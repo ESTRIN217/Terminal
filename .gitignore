@@ -11,6 +11,9 @@ release/
 .cxx
 *.zip
 
+# Fase 2B: binario proot generado por CMake POST_BUILD (no versionar)
+app/src/main/assets/arm64-v8a/proot
+
 # Local configuration file (sdk path, etc)
 local.properties
 

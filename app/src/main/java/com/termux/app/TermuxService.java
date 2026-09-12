@@ -29,6 +29,7 @@ import com.termux.shared.errors.Errno;
 import com.termux.shared.shell.ShellUtils;
 import com.termux.shared.shell.command.runner.app.AppShell;
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
+import com.termux.shared.termux.shell.command.environment.ProotShellEnvironment;
 import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment;
 import com.termux.shared.termux.shell.TermuxShellUtils;
 import com.termux.shared.termux.TermuxConstants;
@@ -45,11 +46,13 @@ import com.termux.shared.data.DataUtils;
 import com.termux.shared.shell.command.ExecutionCommand;
 import com.termux.shared.shell.command.ExecutionCommand.Runner;
 import com.termux.shared.shell.command.ExecutionCommand.ShellCreateMode;
+import com.termux.shared.shell.command.environment.IShellEnvironment;
 import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalSession;
 import com.termux.terminal.TerminalSessionClient;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -600,8 +603,22 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         // If the execution command was started for a plugin, only then will the stdout be set
         // Otherwise if command was manually started by the user like by adding a new terminal session,
         // then no need to set stdout
+        IShellEnvironment shellEnvironmentClient = new TermuxShellEnvironment();
+        if (!executionCommand.isFailsafe
+                && !executionCommand.isPluginExecutionCommand
+                && executionCommand.executable == null
+                && DebianInstaller.isInstalled()
+                && TermuxConstants.PROOT_BIN.canExecute()) {
+            // Default interactive shell runs inside the Debian guest via proot
+            // (Fase 4). Failsafe and plugin commands keep the Termux environment.
+            String[] prootCommand = ProotShellEnvironment.buildProotCommand(executionCommand.arguments);
+            executionCommand.executable = prootCommand[0];
+            executionCommand.arguments = Arrays.copyOfRange(prootCommand, 1, prootCommand.length);
+            shellEnvironmentClient = new ProotShellEnvironment();
+            Logger.logDebug(LOG_TAG, "Starting Debian proot session for \"" + executionCommand.getCommandIdAndLabelLogString() + "\"");
+        }
         TermuxSession newTermuxSession = TermuxSession.execute(this, executionCommand, getTermuxTerminalSessionClient(),
-            this, new TermuxShellEnvironment(), null, executionCommand.isPluginExecutionCommand);
+            this, shellEnvironmentClient, null, executionCommand.isPluginExecutionCommand);
         if (newTermuxSession == null) {
             Logger.logError(LOG_TAG, "Failed to execute new TermuxSession command for:\n" + executionCommand.getCommandIdAndLabelLogString());
             // If the execution command was started for a plugin, then process the error

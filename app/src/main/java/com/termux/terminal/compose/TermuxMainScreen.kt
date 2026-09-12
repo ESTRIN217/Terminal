@@ -8,14 +8,15 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -84,8 +85,9 @@ fun TermuxMainScreen(
         }
     ) {
         Scaffold(
-            modifier = modifier
-                .imePadding(),
+            modifier = Modifier
+            .statusBarsPadding()
+            .navigationBarsPadding(),
             topBar = {
                 if (uiState.sessions.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -117,12 +119,13 @@ fun TermuxMainScreen(
                         )
                     }
                 }
-            },
+            }
         ) { paddingValues ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(modifier)
+                    .imePadding()
+                    .padding(paddingValues)
             ) {
                 // Terminal content
                 Box(
@@ -145,7 +148,6 @@ fun TermuxMainScreen(
                         }
                     }
                 }
-
                 // Extra keys bar
                 if (uiState.isExtraKeysVisible) {
                     ExtraKeysBar(

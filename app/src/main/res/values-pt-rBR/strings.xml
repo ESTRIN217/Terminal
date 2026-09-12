@@ -2,7 +2,7 @@
 
 <!DOCTYPE resources [
     <!ENTITY TERMUX_PACKAGE_NAME "com.termux">
-    <!ENTITY TERMUX_APP_NAME "Termux">
+    <!ENTITY TERMUX_APP_NAME "Terminal">
     <!ENTITY TERMUX_API_APP_NAME "Termux:API">
     <!ENTITY TERMUX_BOOT_APP_NAME "Termux:Boot">
     <!ENTITY TERMUX_FLOAT_APP_NAME "Termux:Float">
@@ -38,6 +38,15 @@
         cartão SD portátil/externo/removível no seu dispositivo.
         \nOs binários de bootstrap compilados para &TERMUX_APP_NAME; têm o caminho $PREFIX codificado e não podem ser instalados
         em nenhum caminho diferente de:\n%1$s.</string>
+
+    <!-- Debian Installation -->
+    <string name="debian_installer_title">Instalando o Debian</string>
+    <string name="debian_installer_downloading">Baixando o Debian… %1$s</string>
+    <string name="debian_installer_extracting">Extraindo o Debian… %1$d arquivos</string>
+    <string name="debian_installer_configuring">Configurando o Debian…</string>
+    <string name="debian_installer_error_title">Não foi possível instalar o Debian</string>
+    <string name="debian_installer_retry">Tentar novamente</string>
+    <string name="debian_installer_failsafe">Shell de emergência</string>
 
 
 

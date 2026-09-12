@@ -310,6 +310,24 @@ public class TermuxFileUtils {
     }
 
     /**
+     * Validate if {@link TermuxConstants#APP_BIN_DIR_PATH} exists and has
+     * {@link FileUtils#APP_WORKING_DIRECTORY_PERMISSIONS} permissions.
+     *
+     * @param createDirectoryIfMissing The {@code boolean} that decides if directory file
+     *                                 should be created if its missing.
+     * @param setMissingPermissions The {@code boolean} that decides if permissions are to be
+     *                              automatically set.
+     * @return Returns the {@code error} if path is not a directory file, failed to create it,
+     * or validating permissions failed, otherwise {@code null}.
+     */
+    public static Error isTermuxAppBinDirectoryAccessible(boolean createDirectoryIfMissing, boolean setMissingPermissions) {
+        return FileUtils.validateDirectoryFileExistenceAndPermissions("termux app bin directory", TermuxConstants.APP_BIN_DIR_PATH,
+            null, createDirectoryIfMissing,
+            FileUtils.APP_WORKING_DIRECTORY_PERMISSIONS, setMissingPermissions, true,
+            false, false);
+    }
+
+    /**
      * Validate if {@link TermuxConstants.TERMUX_APP#APPS_DIR_PATH} exists and has
      * {@link FileUtils#APP_WORKING_DIRECTORY_PERMISSIONS} permissions.
      *
@@ -368,10 +386,12 @@ public class TermuxFileUtils {
             .append(" '" + filesDir + "'")
             .append(" '/data/user/0/" + TermuxConstants.TERMUX_PACKAGE_NAME + "/files'")
             .append(" '/data/user/" + TermuxConstants.TERMUX_PACKAGE_NAME + "/files'")
-            .append(" '" + TermuxConstants.TERMUX_STAGING_PREFIX_DIR_PATH + "'")
-            .append(" '" + TermuxConstants.TERMUX_PREFIX_DIR_PATH + "'")
             .append(" '" + TermuxConstants.TERMUX_HOME_DIR_PATH + "'")
-            .append(" '" + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/login'")
+            .append(" '" + TermuxConstants.APP_BIN_DIR_PATH + "'")
+            .append(" '" + TermuxConstants.PROOT_BIN_PATH + "'")
+            .append(" '" + TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "'")
+            .append(" '" + TermuxConstants.DEBIAN_STAGING_ROOTFS_DIR_PATH + "'")
+            .append(" '" + TermuxConstants.DEBIAN_ROOTFS_TARBALL_FILE_PATH + "'")
             .append(" 2>&1")
             .append("\necho; echo 'mount info:'\n")
             .append("/system/bin/grep -E '( /data )|( /data/data )|( /data/user/[0-9]+ )' /proc/self/mountinfo 2>&1 | /system/bin/grep -v '/data_mirror' 2>&1");

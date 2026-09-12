@@ -11,6 +11,7 @@ import com.termux.terminal.TerminalSession
  * @param isExtraKeysVisible Whether the extra keys bar is visible
  * @param isSoftKeyboardVisible Whether the soft keyboard is visible
  * @param fontSize Font size for the terminal, in density-independent pixels
+ * @param debianInstaller Debian rootfs installer overlay state
  */
 data class TermuxUiState(
     val sessions: List<TerminalSessionUiModel> = emptyList(),
@@ -19,7 +20,8 @@ data class TermuxUiState(
     val isExtraKeysVisible: Boolean = true,
     val isSoftKeyboardVisible: Boolean = false,
     val fontSize: Float = 14f,
-    val extraKeysConfig: ExtraKeysConfig = ExtraKeysConfig(rows = emptyList())
+    val extraKeysConfig: ExtraKeysConfig = ExtraKeysConfig(rows = emptyList()),
+    val debianInstaller: DebianInstallerUiState = DebianInstallerUiState()
 ) {
     /**
      * Get the currently active session, or null if no sessions exist.
@@ -45,4 +47,19 @@ data class TerminalSessionUiModel(
     val session: TerminalSession,
     val name: String,
     val title: String = ""
+)
+
+/**
+ * UI state for the Debian rootfs installer overlay (Fase 3).
+ *
+ * @param visible Whether the installer overlay is shown instead of the terminal
+ * @param progress Download progress in [0,1], or {@code null} when indeterminate
+ * @param statusText Human-readable status line (already formatted by the activity)
+ * @param error Error message when installation failed, {@code null} otherwise
+ */
+data class DebianInstallerUiState(
+    val visible: Boolean = false,
+    val progress: Float? = null,
+    val statusText: String = "",
+    val error: String? = null
 )

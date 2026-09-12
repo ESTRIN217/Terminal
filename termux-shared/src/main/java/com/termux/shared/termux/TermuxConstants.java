@@ -349,7 +349,7 @@ public final class TermuxConstants {
     /** Termux app name */
     public static final String TERMUX_APP_NAME = "Termux"; // Default: "Termux"
     /** Termux package name */
-    public static final String TERMUX_PACKAGE_NAME = "com.termux"; // Default: "com.termux"
+    public static final String TERMUX_PACKAGE_NAME = "com.estrin217.terminal"; // Default: "com.termux"
     /** Termux GitHub repo name */
     public static final String TERMUX_GITHUB_REPO_NAME = "termux-app"; // Default: "termux-app"
     /** Termux GitHub repo url */
@@ -588,6 +588,40 @@ public final class TermuxConstants {
     public static final String TERMUX_FILES_DIR_PATH = TERMUX_INTERNAL_PRIVATE_APP_DATA_DIR_PATH + "/files"; // Default: "/data/data/com.termux/files"
     /** Termux app Files directory */
     public static final File TERMUX_FILES_DIR = new File(TERMUX_FILES_DIR_PATH);
+
+    /** Debian rootfs directory path */
+    public static final String DEBIAN_ROOTFS_DIR_PATH = TERMUX_FILES_DIR_PATH + "/debian";
+    /** Debian rootfs directory */
+    public static final File DEBIAN_ROOTFS_DIR = new File(DEBIAN_ROOTFS_DIR_PATH);
+
+    /** Debian rootfs staging directory path */
+    public static final String DEBIAN_STAGING_ROOTFS_DIR_PATH = TERMUX_FILES_DIR_PATH + "/debian-staging";
+    /** Debian rootfs staging directory */
+    public static final File DEBIAN_STAGING_ROOTFS_DIR = new File(DEBIAN_STAGING_ROOTFS_DIR_PATH);
+
+    /** App bin directory path (where proot lives) */
+    public static final String APP_BIN_DIR_PATH = TERMUX_FILES_DIR_PATH + "/bin";
+    /** App bin directory */
+    public static final File APP_BIN_DIR = new File(APP_BIN_DIR_PATH);
+
+    /** proot executable path */
+    public static final String PROOT_BIN_PATH = APP_BIN_DIR_PATH + "/proot";
+    /** proot executable file */
+    public static final File PROOT_BIN = new File(PROOT_BIN_PATH);
+
+    /** Asset path of the bundled proot binary (Fase 2B, arm64-v8a only). */
+    public static final String PROOT_ASSET_PATH = "arm64-v8a/proot";
+
+    /** Debian rootfs tarball download URL (official Debian OCI layer, debuerreotype, trixie arm64). */
+    public static final String DEBIAN_ROOTFS_TARBALL_URL = "https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/f73bd086e8d0e5e1c8b838ccc442bf24eb3ea205/stable/oci/blobs/rootfs.tar.gz";
+    /** SHA-256 of the Debian rootfs tarball (OCI layer digest, self-verifying). */
+    public static final String DEBIAN_ROOTFS_TARBALL_SHA256 = "ae72a46cc255fceffec50296e43a871d478aa35ebb7beb568f214c0b9d3051f6";
+    /** Size in bytes of the Debian rootfs tarball (for progress UI). */
+    public static final long DEBIAN_ROOTFS_TARBALL_SIZE = 49704853L;
+    /** Local path of the downloaded Debian rootfs tarball. */
+    public static final String DEBIAN_ROOTFS_TARBALL_FILE_PATH = TERMUX_FILES_DIR_PATH + "/debian.tar.gz";
+    /** Local file of the downloaded Debian rootfs tarball. */
+    public static final File DEBIAN_ROOTFS_TARBALL_FILE = new File(DEBIAN_ROOTFS_TARBALL_FILE_PATH);
 
 
 

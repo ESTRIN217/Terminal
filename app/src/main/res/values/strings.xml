@@ -2,7 +2,7 @@
 
 <!DOCTYPE resources [
     <!ENTITY TERMUX_PACKAGE_NAME "com.termux">
-    <!ENTITY TERMUX_APP_NAME "Termux">
+    <!ENTITY TERMUX_APP_NAME "Terminal">
     <!ENTITY TERMUX_API_APP_NAME "Termux:API">
     <!ENTITY TERMUX_BOOT_APP_NAME "Termux:Boot">
     <!ENTITY TERMUX_FLOAT_APP_NAME "Termux:Float">
@@ -38,6 +38,15 @@
         portable/external/removable sd card on your device.
         \nBootstrap binaries compiled for &TERMUX_APP_NAME; have hardcoded $PREFIX path and cannot be installed
         under any path other than:\n%1$s.</string>
+
+    <!-- Debian Installation -->
+    <string name="debian_installer_title">Installing Debian</string>
+    <string name="debian_installer_downloading">Downloading Debian… %1$s</string>
+    <string name="debian_installer_extracting">Extracting Debian… %1$d files</string>
+    <string name="debian_installer_configuring">Configuring Debian…</string>
+    <string name="debian_installer_error_title">Unable to install Debian</string>
+    <string name="debian_installer_retry">Retry</string>
+    <string name="debian_installer_failsafe">Failsafe shell</string>
 
 
 

@@ -17,6 +17,7 @@ import com.termux.shared.data.IntentUtils;
 import com.termux.shared.net.uri.UriUtils;
 import com.termux.shared.interact.MessageDialogUtils;
 import com.termux.shared.net.uri.UriScheme;
+import com.termux.shared.termux.data.TermuxUrlUtils;
 import com.termux.shared.termux.interact.TextInputDialogUtils;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP;
@@ -57,7 +58,7 @@ public class FileReceiverActivity extends AppCompatActivity {
     static boolean isSharedTextAnUrl(String sharedText) {
         if (sharedText == null || sharedText.isEmpty()) return false;
 
-        return Patterns.WEB_URL.matcher(sharedText).matches()
+        return TermuxUrlUtils.getUrlMatchRegex().matcher(sharedText).matches()
             || Pattern.matches("magnet:\\?xt=urn:btih:.*?", sharedText);
     }
 

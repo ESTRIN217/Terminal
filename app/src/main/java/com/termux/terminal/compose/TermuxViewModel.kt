@@ -240,4 +240,59 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
     }
+
+    /**
+     * Show the Debian installer overlay.
+     */
+    fun showDebianInstaller() {
+        viewModelScope.launch {
+            _uiState.update { state ->
+                state.copy(debianInstaller = DebianInstallerUiState(visible = true))
+            }
+        }
+    }
+
+    /**
+     * Update Debian installer progress.
+     *
+     * @param progress Download progress in [0,1], or {@code null} when indeterminate
+     * @param statusText Formatted status line
+     */
+    fun updateDebianInstallerProgress(progress: Float?, statusText: String) {
+        viewModelScope.launch {
+            _uiState.update { state ->
+                state.copy(
+                    debianInstaller = state.debianInstaller.copy(
+                        progress = progress,
+                        statusText = statusText,
+                        error = null
+                    )
+                )
+            }
+        }
+    }
+
+    /**
+     * Show a Debian installer error with retry option.
+     *
+     * @param error The error message to display
+     */
+    fun setDebianInstallerError(error: String) {
+        viewModelScope.launch {
+            _uiState.update { state ->
+                state.copy(debianInstaller = state.debianInstaller.copy(error = error))
+            }
+        }
+    }
+
+    /**
+     * Hide the Debian installer overlay.
+     */
+    fun hideDebianInstaller() {
+        viewModelScope.launch {
+            _uiState.update { state ->
+                state.copy(debianInstaller = state.debianInstaller.copy(visible = false))
+            }
+        }
+    }
 }

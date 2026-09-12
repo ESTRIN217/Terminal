@@ -33,6 +33,7 @@ import com.termux.app.activities.FileManagerActivity
 import com.termux.app.activities.HelpActivity
 import com.termux.app.activities.SettingsActivity
 import com.termux.shared.activity.ActivityUtils
+import com.termux.shared.errors.Error
 import com.termux.shared.logger.Logger
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY
 import com.termux.shared.termux.TermuxUtils
@@ -44,11 +45,13 @@ import com.termux.shared.view.KeyboardUtils
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.compose.ComposeTerminalSessionClient
 import com.termux.terminal.compose.ComposeTerminalViewClient
+import com.termux.terminal.compose.DebianInstallerScreen
 import com.termux.terminal.compose.ExtraKeysConfig
 import com.termux.terminal.compose.TerminalPalette
 import com.termux.terminal.compose.TermuxMainScreen
 import com.termux.terminal.compose.TermuxViewModel
 import com.termux.terminal.compose.TerminalViewRegistry
+import androidx.activity.enableEdgeToEdge
 
 /**
  * A terminal emulator activity using Jetpack Compose.
@@ -89,8 +92,12 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
     /** Whether the Volume Up key is currently held (virtual Fn). */
     private var mVirtualFnKeyDown = false
 
+    /** Failsafe flag pending a Debian install (used by installer retry). */
+    private var mPendingFailSafe = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
         Logger.logDebug(LOG_TAG, "onCreate")
 
@@ -101,14 +108,6 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         mViewModel = ViewModelProvider(this)[TermuxViewModel::class.java]
         mTerminalSessionClient = ComposeTerminalSessionClient(mViewModel)
         mTerminalViewClient = ComposeTerminalViewClient(mViewModel, mProperties)
-
-        // Apply fullscreen flag if configured
-        if (mProperties.isUsingFullScreen()) {
-            window.setFlags(
-                WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN
-            )
-        }
 
         // Apply keep screen on flag if previously enabled via the more options menu
         mIsKeepScreenOnEnabled = mPreferences.shouldKeepScreenOn()
@@ -139,6 +138,17 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+                    val uiState by mViewModel.uiState.collectAsState()
+                    if (uiState.debianInstaller.visible) {
+                        DebianInstallerScreen(
+                            viewModel = mViewModel,
+                            onRetry = { startDebianInstall(mPendingFailSafe) },
+                            onFailsafe = {
+                                mViewModel.hideDebianInstaller()
+                                addNewSession(true, null)
+                            }
+                        )
+                    } else {
                     TermuxMainScreen(
                         viewModel = mViewModel,
                         viewClient = mTerminalViewClient,
@@ -167,6 +177,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                             )
                         }
                     )
+                    }
                 }
             }
         }
@@ -401,7 +412,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                     val isFailSafe = intent?.getBooleanExtra(
                         TERMUX_ACTIVITY.EXTRA_FAILSAFE_SESSION, false
                     ) ?: false
-                    addNewSession(isFailSafe, null)
+                    ensureProotAndDebian(isFailSafe)
                 }
             }
         } else {
@@ -440,6 +451,86 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         Logger.logDebug(LOG_TAG, "onServiceDisconnected")
         mTermuxService = null
         mIsBound = false
+    }
+
+    /**
+     * Ensure the bundled proot binary and the Debian rootfs are installed
+     * before opening the first session (Fase 3).
+     *
+     * @param isFailSafe Whether a failsafe session was requested
+     */
+    private fun ensureProotAndDebian(isFailSafe: Boolean) {
+        mPendingFailSafe = isFailSafe
+        Thread {
+            val prootError = TermuxInstaller.installProotIfNeeded(this)
+            runOnUiThread {
+                if (prootError != null) {
+                    showProotErrorDialog(prootError)
+                } else if (isFailSafe || DebianInstaller.isInstalled()) {
+                    addNewSession(isFailSafe, null)
+                } else {
+                    startDebianInstall(isFailSafe)
+                }
+            }
+        }.start()
+    }
+
+    private fun showProotErrorDialog(error: Error) {
+        Logger.logError(LOG_TAG, Error.getMinimalErrorString(error))
+        android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.bootstrap_error_title)
+            .setMessage(Error.getMinimalErrorString(error))
+            .setNegativeButton(R.string.bootstrap_error_abort) { dialog, _ ->
+                dialog.dismiss()
+                finish()
+            }
+            .setPositiveButton(R.string.bootstrap_error_try_again) { dialog, _ ->
+                dialog.dismiss()
+                ensureProotAndDebian(mPendingFailSafe)
+            }
+            .show()
+    }
+
+    /**
+     * Start (or attach to) the Debian rootfs installation with Compose progress.
+     *
+     * @param isFailSafe Whether to open a failsafe session after install
+     */
+    private fun startDebianInstall(isFailSafe: Boolean) {
+        mPendingFailSafe = isFailSafe
+        mViewModel.showDebianInstaller()
+        DebianInstaller.install(this, object : DebianInstaller.Listener {
+            override fun onProgress(phase: DebianInstaller.Phase, done: Long, total: Long) {
+                val progress = if (total > 0) done.toFloat() / total.toFloat() else null
+                val status = when (phase) {
+                    DebianInstaller.Phase.DOWNLOADING ->
+                        getString(R.string.debian_installer_downloading, formatMB(done) + " / " + formatMB(total))
+                    DebianInstaller.Phase.VERIFYING, DebianInstaller.Phase.CONFIGURING,
+                    DebianInstaller.Phase.MOVING ->
+                        getString(R.string.debian_installer_configuring)
+                    DebianInstaller.Phase.EXTRACTING ->
+                        getString(R.string.debian_installer_extracting, done)
+                }
+                mViewModel.updateDebianInstallerProgress(progress, status)
+            }
+
+            override fun onFinished() {
+                runOnUiThread {
+                    mViewModel.hideDebianInstaller()
+                    if (mTermuxService != null) addNewSession(isFailSafe, null)
+                }
+            }
+
+            override fun onError(error: Error) {
+                runOnUiThread {
+                    mViewModel.setDebianInstallerError(Error.getMinimalErrorString(error))
+                }
+            }
+        })
+    }
+
+    private fun formatMB(bytes: Long): String {
+        return String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
     }
 
     private fun addNewSession(isFailSafe: Boolean, sessionName: String?) {

@@ -8,6 +8,15 @@ import androidx.annotation.Nullable;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP;
 
+/**
+ * Legacy Termux bootstrap package manager/variant holder.
+ *
+ * @deprecated This fork no longer ships a Termux bootstrap: the default shell runs
+ * inside a Debian rootfs via the bundled proot binary, both independent of the
+ * app package name. The package manager/variant statics are kept only for legacy
+ * debug-report compatibility and must not be used for new code.
+ */
+@Deprecated
 public class TermuxBootstrap {
 
     private static final String LOG_TAG = "TermuxBootstrap";

@@ -1,7 +1,3 @@
-import java.math.BigInteger
-import java.net.URI
-import java.security.DigestInputStream
-import java.security.MessageDigest
 import java.util.regex.Pattern
 
 plugins {
@@ -41,6 +37,7 @@ android {
     }
 
     defaultConfig {
+        applicationId = "com.estrin217.terminal"
         minSdk = project.properties["minSdkVersion"]?.toString()?.toInt() ?: 21
         targetSdk = project.properties["targetSdkVersion"]?.toString()?.toInt() ?: 28
         versionCode = 118
@@ -50,7 +47,7 @@ android {
 
         buildConfigField("String", "TERMUX_PACKAGE_VARIANT", "\"$packageVariant\"")
 
-        manifestPlaceholders["TERMUX_PACKAGE_NAME"] = "com.termux"
+        manifestPlaceholders["TERMUX_PACKAGE_NAME"] = "com.estrin217.terminal"
         manifestPlaceholders["TERMUX_APP_NAME"] = "Termux"
         manifestPlaceholders["TERMUX_API_APP_NAME"] = "Termux:API"
         manifestPlaceholders["TERMUX_BOOT_APP_NAME"] = "Termux:Boot"
@@ -66,6 +63,21 @@ android {
                 reset()
                 include("arm64-v8a")
                 isUniversalApk = true
+            }
+        }
+
+        // Fase 2B: proot bundled solo arm64-v8a (el loader embebido lleva
+        // LOADER_ADDRESS y formato objcopy fijos de AArch64).
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
+
+        // Fase 2B: proot usa getifaddrs (Bionic API 24+). Compilar el nativo
+        // contra android-28, igual que la verificacion de Fase 2A
+        // (aarch64-linux-android28-clang). El minSdk Java no cambia.
+        externalNativeBuild {
+            cmake {
+                arguments += "-DANDROID_PLATFORM=android-28"
             }
         }
     }
@@ -142,6 +154,9 @@ dependencies {
 
     // Kotlin coroutines
     implementation(libs.kotlinx.coroutines.android)
+
+    // Fase 3: extraccion del rootfs Debian (.tar.gz OCI; gzip va en commons-compress)
+    implementation(libs.commons.compress)
 }
 
 tasks.register("versionName") {
@@ -162,66 +177,11 @@ fun validateVersionName(versionName: String) {
     }
 }
 
-fun downloadBootstrap(arch: String, expectedChecksum: String, version: String) {
-    val digest = MessageDigest.getInstance("SHA-256")
-    val localUrl = "src/main/cpp/bootstrap-$arch.zip"
-    val file = file(localUrl)
-    if (file.exists()) {
-        val buffer = ByteArray(8192)
-        file.inputStream().use { input ->
-            while (true) {
-                val readBytes = input.read(buffer)
-                if (readBytes < 0) break
-                digest.update(buffer, 0, readBytes)
-            }
-        }
-        val checksum = BigInteger(1, digest.digest()).toString(16).padStart(64, '0')
-        if (checksum == expectedChecksum) {
-            return
-        } else {
-            logger.quiet("Deleting old local file with wrong hash: $localUrl: expected: $expectedChecksum, actual: $checksum")
-            file.delete()
-        }
-    }
-
-    val remoteUrl = "https://github.com/termux/termux-packages/releases/download/bootstrap-$version/bootstrap-$arch.zip"
-    logger.quiet("Downloading $remoteUrl ...")
-
-    file.parentFile.mkdirs()
-    val digestStream = DigestInputStream(URI(remoteUrl).toURL().openStream(), digest)
-    file.outputStream().buffered().use { out ->
-        digestStream.transferTo(out)
-    }
-
-    val checksum = BigInteger(1, digest.digest()).toString(16).padStart(64, '0')
-    if (checksum != expectedChecksum) {
-        file.delete()
-        throw GradleException("Wrong checksum for $remoteUrl: expected: $expectedChecksum, actual: $checksum")
-    }
+// Fase 2B: el binario proot se genera via CMake POST_BUILD en
+// src/main/assets/. Asegurar que CMake corre antes de fusionar assets
+// para que el binario entre en el APK ya en la primera compilacion.
+tasks.matching { it.name.matches(Regex("merge.*Assets")) }.configureEach {
+    dependsOn(tasks.matching { it.name.startsWith("buildCMake") })
 }
 
-tasks.named<Delete>("clean") {
-    doLast {
-        fileTree(File(projectDir, "src/main/cpp")).matching { include("bootstrap-*.zip") }.forEach { it.delete() }
-    }
-}
 
-tasks.register("downloadBootstraps") {
-    doLast {
-        if (packageVariant == "apt-android-7") {
-            val version = "2026.02.12-r1" + "%2B" + "apt.android-7"
-            downloadBootstrap("aarch64", "ea2aeba8819e517db711f8c32369e89e7c52cee73e07930ff91185e1ab93f4f3", version)
-            downloadBootstrap("arm", "a38f4d3b2f735f83be2bf54eff463e86dc32a3e2f9f861c1557c4378d249c018", version)
-            downloadBootstrap("i686", "f5bc0b025b9f3b420b5fcaeefc064f888f5f22a0d6fd7090f4aac0c33eb3555b", version)
-            downloadBootstrap("x86_64", "b7fd0f2e3a4de534be3144f9f91acc768630fc463eaf134ab2e64c545e834f7a", version)
-        } else if (packageVariant == "apt-android-5") {
-            val version = "2022.04.28-r6" + "+" + packageVariant
-            downloadBootstrap("aarch64", "913609d439415c828c5640be1b0561467e539cb1c7080662decaaca2fb4820e7", version)
-            downloadBootstrap("arm", "26bfb45304c946170db69108e5eb6e3641aad751406ce106c80df80cad2eccf8", version)
-            downloadBootstrap("i686", "46dcfeb5eef67ba765498db9fe4c50dc4690805139aa0dd141a9d8ee0693cd27", version)
-            downloadBootstrap("x86_64", "615b590679ee6cd885b7fd2ff9473c845e920f9b422f790bb158c63fe42b8481", version)
-        } else {
-            throw GradleException("Unsupported TERMUX_PACKAGE_VARIANT \"$packageVariant\"")
-        }
-    }
-}
