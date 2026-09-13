@@ -47,7 +47,7 @@
         <intent
             android:action="android.intent.action.VIEW"
             android:targetPackage="com.estrin217.terminal"
-            android:targetClass="com.termux.app.activities.SettingsActivity"
+            android:targetClass="com.termux.app.activities.SettingsComposeActivity"
             android:name="android.shortcut.conversation"/>
     </shortcut>
 

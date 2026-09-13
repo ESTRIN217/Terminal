@@ -11,10 +11,6 @@ permissions:
 jobs:
   attach-apks:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        package_variant: [ apt-android-7 ]
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -32,8 +28,6 @@ jobs:
 
       - name: Build and attach APKs to release
         shell: bash {0}
-        env:
-          PACKAGE_VARIANT: ${{ matrix.package_variant }}
         run: |
           exit_on_error() {
               echo "$1"
@@ -50,12 +44,11 @@ jobs:
           fi
 
           APK_DIR_PATH="./app/build/outputs/apk/debug"
-          APK_VERSION_TAG="$RELEASE_VERSION_NAME+${{ env.PACKAGE_VARIANT }}-github-debug"
+          APK_VERSION_TAG="$RELEASE_VERSION_NAME+github-debug"
           APK_BASENAME_PREFIX="terminal_$APK_VERSION_TAG"
 
           echo "Building APKs for 'APK_VERSION_TAG' release"
           export TERMUX_APK_VERSION_TAG="$APK_VERSION_TAG" # Used by app/build.gradle.kts
-          export TERMUX_PACKAGE_VARIANT="${{ env.PACKAGE_VARIANT }}" # Used by app/build.gradle.kts
           if ! ./gradlew assembleDebug; then
             exit_on_error "Build failed for '$APK_VERSION_TAG' release."
           fi

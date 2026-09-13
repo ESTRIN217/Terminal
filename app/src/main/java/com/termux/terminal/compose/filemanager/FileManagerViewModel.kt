@@ -1,0 +1,313 @@
+package com.termux.terminal.compose.filemanager
+
+import android.app.Application
+import android.content.Context
+import android.os.Environment
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.termux.app.filemanager.FileOperationsHelper
+import com.termux.app.filemanager.FileSortOption
+import com.termux.shared.termux.TermuxConstants
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.util.ArrayDeque
+
+/**
+ * ViewModel for the Compose file manager.
+ *
+ * Reuses [FileOperationsHelper] and [FileSortOption] for all IO so
+ * behaviour matches the old `FileManagerActivity`. Paste runs on
+ * Dispatchers.IO via [viewModelScope] instead of raw threads.
+ */
+class FileManagerViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val _uiState = MutableStateFlow(FileManagerUiState())
+    val uiState: StateFlow<FileManagerUiState> = _uiState.asStateFlow()
+
+    private val backStack = ArrayDeque<String>()
+    private val forwardStack = ArrayDeque<String>()
+    private var currentDir: File? = null
+
+    /** Last trashed file + original path, for Snackbar undo. */
+    var lastTrash: Pair<File, File>? = null
+        private set
+
+    private val prefsName = "file_manager"
+
+    init {
+        val prefs = application.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+        val sort = try {
+            FileSortOption.valueOf(
+                prefs.getString("sort_option", FileSortOption.NAME.name)
+                    ?: FileSortOption.NAME.name
+            )
+        } catch (e: Exception) {
+            FileSortOption.NAME
+        }
+        _uiState.update {
+            it.copy(
+                sortOption = sort,
+                sortAscending = prefs.getBoolean("sort_ascending", true),
+                showHidden = prefs.getBoolean("show_hidden", false)
+            )
+        }
+        navigateToInternal(defaultDir(), pushHistory = false, clearSearch = true)
+    }
+
+    private fun defaultDir(): File {
+        val home = File(TermuxConstants.TERMUX_FILES_DIR_PATH + "/home")
+        if (home.exists()) return home
+        return Environment.getExternalStorageDirectory()
+    }
+
+    private fun persistPrefs() {
+        val s = _uiState.value
+        getApplication<Application>().getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+            .edit()
+            .putString("sort_option", s.sortOption.name)
+            .putBoolean("sort_ascending", s.sortAscending)
+            .putBoolean("show_hidden", s.showHidden)
+            .apply()
+    }
+
+    fun bookmarkDirs(): List<Pair<String, File>> {
+        val list = mutableListOf<Pair<String, File>>()
+        val home = File(TermuxConstants.TERMUX_FILES_DIR_PATH + "/home")
+        if (home.exists()) list.add("Home" to home)
+        list.add("SDCard" to Environment.getExternalStorageDirectory())
+        list.add("Root" to File("/"))
+        return list
+    }
+
+    fun navigateTo(dir: File) {
+        currentDir?.let {
+            backStack.addLast(it.absolutePath)
+            forwardStack.clear()
+        }
+        navigateToInternal(dir, pushHistory = false, clearSearch = true)
+    }
+
+    fun goBack() {
+        if (backStack.isEmpty()) return
+        currentDir?.let { forwardStack.addLast(it.absolutePath) }
+        val path = backStack.removeLast()
+        navigateToInternal(File(path), pushHistory = false, clearSearch = true)
+    }
+
+    fun goForward() {
+        if (forwardStack.isEmpty()) return
+        currentDir?.let { backStack.addLast(it.absolutePath) }
+        val path = forwardStack.removeLast()
+        navigateToInternal(File(path), pushHistory = false, clearSearch = true)
+    }
+
+    fun goUp(): Boolean {
+        val parent = currentDir?.parentFile ?: return false
+        if (!parent.exists()) return false
+        currentDir?.let {
+            backStack.addLast(it.absolutePath)
+            forwardStack.clear()
+        }
+        navigateToInternal(parent, pushHistory = false, clearSearch = true)
+        return true
+    }
+
+    /** Back press handling: exit selection first, then history/up. */
+    fun onBackPressed(): Boolean {
+        val s = _uiState.value
+        if (s.selectionMode) {
+            clearSelection()
+            return true
+        }
+        if (backStack.isNotEmpty()) {
+            goBack()
+            return true
+        }
+        return goUp()
+    }
+
+    private fun navigateToInternal(dir: File, pushHistory: Boolean, clearSearch: Boolean) {
+        if (!dir.exists()) return
+        val target = if (dir.isDirectory) dir else dir.parentFile ?: return
+        currentDir = target
+        if (clearSearch) _uiState.update { it.copy(searchQuery = "") }
+        refresh()
+    }
+
+    fun refresh() {
+        val dir = currentDir ?: return
+        val s = _uiState.value
+        val all = dir.listFiles()?.toList() ?: emptyList()
+        val visible = all.filter { s.showHidden || !it.name.startsWith(".") }
+        val filtered = if (s.searchQuery.isEmpty()) visible
+        else visible.filter { it.name.contains(s.searchQuery, ignoreCase = true) }
+        val sorted = filtered.sortedWith(s.sortOption.getComparator(s.sortAscending))
+        _uiState.update {
+            it.copy(
+                currentPath = dir.absolutePath,
+                title = titleFor(dir),
+                files = sorted,
+                canGoBack = backStack.isNotEmpty(),
+                canGoForward = forwardStack.isNotEmpty(),
+                hasClipboard = FileOperationsHelper.hasClipboard()
+            )
+        }
+    }
+
+    private fun titleFor(dir: File): String {
+        if (dir.absolutePath == "/") return "Root"
+        if (dir.name == "home" && (dir.parent ?: "").endsWith("/files")) return "Home"
+        return dir.name.ifEmpty { dir.absolutePath }
+    }
+
+    fun setSearchQuery(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
+        refresh()
+    }
+
+    fun toggleSort(option: FileSortOption) {
+        _uiState.update {
+            if (it.sortOption == option) it.copy(sortAscending = !it.sortAscending)
+            else it.copy(sortOption = option, sortAscending = true)
+        }
+        persistPrefs()
+        refresh()
+    }
+
+    fun toggleHidden() {
+        _uiState.update { it.copy(showHidden = !it.showHidden) }
+        persistPrefs()
+        refresh()
+    }
+
+    fun toggleSelection(path: String) {
+        _uiState.update { state ->
+            val selected = state.selectedPaths.toMutableSet()
+            if (!selected.add(path)) selected.remove(path)
+            state.copy(selectedPaths = selected, selectionMode = selected.isNotEmpty())
+        }
+    }
+
+    fun selectAll() {
+        _uiState.update {
+            it.copy(
+                selectedPaths = it.files.map { f -> f.absolutePath }.toSet(),
+                selectionMode = it.files.isNotEmpty()
+            )
+        }
+    }
+
+    fun clearSelection() {
+        _uiState.update { it.copy(selectedPaths = emptySet(), selectionMode = false) }
+    }
+
+    fun selectedFiles(): List<File> =
+        _uiState.value.selectedPaths.map(::File)
+
+    fun createFolder(name: String): Boolean {
+        val dir = currentDir ?: return false
+        val ok = FileOperationsHelper.createDirectory(dir, name.trim())
+        if (ok) refresh()
+        return ok
+    }
+
+    fun createFile(name: String): Boolean {
+        val dir = currentDir ?: return false
+        val ok = FileOperationsHelper.createFile(dir, name.trim())
+        if (ok) refresh()
+        return ok
+    }
+
+    fun renameFile(file: File, newName: String): Boolean {
+        val ok = FileOperationsHelper.renameFile(file, newName.trim())
+        if (ok) refresh()
+        return ok
+    }
+
+    fun copySelection() {
+        FileOperationsHelper.setClipboard(
+            selectedFiles(), FileOperationsHelper.ClipboardOperation.COPY
+        )
+        clearSelection()
+        refresh()
+    }
+
+    fun cutSelection() {
+        FileOperationsHelper.setClipboard(
+            selectedFiles(), FileOperationsHelper.ClipboardOperation.CUT
+        )
+        clearSelection()
+        refresh()
+    }
+
+    fun deleteFiles(files: List<File>, onDone: (ok: Boolean) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            var ok = true
+            for (f in files) {
+                val trash = moveToTrash(f)
+                if (trash == null) {
+                    ok = false
+                } else {
+                    lastTrash = trash to f
+                }
+            }
+            withContext(Dispatchers.Main) {
+                clearSelection()
+                refresh()
+                onDone(ok)
+            }
+        }
+    }
+
+    fun undoDelete(): Boolean {
+        val (trash, original) = lastTrash ?: return false
+        val ok = FileOperationsHelper.moveFile(trash, original)
+        if (ok) lastTrash = null
+        refresh()
+        return ok
+    }
+
+    private fun moveToTrash(file: File): File? {
+        val trashDir = File(getApplication<Application>().cacheDir, "fm_trash")
+        if (!trashDir.exists()) trashDir.mkdirs()
+        var trashFile = File(trashDir, file.name)
+        var i = 1
+        while (trashFile.exists()) {
+            trashFile = File(trashDir, file.name + "." + i)
+            i++
+        }
+        return if (FileOperationsHelper.moveFile(file, trashFile)) trashFile else null
+    }
+
+    fun paste(onDone: (count: Int) -> Unit) {
+        if (!FileOperationsHelper.hasClipboard()) return
+        val dest = currentDir ?: return
+        val sources = FileOperationsHelper.getClipboardFiles().toList()
+        val isCut = FileOperationsHelper.getClipboardOperation() ==
+            FileOperationsHelper.ClipboardOperation.CUT
+        viewModelScope.launch(Dispatchers.IO) {
+            var count = 0
+            for (src in sources) {
+                val target = File(dest, src.name)
+                val ok = if (isCut) FileOperationsHelper.moveFile(src, target)
+                else FileOperationsHelper.copyFile(src, target)
+                if (ok) count++
+            }
+            if (isCut) FileOperationsHelper.clearClipboard()
+            withContext(Dispatchers.Main) {
+                refresh()
+                onDone(count)
+            }
+        }
+    }
+
+    fun consumeStatusMessage() {
+        _uiState.update { it.copy(statusMessage = null) }
+    }
+}

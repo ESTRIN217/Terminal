@@ -13,6 +13,7 @@ window = "1.5.1"
 
 # Material / Google
 material = "1.14.0"
+material3 = "1.5.0-alpha28"
 guava = "33.6.0-android"
 listenablefuture = "9999.0-empty-to-avoid-conflict-with-guava"
 
@@ -93,7 +94,7 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 # Compose (BOM-managed)
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }
-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
 compose-material-icons = { group = "androidx.compose.material", name = "material-icons-extended" }
 compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
 compose-runtime = { group = "androidx.compose.runtime", name = "runtime" }

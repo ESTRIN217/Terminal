@@ -241,8 +241,6 @@
     <!-- About Preference -->
     <string name="about_preference_title">Acerca de</string>
 
-    <!-- Donate Preference -->
-    <string name="donate_preference_title">Donar</string>
 
 
     <!-- File Manager Actions -->

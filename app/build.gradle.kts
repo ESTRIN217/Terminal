@@ -6,7 +6,6 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-val packageVariant: String = System.getenv("TERMUX_PACKAGE_VARIANT") ?: "apt-android-7"
 val appVersionName = System.getenv("TERMUX_APP_VERSION_NAME") ?: ""
 val apkVersionTag = System.getenv("TERMUX_APK_VERSION_TAG") ?: ""
 val splitAPKsForDebugBuilds = System.getenv("TERMUX_SPLIT_APKS_FOR_DEBUG_BUILDS") ?: "1"
@@ -38,14 +37,12 @@ android {
 
     defaultConfig {
         applicationId = "com.estrin217.terminal"
-        minSdk = project.properties["minSdkVersion"]?.toString()?.toInt() ?: 21
+        minSdk = project.properties["minSdkVersion"]?.toString()?.toInt() ?: 24
         targetSdk = project.properties["targetSdkVersion"]?.toString()?.toInt() ?: 28
-        versionCode = 118
-        val verName = appVersionName.ifEmpty { "0.118.0" }
+        versionCode = 119
+        val verName = appVersionName.ifEmpty { "1.119.0" }
         versionName = verName
         validateVersionName(verName)
-
-        buildConfigField("String", "TERMUX_PACKAGE_VARIANT", "\"$packageVariant\"")
 
         manifestPlaceholders["TERMUX_PACKAGE_NAME"] = "com.estrin217.terminal"
         manifestPlaceholders["TERMUX_APP_NAME"] = "Terminal"
@@ -136,9 +133,9 @@ android {
     }
 }
 
-// APK file naming (ported from the pre-Kotlin build.gradle): CI workflows locate
-// artifacts as "terminal_<versionTag>_<abi>.apk". TERMUX_APK_VERSION_TAG is set by
-// the release/debug workflows; when empty, "<packageVariant>-<buildType>" is used.
+// APK file naming: CI workflows locate artifacts as
+// "terminal_<versionTag>_<abi>.apk". TERMUX_APK_VERSION_TAG is set by
+// the release/debug workflows; when empty, "<buildType>" is used.
 androidComponents {
     onVariants { variant ->
         val buildTypeName = variant.buildType
@@ -147,7 +144,7 @@ androidComponents {
                 val abi = output.filters
                     .find { it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI }
                     ?.identifier ?: "universal"
-                val tag = apkVersionTag.ifEmpty { "$packageVariant-$buildTypeName" }
+                val tag = apkVersionTag.ifEmpty { buildTypeName }
                 output.outputFileName.set("terminal_${tag}_${abi}.apk")
             }
         }

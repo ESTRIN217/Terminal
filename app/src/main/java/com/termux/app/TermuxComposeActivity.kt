@@ -7,7 +7,6 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.content.res.Configuration
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.IBinder
@@ -22,25 +21,19 @@ import android.widget.ListView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import com.termux.R
-import com.termux.app.activities.FileManagerActivity
+import com.termux.app.activities.FileManagerComposeActivity
 import com.termux.app.activities.HelpActivity
-import com.termux.app.activities.SettingsActivity
+import com.termux.app.activities.SettingsComposeActivity
 import com.termux.app.models.UserAction
 import com.termux.shared.activity.ActivityUtils
 import com.termux.shared.activities.ReportActivity
@@ -54,7 +47,6 @@ import com.termux.shared.logger.Logger
 import com.termux.shared.markdown.MarkdownUtils
 import com.termux.shared.models.ReportInfo
 import com.termux.shared.shell.ShellUtils
-import com.termux.shared.termux.TermuxBootstrap
 import com.termux.shared.termux.TermuxConstants
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY
 import com.termux.shared.termux.TermuxUtils
@@ -70,6 +62,7 @@ import com.termux.terminal.compose.ComposeTerminalViewClient
 import com.termux.terminal.compose.DebianInstallerScreen
 import com.termux.terminal.compose.ExtraKeysConfig
 import com.termux.terminal.compose.TerminalPalette
+import com.termux.terminal.compose.TermuxExpressiveTheme
 import com.termux.terminal.compose.TermuxMainScreen
 import com.termux.terminal.compose.TermuxViewModel
 import com.termux.terminal.compose.TerminalViewRegistry
@@ -158,16 +151,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         bindService(serviceIntent, this, BIND_AUTO_CREATE)
 
         setContent {
-            val darkTheme = isSystemInDarkTheme()
-            val context = LocalContext.current
-            val colorScheme = when {
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && darkTheme -> dynamicDarkColorScheme(context)
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicLightColorScheme(context)
-                darkTheme -> darkColorScheme()
-                else -> lightColorScheme()
-            }
-
-            MaterialTheme(colorScheme = colorScheme) {
+            TermuxExpressiveTheme {
                 val palette = TerminalPalette.fromTheme()
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -202,13 +186,13 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                         onOpenFileManager = {
                             ActivityUtils.startActivity(
                                 this@TermuxComposeActivity,
-                                Intent(this@TermuxComposeActivity, FileManagerActivity::class.java)
+                                Intent(this@TermuxComposeActivity, FileManagerComposeActivity::class.java)
                             )
                         },
                         onOpenSettings = {
                             ActivityUtils.startActivity(
                                 this@TermuxComposeActivity,
-                                Intent(this@TermuxComposeActivity, SettingsActivity::class.java)
+                                Intent(this@TermuxComposeActivity, SettingsComposeActivity::class.java)
                             )
                         }
                     )
@@ -741,7 +725,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                 true
             }
             CONTEXT_MENU_SETTINGS_ID -> {
-                ActivityUtils.startActivity(this, Intent(this, SettingsActivity::class.java))
+                ActivityUtils.startActivity(this, Intent(this, SettingsComposeActivity::class.java))
                 true
             }
             CONTEXT_MENU_REPORT_ID -> {
@@ -901,12 +885,6 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             }
 
             reportString.append("\n\n").append(AndroidUtils.getDeviceInfoMarkdownString(this@TermuxComposeActivity, true))
-
-            if (TermuxBootstrap.isAppPackageManagerAPT()) {
-                val termuxAptInfo = TermuxUtils.geAPTInfoMarkdownString(this@TermuxComposeActivity)
-                if (termuxAptInfo != null)
-                    reportString.append("\n\n").append(termuxAptInfo)
-            }
 
             if (addTermuxDebugInfo) {
                 val termuxDebugInfo = TermuxUtils.getTermuxDebugMarkdownString(this@TermuxComposeActivity)

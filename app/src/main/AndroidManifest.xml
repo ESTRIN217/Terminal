@@ -108,17 +108,17 @@
             tools:targetApi="n" />
 
         <activity
-            android:name=".app.activities.FileManagerActivity"
+            android:name=".app.activities.FileManagerComposeActivity"
             android:exported="false"
             android:label="@string/title_activity_file_manager"
-            android:parentActivityName=".app.TermuxActivity"
-            android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
+            android:parentActivityName=".app.TermuxComposeActivity"
+            android:theme="@style/Theme.TermuxActivity.DayNight.NoActionBar" />
 
         <activity
-            android:name=".app.activities.SettingsActivity"
+            android:name=".app.activities.SettingsComposeActivity"
             android:exported="true"
             android:label="@string/title_activity_termux_settings"
-            android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
+            android:theme="@style/Theme.TermuxActivity.DayNight.NoActionBar" />
 
         <activity
             android:name=".shared.activities.ReportActivity"

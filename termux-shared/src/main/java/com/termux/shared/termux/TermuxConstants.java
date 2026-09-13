@@ -511,31 +511,6 @@ public final class TermuxConstants {
 
 
     /*
-     * Termux packages urls.
-     */
-
-    /** Termux Packages GitHub repo name */
-    public static final String TERMUX_PACKAGES_GITHUB_REPO_NAME = "termux-packages"; // Default: "termux-packages"
-    /** Termux Packages GitHub repo url (upstream attribution, not affiliated) */
-    public static final String TERMUX_PACKAGES_GITHUB_REPO_URL = TERMUX_UPSTREAM_GITHUB_ORGANIZATION_URL + "/" + TERMUX_PACKAGES_GITHUB_REPO_NAME; // Upstream attribution: "https://github.com/termux/termux-packages"
-    /** Termux Packages GitHub issues repo url */
-    public static final String TERMUX_PACKAGES_GITHUB_ISSUES_REPO_URL = TERMUX_PACKAGES_GITHUB_REPO_URL + "/issues"; // Default: "https://github.com/termux/termux-packages/issues"
-
-
-    /** Termux API apt package name */
-    public static final String TERMUX_API_APT_PACKAGE_NAME = "termux-api"; // Default: "termux-api"
-    /** Termux API apt GitHub repo name */
-    public static final String TERMUX_API_APT_GITHUB_REPO_NAME = "termux-api-package"; // Default: "termux-api-package"
-    /** Termux API apt GitHub repo url (upstream attribution, not affiliated) */
-    public static final String TERMUX_API_APT_GITHUB_REPO_URL = TERMUX_UPSTREAM_GITHUB_ORGANIZATION_URL + "/" + TERMUX_API_APT_GITHUB_REPO_NAME; // Upstream attribution: "https://github.com/termux/termux-api-package"
-    /** Termux API apt GitHub issues repo url */
-    public static final String TERMUX_API_APT_GITHUB_ISSUES_REPO_URL = TERMUX_API_APT_GITHUB_REPO_URL + "/issues"; // Default: "https://github.com/termux/termux-api-package/issues"
-
-
-
-
-
-    /*
      * Termux miscellaneous urls.
      */
 
@@ -554,9 +529,6 @@ public final class TermuxConstants {
     /** Termux GitHub wiki repo url (fork) */
     public static final String TERMUX_GITHUB_WIKI_REPO_URL = TERMUX_GITHUB_REPO_URL + "/wiki"; // Default: "https://github.com/ESTRIN217/Terminal/wiki"
 
-    /** Termux Packages wiki repo url (upstream attribution, not affiliated) */
-    public static final String TERMUX_PACKAGES_GITHUB_WIKI_REPO_URL = TERMUX_PACKAGES_GITHUB_REPO_URL + "/wiki"; // Upstream attribution: "https://github.com/termux/termux-packages/wiki"
-
 
     /** Termux support url (fork issues, no upstream support) */
     public static final String TERMUX_SUPPORT_EMAIL_URL = "https://github.com/ESTRIN217/Terminal/issues"; // Default: "https://github.com/ESTRIN217/Terminal/issues"
@@ -570,10 +542,6 @@ public final class TermuxConstants {
 
     /** Terminal discussions url (fork) */
     public static final String TERMUX_REDDIT_SUBREDDIT_URL = "https://github.com/ESTRIN217/Terminal/discussions"; // Default: "https://github.com/ESTRIN217/Terminal/discussions"
-
-
-    /** Termux donate url (fork repo, no upstream donation link) */
-    public static final String TERMUX_DONATE_URL = TERMUX_SITE_URL; // Default: "https://github.com/ESTRIN217/Terminal"
 
 
 
@@ -1020,7 +988,7 @@ public final class TermuxConstants {
 
 
         /** Termux app settings activity name. */
-        public static final String TERMUX_SETTINGS_ACTIVITY_NAME = TERMUX_PACKAGE_NAME + ".app.activities.SettingsActivity"; // Default: "com.estrin217.terminal.app.activities.SettingsActivity"
+        public static final String TERMUX_SETTINGS_ACTIVITY_NAME = TERMUX_PACKAGE_NAME + ".app.activities.SettingsComposeActivity"; // Default: "com.estrin217.terminal.app.activities.SettingsComposeActivity"
 
 
 

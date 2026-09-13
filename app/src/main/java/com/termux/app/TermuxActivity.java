@@ -40,9 +40,9 @@ import com.termux.shared.android.PermissionUtils;
 import com.termux.shared.data.DataUtils;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY;
-import com.termux.app.activities.FileManagerActivity;
+import com.termux.app.activities.FileManagerComposeActivity;
 import com.termux.app.activities.HelpActivity;
-import com.termux.app.activities.SettingsActivity;
+import com.termux.app.activities.SettingsComposeActivity;
 import com.termux.shared.termux.crash.TermuxCrashUtils;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.app.terminal.TermuxSessionsListViewController;
@@ -573,14 +573,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void setFileManagerButtonView() {
         ImageButton fileManagerButton = findViewById(R.id.file_manager_button);
         fileManagerButton.setOnClickListener(v -> {
-            ActivityUtils.startActivity(this, new Intent(this, FileManagerActivity.class));
+            ActivityUtils.startActivity(this, new Intent(this, FileManagerComposeActivity.class));
         });
     }
 
     private void setSettingsButtonView() {
         ImageButton settingsButton = findViewById(R.id.settings_button);
         settingsButton.setOnClickListener(v -> {
-            ActivityUtils.startActivity(this, new Intent(this, SettingsActivity.class));
+            ActivityUtils.startActivity(this, new Intent(this, SettingsComposeActivity.class));
         });
     }
 
@@ -770,7 +770,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 ActivityUtils.startActivity(this, new Intent(this, HelpActivity.class));
                 return true;
             case CONTEXT_MENU_SETTINGS_ID:
-                ActivityUtils.startActivity(this, new Intent(this, SettingsActivity.class));
+                ActivityUtils.startActivity(this, new Intent(this, SettingsComposeActivity.class));
                 return true;
             case CONTEXT_MENU_REPORT_ID:
                 mTermuxTerminalViewClient.reportIssueFromTranscript();
