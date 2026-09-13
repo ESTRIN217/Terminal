@@ -48,13 +48,13 @@ android {
         buildConfigField("String", "TERMUX_PACKAGE_VARIANT", "\"$packageVariant\"")
 
         manifestPlaceholders["TERMUX_PACKAGE_NAME"] = "com.estrin217.terminal"
-        manifestPlaceholders["TERMUX_APP_NAME"] = "Termux"
-        manifestPlaceholders["TERMUX_API_APP_NAME"] = "Termux:API"
-        manifestPlaceholders["TERMUX_BOOT_APP_NAME"] = "Termux:Boot"
-        manifestPlaceholders["TERMUX_FLOAT_APP_NAME"] = "Termux:Float"
-        manifestPlaceholders["TERMUX_STYLING_APP_NAME"] = "Termux:Styling"
-        manifestPlaceholders["TERMUX_TASKER_APP_NAME"] = "Termux:Tasker"
-        manifestPlaceholders["TERMUX_WIDGET_APP_NAME"] = "Termux:Widget"
+        manifestPlaceholders["TERMUX_APP_NAME"] = "Terminal"
+        manifestPlaceholders["TERMUX_API_APP_NAME"] = "Terminal:API"
+        manifestPlaceholders["TERMUX_BOOT_APP_NAME"] = "Terminal:Boot"
+        manifestPlaceholders["TERMUX_FLOAT_APP_NAME"] = "Terminal:Float"
+        manifestPlaceholders["TERMUX_STYLING_APP_NAME"] = "Terminal:Styling"
+        manifestPlaceholders["TERMUX_TASKER_APP_NAME"] = "Terminal:Tasker"
+        manifestPlaceholders["TERMUX_WIDGET_APP_NAME"] = "Terminal:Widget"
 
         splits {
             abi {
@@ -136,6 +136,24 @@ android {
     }
 }
 
+// APK file naming (ported from the pre-Kotlin build.gradle): CI workflows locate
+// artifacts as "terminal_<versionTag>_<abi>.apk". TERMUX_APK_VERSION_TAG is set by
+// the release/debug workflows; when empty, "<packageVariant>-<buildType>" is used.
+androidComponents {
+    onVariants { variant ->
+        val buildTypeName = variant.buildType
+        if (buildTypeName == "debug" || buildTypeName == "release") {
+            variant.outputs.forEach { output ->
+                val abi = output.filters
+                    .find { it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI }
+                    ?.identifier ?: "universal"
+                val tag = apkVersionTag.ifEmpty { "$packageVariant-$buildTypeName" }
+                output.outputFileName.set("terminal_${tag}_${abi}.apk")
+            }
+        }
+    }
+}
+
 dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
@@ -160,8 +178,11 @@ dependencies {
 }
 
 tasks.register("versionName") {
+    // Stored as a task input so the doLast action does not capture the script
+    // object (which breaks configuration cache serialization).
+    inputs.property("appVersionName", android.defaultConfig.versionName)
     doLast {
-        println(android.defaultConfig.versionName)
+        println(inputs.properties["appVersionName"])
     }
 }
 

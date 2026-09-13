@@ -1,1 +1,4 @@
-custom: https://termux.dev/donate
+# No upstream Termux donation links: this is an independent fork (ESTRIN217/Terminal).
+# Add your own funding links here if desired, e.g.:
+# github: ESTRIN217
+# custom: https://github.com/ESTRIN217/Terminal

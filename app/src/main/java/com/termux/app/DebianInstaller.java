@@ -115,8 +115,17 @@ final class DebianInstaller {
      */
     static synchronized void install(Context context, Listener listener) {
         if (isInstalled()) {
-            Logger.logInfo(LOG_TAG, "Debian rootfs already installed.");
-            if (listener != null) listener.onFinished();
+            Logger.logInfo(LOG_TAG, "Debian rootfs already installed, repairing permissions.");
+            // Best-effort repair for rootfs extracted before mode preservation
+            // (0700 on tmp/var/lib/dpkg breaks dpkg even as fake root) and for
+            // installing the link(2)-emulation shim (Fase 6).
+            Context appContext = context.getApplicationContext();
+            new Thread(() -> {
+                Error repairError = repairInstalledRootfsPermissions(appContext);
+                if (repairError != null)
+                    Logger.logErrorExtended(LOG_TAG, "Debian permission repair failed:\n" + repairError);
+                if (listener != null) listener.onFinished();
+            }, "debian-permission-repair").start();
             return;
         }
         if (sInstalling) {
@@ -197,7 +206,7 @@ final class DebianInstaller {
             }
 
             reportProgress(Phase.CONFIGURING, 0, -1);
-            error = writePostInstallConfig(staging);
+            error = writePostInstallConfig(staging, context);
             if (error != null) {
                 reportError(error);
                 return;
@@ -330,6 +339,9 @@ final class DebianInstaller {
                 if (entry.isDirectory()) {
                     Error error = FileUtils.createDirectoryFile(out.getAbsolutePath());
                     if (error != null) return error;
+                    // Preserve tar dir mode (755, 1777 for /tmp, ...). mkdirs() alone
+                    // inherits the app umask and produced 0700 dirs that break apt/dpkg.
+                    applyMode(out, entry.getMode());
                 } else if (entry.isSymbolicLink()) {
                     Error error = ensureParentExists(out);
                     if (error != null) return error;
@@ -354,7 +366,7 @@ final class DebianInstaller {
                     } catch (Exception e) {
                         return new Error("Failed to extract file \"" + out.getAbsolutePath() + "\".", e);
                     }
-                    applyExecutableBit(out, entry.getMode());
+                    applyFileMode(out, entry.getMode());
                     extractedFiles++;
                 } else {
                     Logger.logDebug(LOG_TAG, "Skipping special tar entry: \"" + entry.getName() + "\".");
@@ -454,19 +466,47 @@ final class DebianInstaller {
         return FileUtils.createDirectoryFile(parent.getAbsolutePath());
     }
 
-    private static void applyExecutableBit(File out, int mode) {
-        // Preserve owner-executable bit from the tar entry (binaries, scripts).
-        if ((mode & 0100) != 0 && !out.setExecutable(true, true))
-            Logger.logError(LOG_TAG, "Failed to set executable bit on \"" + out.getAbsolutePath() + "\".");
+    private static void applyFileMode(File out, int mode) {
+        // Preserve full permission bits (incl. sticky 01000 for /tmp). Best effort:
+        // charging obscure suid/sgid bits must never abort the install.
+        if (!chmodUnchecked(out.getAbsolutePath(), normalizeMode(mode))) {
+            if ((mode & 0100) != 0 && !out.setExecutable(true, true))
+                Logger.logError(LOG_TAG, "Failed to set executable bit on \"" + out.getAbsolutePath() + "\".");
+        }
+    }
+
+    private static void applyMode(File out, int mode) {
+        chmodUnchecked(out.getAbsolutePath(), normalizeMode(mode));
+    }
+
+    /**
+     * Mask a tar entry mode down to permission bits (sticky/suid/sgid kept).
+     *
+     * @param mode Raw tar entry mode.
+     * @return Returns {@code mode & 07777}.
+     */
+    static int normalizeMode(int mode) {
+        return mode & 07777;
+    }
+
+    private static boolean chmodUnchecked(String path, int mode) {
+        try {
+            Os.chmod(path, mode);
+            return true;
+        } catch (Exception e) {
+            Logger.logDebug(LOG_TAG, "chmod " + Integer.toOctalString(mode) + " failed on \"" + path + "\": " + e.getMessage());
+            return false;
+        }
     }
 
     /**
      * Write post-install configuration: DNS and APT sandbox workaround for proot.
      *
      * @param staging The staging directory {@link File}.
+     * @param context The {@link Context} to read the bundled linkfix asset.
      * @return Returns the {@link Error} on failure, otherwise {@code null}.
      */
-    private static Error writePostInstallConfig(File staging) {
+    private static Error writePostInstallConfig(File staging, Context context) {
         Error error = FileUtils.writeTextToFile("debian resolv.conf",
             new File(staging, "etc/resolv.conf").getAbsolutePath(),
             StandardCharsets.UTF_8, "nameserver 1.1.1.1\nnameserver 8.8.8.8\n", false);
@@ -475,9 +515,114 @@ final class DebianInstaller {
         error = FileUtils.createDirectoryFile(new File(staging, "etc/apt/apt.conf.d").getAbsolutePath());
         if (error != null) return error;
 
-        return FileUtils.writeTextToFile("debian apt sandbox config",
+        error = FileUtils.writeTextToFile("debian apt sandbox config",
             new File(staging, "etc/apt/apt.conf.d/01norestrict").getAbsolutePath(),
             StandardCharsets.UTF_8, "APT::Sandbox::User \"root\";\n", false);
+        if (error != null) return error;
+
+        error = installLinkfixToRootfs(context, staging);
+        if (error != null) return error;
+
+        return enforceCriticalPermissions(staging);
+    }
+
+    /**
+     * Enforce Debian-expected modes for paths dpkg/apt need.
+     *
+     * <p>Extraction alone cannot be trusted: {@code mkdirs()}/{@code FileOutputStream}
+     * apply the app umask, which previously left {@code /tmp} and
+     * {@code /var/lib/dpkg} at {@code 0700} and broke
+     * {@code apt upgrade} (dpkg backup links, {@code status-old}).</p>
+     *
+     * @param root The staging or live rootfs directory {@link File}.
+     * @return Returns the {@link Error} on failure, otherwise {@code null}.
+     */
+    private static Error enforceCriticalPermissions(File root) {
+        Error error = FileUtils.createDirectoryFile(new File(root, "var/lib/dpkg/updates").getAbsolutePath());
+        if (error != null) return error;
+        error = FileUtils.createDirectoryFile(new File(root, "run/shm").getAbsolutePath());
+        if (error != null) return error;
+
+        chmodUnchecked(new File(root, "tmp").getAbsolutePath(), 01777);
+        chmodUnchecked(new File(root, "var/tmp").getAbsolutePath(), 01777);
+        chmodUnchecked(new File(root, "var/lib/dpkg").getAbsolutePath(), 0755);
+        chmodUnchecked(new File(root, "var/lib/dpkg/updates").getAbsolutePath(), 0755);
+        chmodUnchecked(new File(root, "etc/apt").getAbsolutePath(), 0755);
+        chmodUnchecked(new File(root, "etc/apt/apt.conf.d").getAbsolutePath(), 0755);
+        chmodUnchecked(new File(root, "var/cache/apt/archives").getAbsolutePath(), 0755);
+        chmodUnchecked(new File(root, "etc/resolv.conf").getAbsolutePath(), 0644);
+        chmodUnchecked(new File(root, "etc/apt/apt.conf.d/01norestrict").getAbsolutePath(), 0644);
+        chmodUnchecked(new File(root, TermuxConstants.LINKFIX_GUEST_SO_PATH.substring(1)).getAbsolutePath(), 0755);
+        return null;
+    }
+
+    /**
+     * Whether the link(2)-emulation shim is present in the live rootfs.
+     *
+     * @return Returns {@code true} if the shim exists in the installed rootfs.
+     */
+    static boolean isLinkfixInstalled() {
+        return new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH
+            + TermuxConstants.LINKFIX_GUEST_SO_PATH).isFile();
+    }
+
+    /**
+     * Copy the bundled link(2)-emulation shim into a rootfs (Fase 6).
+     *
+     * <p>Some devices deny link(2)/linkat(2) inside app data entirely (Android 15
+     * SELinux/filesystem policy: touch works, link fails with EACCES even as
+     * fake root). dpkg requires hardlinks for every status update and file
+     * backup, so without this shim dpkg is unusable there. The shim is
+     * preloaded via {@code LD_PRELOAD} (see {@link ProotShellEnvironment})
+     * and emulates links of regular files with copies.</p>
+     *
+     * @param context The {@link Context} to read the bundled asset.
+     * @param root The staging or live rootfs directory {@link File}.
+     * @return Returns the {@link Error} on failure, otherwise {@code null}.
+     */
+    private static Error installLinkfixToRootfs(Context context, File root) {
+        File dest = new File(root, TermuxConstants.LINKFIX_GUEST_SO_PATH.substring(1));
+        Error error = FileUtils.createDirectoryFile(dest.getParent());
+        if (error != null) return error;
+
+        try (InputStream in = new BufferedInputStream(
+                context.getAssets().open(TermuxConstants.LINKFIX_SO_ASSET_PATH));
+             OutputStream out = new FileOutputStream(dest)) {
+            byte[] buffer = new byte[32768];
+            int readBytes;
+            while ((readBytes = in.read(buffer)) != -1)
+                out.write(buffer, 0, readBytes);
+        } catch (Exception e) {
+            return new Error("Failed to install linkfix shim to \"" + dest.getAbsolutePath() + "\".", e);
+        }
+
+        if (!chmodUnchecked(dest.getAbsolutePath(), 0755))
+            return new Error("Failed to chmod 0755 linkfix shim at \"" + dest.getAbsolutePath() + "\".");
+        return null;
+    }
+
+    /**
+     * Repair permissions of an already-installed rootfs in place.
+     *
+     * <p>Installs extracted before mode preservation shipped with
+     * {@code 0700} on {@code tmp}, {@code var/tmp} and {@code var/lib/dpkg},
+     * which makes {@code dpkg} fail with {@code Permission denied} on
+     * {@code status-old} and backup links even as (fake) root. Also installs
+     * the link(2)-emulation shim if missing.</p>
+     *
+     * @param context The {@link Context} to read the bundled linkfix asset.
+     * @return Returns the {@link Error} if no usable rootfs is installed,
+     * otherwise {@code null} (chmods are best effort).
+     */
+    static Error repairInstalledRootfsPermissions(Context context) {
+        if (!isInstalled())
+            return new Error("No usable Debian rootfs installed at \"" + TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "\".");
+        File root = new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH);
+        if (!isLinkfixInstalled()) {
+            Error error = installLinkfixToRootfs(context, root);
+            if (error != null) return error;
+        }
+        return enforceCriticalPermissions(root);
     }
 
     private static String sha256OfFile(File file, long[] progressOut) throws Exception {

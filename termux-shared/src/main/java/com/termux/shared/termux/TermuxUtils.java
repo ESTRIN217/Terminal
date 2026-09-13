@@ -169,8 +169,8 @@ public class TermuxUtils {
     }
 
     /**
-     * Check if Termux:API app is installed and enabled. This can be used by external apps that don't
-     * share `sharedUserId` with the Termux:API app.
+     * Check if Terminal:API app is installed and enabled. This can be used by external apps that don't
+     * share `sharedUserId` with the Terminal:API app.
      *
      * @param context The context for operations.
      * @return Returns {@code errmsg} if {@link TermuxConstants#TERMUX_API_PACKAGE_NAME} is not installed

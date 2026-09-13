@@ -1,15 +1,24 @@
 package com.termux.app
 
+import android.app.AlertDialog
+import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.IBinder
+import android.view.ContextMenu
 import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.Menu
+import android.view.MenuItem
+import android.view.View
 import android.view.WindowManager
+import android.widget.ListView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -32,11 +41,24 @@ import com.termux.R
 import com.termux.app.activities.FileManagerActivity
 import com.termux.app.activities.HelpActivity
 import com.termux.app.activities.SettingsActivity
+import com.termux.app.models.UserAction
 import com.termux.shared.activity.ActivityUtils
+import com.termux.shared.activities.ReportActivity
+import com.termux.shared.android.AndroidUtils
+import com.termux.shared.data.DataUtils
 import com.termux.shared.errors.Error
+import com.termux.shared.file.FileUtils
+import com.termux.shared.interact.MessageDialogUtils
+import com.termux.shared.interact.ShareUtils
 import com.termux.shared.logger.Logger
+import com.termux.shared.markdown.MarkdownUtils
+import com.termux.shared.models.ReportInfo
+import com.termux.shared.shell.ShellUtils
+import com.termux.shared.termux.TermuxBootstrap
+import com.termux.shared.termux.TermuxConstants
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY
 import com.termux.shared.termux.TermuxUtils
+import com.termux.shared.termux.data.TermuxUrlUtils
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties
 import com.termux.shared.termux.settings.properties.TermuxPropertyConstants
@@ -69,6 +91,19 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
     companion object {
         private const val LOG_TAG = "TermuxComposeActivity"
         private const val MAX_SESSIONS = 8
+
+        private const val CONTEXT_MENU_SELECT_URL_ID = 0
+        private const val CONTEXT_MENU_SHARE_TRANSCRIPT_ID = 1
+        private const val CONTEXT_MENU_SHARE_SELECTED_TEXT = 10
+        private const val CONTEXT_MENU_AUTOFILL_USERNAME = 11
+        private const val CONTEXT_MENU_AUTOFILL_PASSWORD = 2
+        private const val CONTEXT_MENU_RESET_TERMINAL_ID = 3
+        private const val CONTEXT_MENU_KILL_PROCESS_ID = 4
+        private const val CONTEXT_MENU_STYLING_ID = 5
+        private const val CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON = 6
+        private const val CONTEXT_MENU_HELP_ID = 7
+        private const val CONTEXT_MENU_SETTINGS_ID = 8
+        private const val CONTEXT_MENU_REPORT_ID = 9
     }
 
     private var mTermuxService: TermuxService? = null
@@ -618,5 +653,267 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         } catch (e: Exception) {
             Logger.logDebug(LOG_TAG, "Failed to load extra keys config: ${e.message}")
         }
+    }
+
+    /** Build the "More" context menu of the text selection toolbar, mirroring the classic
+     * {@link TermuxActivity#onCreateContextMenu}. */
+    override fun onCreateContextMenu(menu: ContextMenu, v: View, menuInfo: ContextMenu.ContextMenuInfo?) {
+        val currentSession = getCurrentSession()
+        if (currentSession == null) return
+
+        val terminalView = TerminalViewRegistry.activeView
+        val autoFillEnabled = terminalView?.isAutoFillEnabled == true
+
+        menu.add(Menu.NONE, CONTEXT_MENU_SELECT_URL_ID, Menu.NONE, R.string.action_select_url)
+        menu.add(Menu.NONE, CONTEXT_MENU_SHARE_TRANSCRIPT_ID, Menu.NONE, R.string.action_share_transcript)
+        if (!DataUtils.isNullOrEmpty(terminalView?.storedSelectedText))
+            menu.add(Menu.NONE, CONTEXT_MENU_SHARE_SELECTED_TEXT, Menu.NONE, R.string.action_share_selected_text)
+        if (autoFillEnabled)
+            menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_USERNAME, Menu.NONE, R.string.action_autofill_username)
+        if (autoFillEnabled)
+            menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_PASSWORD, Menu.NONE, R.string.action_autofill_password)
+        menu.add(Menu.NONE, CONTEXT_MENU_RESET_TERMINAL_ID, Menu.NONE, R.string.action_reset_terminal)
+        menu.add(Menu.NONE, CONTEXT_MENU_KILL_PROCESS_ID, Menu.NONE,
+            getResources().getString(R.string.action_kill_process, currentSession.getPid()))
+            .setEnabled(currentSession.isRunning())
+        menu.add(Menu.NONE, CONTEXT_MENU_STYLING_ID, Menu.NONE, R.string.action_style_terminal)
+        menu.add(Menu.NONE, CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, Menu.NONE, R.string.action_toggle_keep_screen_on)
+            .setCheckable(true).setChecked(mPreferences.shouldKeepScreenOn())
+        menu.add(Menu.NONE, CONTEXT_MENU_HELP_ID, Menu.NONE, R.string.action_open_help)
+        menu.add(Menu.NONE, CONTEXT_MENU_SETTINGS_ID, Menu.NONE, R.string.action_open_settings)
+        menu.add(Menu.NONE, CONTEXT_MENU_REPORT_ID, Menu.NONE, R.string.action_report_issue)
+    }
+
+    /** Handle items of the "More" context menu of the text selection toolbar. */
+    override fun onContextItemSelected(item: MenuItem): Boolean {
+        val session = getCurrentSession()
+
+        return when (item.itemId) {
+            CONTEXT_MENU_SELECT_URL_ID -> {
+                showUrlSelection()
+                true
+            }
+            CONTEXT_MENU_SHARE_TRANSCRIPT_ID -> {
+                shareSessionTranscript()
+                true
+            }
+            CONTEXT_MENU_SHARE_SELECTED_TEXT -> {
+                shareSelectedText()
+                true
+            }
+            CONTEXT_MENU_AUTOFILL_USERNAME -> {
+                TerminalViewRegistry.activeView?.requestAutoFillUsername()
+                true
+            }
+            CONTEXT_MENU_AUTOFILL_PASSWORD -> {
+                TerminalViewRegistry.activeView?.requestAutoFillPassword()
+                true
+            }
+            CONTEXT_MENU_RESET_TERMINAL_ID -> {
+                onResetTerminalSession(session)
+                true
+            }
+            CONTEXT_MENU_KILL_PROCESS_ID -> {
+                showKillSessionDialog(session)
+                true
+            }
+            CONTEXT_MENU_STYLING_ID -> {
+                showStylingDialog()
+                true
+            }
+            CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON -> {
+                setKeepScreenOn(!mIsKeepScreenOnEnabled)
+                true
+            }
+            CONTEXT_MENU_HELP_ID -> {
+                ActivityUtils.startActivity(this, Intent(this, HelpActivity::class.java))
+                true
+            }
+            CONTEXT_MENU_SETTINGS_ID -> {
+                ActivityUtils.startActivity(this, Intent(this, SettingsActivity::class.java))
+                true
+            }
+            CONTEXT_MENU_REPORT_ID -> {
+                reportIssueFromTranscript()
+                true
+            }
+            else -> super.onContextItemSelected(item)
+        }
+    }
+
+    override fun onContextMenuClosed(menu: Menu) {
+        super.onContextMenuClosed(menu)
+        // onContextMenuClosed() is triggered twice if back button is pressed to dismiss instead
+        // of tap for some reason
+        TerminalViewRegistry.activeView?.onContextMenuClosed(menu)
+    }
+
+    private fun showKillSessionDialog(session: TerminalSession?) {
+        if (session == null) return
+
+        AlertDialog.Builder(this)
+            .setIcon(android.R.drawable.ic_dialog_alert)
+            .setMessage(R.string.title_confirm_kill_process)
+            .setPositiveButton(android.R.string.yes) { dialog, _ ->
+                dialog.dismiss()
+                session.finishIfRunning()
+            }
+            .setNegativeButton(android.R.string.no, null)
+            .show()
+    }
+
+    private fun onResetTerminalSession(session: TerminalSession?) {
+        if (session != null) {
+            session.reset()
+            Toast.makeText(this, R.string.msg_terminal_reset, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showStylingDialog() {
+        val stylingIntent = Intent().apply {
+            setClassName(
+                TermuxConstants.TERMUX_STYLING_PACKAGE_NAME,
+                TermuxConstants.TERMUX_STYLING_APP.TERMUX_STYLING_ACTIVITY_NAME
+            )
+        }
+        try {
+            startActivity(stylingIntent)
+        } catch (e: ActivityNotFoundException) {
+            showStylingNotInstalledDialog()
+        } catch (e: IllegalArgumentException) {
+            showStylingNotInstalledDialog()
+        }
+    }
+
+    private fun showStylingNotInstalledDialog() {
+        AlertDialog.Builder(this)
+            .setMessage(R.string.error_styling_not_installed)
+            .setPositiveButton(R.string.action_styling_install) { _, _ ->
+                ActivityUtils.startActivity(
+                    this,
+                    Intent(Intent.ACTION_VIEW, Uri.parse(TermuxConstants.TERMUX_STYLING_FDROID_PACKAGE_URL))
+                )
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun shareSessionTranscript() {
+        val session = getCurrentSession() ?: return
+
+        var transcriptText = ShellUtils.getTerminalSessionTranscriptText(session, false, true) ?: return
+
+        // See https://github.com/termux/termux-app/issues/1166.
+        transcriptText = DataUtils.getTruncatedCommandOutput(
+            transcriptText, DataUtils.TRANSACTION_SIZE_LIMIT_IN_BYTES, false, true, false
+        ).trim()
+        ShareUtils.shareText(this, getString(R.string.title_share_transcript),
+            transcriptText, getString(R.string.title_share_transcript_with))
+    }
+
+    private fun shareSelectedText() {
+        val selectedText = TerminalViewRegistry.activeView?.storedSelectedText
+        if (DataUtils.isNullOrEmpty(selectedText)) return
+        ShareUtils.shareText(this, getString(R.string.title_share_selected_text),
+            selectedText, getString(R.string.title_share_selected_text_with))
+    }
+
+    private fun showUrlSelection() {
+        val session = getCurrentSession() ?: return
+
+        val text = ShellUtils.getTerminalSessionTranscriptText(session, true, true)
+        val urlSet = TermuxUrlUtils.extractUrls(text)
+        if (urlSet.isEmpty()) {
+            AlertDialog.Builder(this).setMessage(R.string.title_select_url_none_found).show()
+            return
+        }
+
+        // Latest first.
+        val urls = urlSet.toTypedArray().reversedArray()
+
+        // Click to copy url to clipboard:
+        val dialog = AlertDialog.Builder(this)
+            .setItems(urls) { _, which ->
+                ShareUtils.copyTextToClipboard(
+                    this, urls[which].toString(),
+                    getString(R.string.msg_select_url_copied_to_clipboard)
+                )
+            }
+            .setTitle(R.string.title_select_url_dialog)
+            .create()
+
+        // Long press to open URL:
+        dialog.setOnShowListener {
+            val listView = dialog.getListView()
+            listView?.setOnItemLongClickListener { _, _, position, _ ->
+                dialog.dismiss()
+                ShareUtils.openUrl(this, urls[position].toString())
+                true
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun reportIssueFromTranscript() {
+        val session = getCurrentSession() ?: return
+
+        val transcriptText = ShellUtils.getTerminalSessionTranscriptText(session, false, true) ?: return
+
+        MessageDialogUtils.showMessage(this, TermuxConstants.TERMUX_APP_NAME + " Report Issue",
+            getString(R.string.msg_add_termux_debug_info),
+            getString(com.termux.shared.R.string.action_yes),
+            { _, _ -> reportIssueFromTranscript(transcriptText, true) },
+            getString(com.termux.shared.R.string.action_no),
+            { _, _ -> reportIssueFromTranscript(transcriptText, false) },
+            null)
+    }
+
+    private fun reportIssueFromTranscript(transcriptText: String, addTermuxDebugInfo: Boolean) {
+        Logger.showToast(this, getString(R.string.msg_generating_report), true)
+
+        Thread {
+            val reportString = StringBuilder()
+
+            val title = TermuxConstants.TERMUX_APP_NAME + " Report Issue"
+
+            reportString.append("## Transcript\n")
+            reportString.append("\n").append(MarkdownUtils.getMarkdownCodeForString(transcriptText, true))
+            reportString.append("\n##\n")
+
+            if (addTermuxDebugInfo) {
+                reportString.append("\n\n").append(TermuxUtils.getAppInfoMarkdownString(
+                    this@TermuxComposeActivity, TermuxUtils.AppInfoMode.TERMUX_AND_PLUGIN_PACKAGES))
+            } else {
+                reportString.append("\n\n").append(TermuxUtils.getAppInfoMarkdownString(
+                    this@TermuxComposeActivity, TermuxUtils.AppInfoMode.TERMUX_PACKAGE))
+            }
+
+            reportString.append("\n\n").append(AndroidUtils.getDeviceInfoMarkdownString(this@TermuxComposeActivity, true))
+
+            if (TermuxBootstrap.isAppPackageManagerAPT()) {
+                val termuxAptInfo = TermuxUtils.geAPTInfoMarkdownString(this@TermuxComposeActivity)
+                if (termuxAptInfo != null)
+                    reportString.append("\n\n").append(termuxAptInfo)
+            }
+
+            if (addTermuxDebugInfo) {
+                val termuxDebugInfo = TermuxUtils.getTermuxDebugMarkdownString(this@TermuxComposeActivity)
+                if (termuxDebugInfo != null)
+                    reportString.append("\n\n").append(termuxDebugInfo)
+            }
+
+            val userActionName = UserAction.REPORT_ISSUE_FROM_TRANSCRIPT.getName()
+
+            val reportInfo = ReportInfo(userActionName,
+                TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY_NAME, title)
+            reportInfo.setReportString(reportString.toString())
+            reportInfo.setReportStringSuffix("\n\n" + TermuxUtils.getReportIssueMarkdownString(this@TermuxComposeActivity))
+            reportInfo.setReportSaveFileLabelAndPath(userActionName,
+                Environment.getExternalStorageDirectory().toString() + "/" +
+                    FileUtils.sanitizeFileName(TermuxConstants.TERMUX_APP_NAME + "-" + userActionName + ".log", true, true))
+
+            ReportActivity.startReportActivity(this@TermuxComposeActivity, reportInfo)
+        }.start()
     }
 }

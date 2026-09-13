@@ -1,4 +1,6 @@
-The `termux/termux-app` repository is released under [GPLv3 only](https://www.gnu.org/licenses/gpl-3.0.html) license.
+The `ESTRIN217/Terminal` repository is a fork of [`termux/termux-app`](https://github.com/termux/termux-app)
+and is released under the [GPLv3 only](https://www.gnu.org/licenses/gpl-3.0.html) license.
+It is not affiliated with, endorsed by, or supported by the Termux team.
 
 ### Exceptions
 

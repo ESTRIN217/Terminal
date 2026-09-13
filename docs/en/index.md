@@ -1,13 +1,13 @@
 ---
-page_ref: /docs/apps/termux/index.html
+page_ref: /docs/apps/terminal/index.html
 ---
 
-# Termux App Docs
+# Terminal Docs
 
 <!--- DOC_HEADER_PLACEHOLDER -->
 
-Welcome to documentation for the [Termux App].
+Welcome to documentation for [Terminal], an independent fork not affiliated with the Termux team.
 
 ##
 
-[Termux App]: https://github.com/termux/termux-app
+[Terminal]: https://github.com/ESTRIN217/Terminal

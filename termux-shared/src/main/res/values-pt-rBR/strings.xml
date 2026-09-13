@@ -2,13 +2,13 @@
 
 <!DOCTYPE resources [
     <!ENTITY TERMUX_PACKAGE_NAME "com.estrin217.terminal">
-    <!ENTITY TERMUX_APP_NAME "Termux">
-    <!ENTITY TERMUX_API_APP_NAME "Termux:API">
-    <!ENTITY TERMUX_BOOT_APP_NAME "Termux:Boot">
-    <!ENTITY TERMUX_FLOAT_APP_NAME "Termux:Float">
-    <!ENTITY TERMUX_STYLING_APP_NAME "Termux:Styling">
-    <!ENTITY TERMUX_TASKER_APP_NAME "Termux:Tasker">
-    <!ENTITY TERMUX_WIDGET_APP_NAME "Termux:Widget">
+    <!ENTITY TERMUX_APP_NAME "Terminal">
+    <!ENTITY TERMUX_API_APP_NAME "Terminal:API">
+    <!ENTITY TERMUX_BOOT_APP_NAME "Terminal:Boot">
+    <!ENTITY TERMUX_FLOAT_APP_NAME "Terminal:Float">
+    <!ENTITY TERMUX_STYLING_APP_NAME "Terminal:Styling">
+    <!ENTITY TERMUX_TASKER_APP_NAME "Terminal:Tasker">
+    <!ENTITY TERMUX_WIDGET_APP_NAME "Terminal:Widget">
     <!ENTITY TERMUX_PREFIX_DIR_PATH "/data/data/com.estrin217.terminal/files/usr">
     ]>
 
@@ -81,18 +81,17 @@
     <!-- TermuxUtils -->
     <string name="msg_report_issue">
         Se você deseja relatar este problema, copie seu texto do menu de opções (3 pontos no canto superior direito) e publique
-        um problema em um dos seguintes links.
-        \n\nSe você estiver publicando um relatório de falha do aplicativo Termux, forneça detalhes sobre o que você estava fazendo que
+        um problema em https://github.com/ESTRIN217/Terminal/issues.
+        \n\nSe você estiver publicando um relatório de falha do aplicativo Terminal, forneça detalhes sobre o que você estava fazendo que
         causou a falha e como reproduzi-la, se possível.
-        \n\nSe você estiver publicando um problema no GitHub, publique-o no repositório ao qual o relatório pertence.
-        Problemas abertos ou emails enviados com **(parciais) capturas de tela** em vez de texto copiado ou um arquivo deste relatório
+        \n\nProblemas abertos ou emails enviados com **(parciais) capturas de tela** em vez de texto copiado ou um arquivo deste relatório
         **provavelmente serão fechados/excluídos automaticamente**. Você pode remover opcionalmente qualquer informação específica do dispositivo que
         considere privada ou que não deseje compartilhar ou que não seja relevante para o problema.
-        \n\nNão fornecemos suporte para ferramentas/scripts relacionados a hacking. Quaisquer perguntas feitas sobre eles por email,
-        no GitHub ou em outros fóruns oficiais da comunidade Termux **provavelmente serão fechadas/excluídas automaticamente** e podem
-        até resultar em banimento **temporário ou permanente**. Consulte %1$s/wiki/Hacking para detalhes.</string>
+        \n\nNão fornecemos suporte para ferramentas/scripts relacionados a hacking. Quaisquer perguntas feitas sobre eles
+        **provavelmente serão fechadas/excluídas automaticamente** e podem
+        até resultar em banimento **temporário ou permanente**.</string>
 
-    <string name="msg_termux_app_required_by_app">O &TERMUX_APP_NAME; é necessário para o aplicativo %1$s executar comandos do termux.</string>
+    <string name="msg_termux_app_required_by_app">O &TERMUX_APP_NAME; é necessário para o aplicativo %1$s executar comandos do terminal.</string>
     <string name="error_termux_app_package_context_not_accessible">O aplicativo &TERMUX_APP_NAME; (contexto do pacote) não está acessível.</string>
     <string name="error_termux_prefix_dir_path_not_accessible">O diretório $PREFIX do aplicativo &TERMUX_APP_NAME; não está acessível pelo aplicativo %1$s.
         Isso pode ser porque você não instalou ou configurou o aplicativo &TERMUX_APP_NAME; ou

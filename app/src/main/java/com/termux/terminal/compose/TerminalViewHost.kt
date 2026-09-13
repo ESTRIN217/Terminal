@@ -1,5 +1,6 @@
 package com.termux.terminal.compose
 
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -48,6 +49,10 @@ fun TerminalViewHost(
                 // activity_termux.xml; without it the view can never take focus in touch
                 // mode, so neither key events nor the soft keyboard reach it.
                 isFocusableInTouchMode = true
+                // Register with the activity so that the "More" menu of the text selection
+                // toolbar ("MORE" action in TextSelectionCursorController) shows a context
+                // menu handled by TermuxComposeActivity.
+                (context as? ComponentActivity)?.registerForContextMenu(this)
                 setTerminalViewClient(viewClient)
                 setTextSize(fontSize.toInt())
                 appliedFontSize = fontSize

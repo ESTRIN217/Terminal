@@ -84,7 +84,7 @@ import org.json.JSONObject;
  * "-_-" will input the string "-_-"
  * }
  *
- * For more info, check https://wiki.termux.com/wiki/Touch_Keyboard.
+ * For more info, check https://github.com/ESTRIN217/Terminal/wiki.
  */
 public class ExtraKeysInfo {
 

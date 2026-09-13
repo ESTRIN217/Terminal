@@ -263,7 +263,7 @@ public class SharedProperties {
      *
      * @param propertiesFilePaths The {@link List<String>} containing properties file paths.
      * @param logTag If log tag to use for logging errors.
-     * @return Returns the {@link File} object for Termux:Float app properties.
+     * @return Returns the {@link File} object for Terminal:Float app properties.
      */
     public static File getPropertiesFileFromList(List<String> propertiesFilePaths, @NonNull String logTag) {
         if (propertiesFilePaths == null || propertiesFilePaths.size() == 0)

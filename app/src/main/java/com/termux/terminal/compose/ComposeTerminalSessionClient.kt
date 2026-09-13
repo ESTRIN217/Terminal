@@ -1,5 +1,6 @@
 package com.termux.terminal.compose
 
+import com.termux.shared.interact.ShareUtils
 import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase
 import com.termux.terminal.TerminalSession
 
@@ -22,6 +23,17 @@ class ComposeTerminalSessionClient(
 
     override fun onTitleChanged(updatedSession: TerminalSession) {
         mViewModel.updateSessionTitle(updatedSession, updatedSession.title ?: "")
+    }
+
+    override fun onCopyTextToClipboard(session: TerminalSession, text: String) {
+        val view = TerminalViewRegistry.activeView ?: return
+        ShareUtils.copyTextToClipboard(view.context, text)
+    }
+
+    override fun onPasteTextFromClipboard(session: TerminalSession?) {
+        val view = TerminalViewRegistry.activeView ?: return
+        val text = ShareUtils.getTextStringFromClipboardIfSet(view.context, true) ?: return
+        (session ?: view.mTermSession)?.getEmulator()?.paste(text)
     }
 
     override fun onColorsChanged(changedSession: TerminalSession) {

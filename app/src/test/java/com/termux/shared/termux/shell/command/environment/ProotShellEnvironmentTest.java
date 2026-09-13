@@ -17,7 +17,8 @@ public class ProotShellEnvironmentTest {
             TermuxConstants.PROOT_BIN_PATH,
             "-r", TermuxConstants.DEBIAN_ROOTFS_DIR_PATH,
             "-0", "-w", "/root",
-            "-b", "/dev", "-b", "/proc", "-b", "/sys",
+            "-b", "/dev", "-b", "/dev/shm", "-b", "/dev/pts",
+            "-b", "/proc", "-b", "/sys",
             "-b", "/sdcard", "-b", "/storage",
             "/bin/bash", "--login"
         };
@@ -27,10 +28,31 @@ public class ProotShellEnvironmentTest {
     @Test
     public void testBuildProotCommand_extraArgsAppended() {
         String[] command = ProotShellEnvironment.buildProotCommand(new String[]{"-c", "echo hi"});
-        Assert.assertEquals(20, command.length);
-        Assert.assertEquals("--login", command[17]);
-        Assert.assertEquals("-c", command[18]);
-        Assert.assertEquals("echo hi", command[19]);
+        Assert.assertEquals(24, command.length);
+        Assert.assertEquals("--login", command[21]);
+        Assert.assertEquals("-c", command[22]);
+        Assert.assertEquals("echo hi", command[23]);
+    }
+
+    @Test
+    public void testBuildProotCommand_withLinkfix_wrapsGuestInEnv() {
+        String[] command = ProotShellEnvironment.buildProotCommand(null, true);
+        Assert.assertEquals(24, command.length);
+        // LD_PRELOAD must reach the guest via argv (/usr/bin/env), never via
+        // the host process environment (it would break the Bionic proot binary).
+        Assert.assertEquals("/usr/bin/env", command[20]);
+        Assert.assertEquals("LD_PRELOAD=" + TermuxConstants.LINKFIX_GUEST_SO_PATH, command[21]);
+        Assert.assertEquals("/bin/bash", command[22]);
+        Assert.assertEquals("--login", command[23]);
+    }
+
+    @Test
+    public void testBuildProotCommand_withLinkfix_extraArgsAfterLogin() {
+        String[] command = ProotShellEnvironment.buildProotCommand(new String[]{"-c", "echo hi"}, true);
+        Assert.assertEquals(26, command.length);
+        Assert.assertEquals("--login", command[23]);
+        Assert.assertEquals("-c", command[24]);
+        Assert.assertEquals("echo hi", command[25]);
     }
 
     @Test
@@ -43,8 +65,19 @@ public class ProotShellEnvironmentTest {
         Assert.assertEquals("/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", env.get("PATH"));
         Assert.assertEquals("/tmp", env.get("TMPDIR"));
         Assert.assertEquals(TermuxConstants.TERMUX_FILES_DIR_PATH, env.get("PROOT_TMP_DIR"));
+        Assert.assertEquals("C.UTF-8", env.get("LANG"));
+        Assert.assertEquals("C.UTF-8", env.get("LC_ALL"));
+        Assert.assertEquals("noninteractive", env.get("DEBIAN_FRONTEND"));
         Assert.assertFalse(env.containsKey("LD_PRELOAD"));
         Assert.assertFalse(env.containsKey("LD_LIBRARY_PATH"));
+    }
+
+    @Test
+    public void testGetEnvironment_noLinkfixPreloadWithoutRootfs() {
+        // No rootfs (and no shim) on the unit-test host: LD_PRELOAD must stay
+        // unset, otherwise every guest process would fail to start.
+        HashMap<String, String> env = new ProotShellEnvironment().getEnvironment(null, false);
+        Assert.assertFalse(env.containsKey("LD_PRELOAD"));
     }
 
     @Test

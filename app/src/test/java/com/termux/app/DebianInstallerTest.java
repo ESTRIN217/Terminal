@@ -52,4 +52,28 @@ public class DebianInstallerTest {
         // Fresh checkout has no rootfs; must be false (path is package-derived).
         Assert.assertFalse(DebianInstaller.isInstalled());
     }
+
+    @Test
+    public void testNormalizeMode_masksToPermissionBits() {
+        Assert.assertEquals(0755, DebianInstaller.normalizeMode(0100755));
+        Assert.assertEquals(0644, DebianInstaller.normalizeMode(0100644));
+        Assert.assertEquals(01777, DebianInstaller.normalizeMode(0401777));
+        Assert.assertEquals(0755, DebianInstaller.normalizeMode(0755));
+    }
+
+    @Test
+    public void testRepairInstalledRootfsPermissions_missingRootfs() {
+        // No rootfs on host test machine: must report an error, not throw.
+        // Context is unused on this path (checked after isInstalled()).
+        Assert.assertNotNull(DebianInstaller.repairInstalledRootfsPermissions(null));
+    }
+
+    @Test
+    public void testLinkfixConstants_pathsConsistent() {
+        Assert.assertEquals("debian/termux-linkfix.so",
+            TermuxConstants.LINKFIX_SO_ASSET_PATH);
+        Assert.assertEquals("/usr/libexec/termux-linkfix.so",
+            TermuxConstants.LINKFIX_GUEST_SO_PATH);
+        Assert.assertFalse(DebianInstaller.isLinkfixInstalled());
+    }
 }

@@ -26,6 +26,7 @@ import com.termux.shared.termux.plugins.TermuxPluginUtils;
 import com.termux.shared.data.IntentUtils;
 import com.termux.shared.net.uri.UriUtils;
 import com.termux.shared.errors.Errno;
+import com.termux.shared.errors.Error;
 import com.termux.shared.shell.ShellUtils;
 import com.termux.shared.shell.command.runner.app.AppShell;
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
@@ -265,10 +266,10 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
      *
      * Note that if don't kill the processes started by plugins which **expect** the result back
      * and notify their creators that they have been killed, then they may get stuck waiting for
-     * the results forever like in case of commands started by Termux:Tasker or RUN_COMMAND intent,
+     * the results forever like in case of commands started by Terminal:Tasker or RUN_COMMAND intent,
      * since once TermuxService has been killed, no result will be sent back. They may still get
      * stuck if termux app process gets killed, so for this case reasonable timeout values should
-     * be used, like in Tasker for the Termux:Tasker actions.
+     * be used, like in Tasker for the Terminal:Tasker actions.
      *
      * We make copies of each list since items are removed inside the loop.
      */
@@ -609,6 +610,13 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
                 && executionCommand.executable == null
                 && DebianInstaller.isInstalled()
                 && TermuxConstants.PROOT_BIN.canExecute()) {
+            // Ensure the rootfs is healthy before use (perms + linkfix shim).
+            // This covers every entry point (Compose, legacy activity,
+            // notification, shortcuts): repair is idempotent and fast, so it
+            // runs synchronously here instead of relying on the installer UI.
+            Error repairError = DebianInstaller.repairInstalledRootfsPermissions(this);
+            if (repairError != null)
+                Logger.logErrorExtended(LOG_TAG, "Debian rootfs repair failed (continuing anyway):\n" + repairError);
             // Default interactive shell runs inside the Debian guest via proot
             // (Fase 4). Failsafe and plugin commands keep the Termux environment.
             String[] prootCommand = ProotShellEnvironment.buildProotCommand(executionCommand.arguments);

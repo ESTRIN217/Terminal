@@ -110,13 +110,6 @@ fun TermuxMainScreen(
                             },
                             modifier = Modifier.weight(1f)
                         )
-                        MoreOptionsMenu(
-                            session = uiState.activeSession,
-                            isKeepScreenOnEnabled = isKeepScreenOnEnabled,
-                            onSetKeepScreenOn = onSetKeepScreenOn,
-                            onOpenHelp = onOpenHelp,
-                            onOpenSettings = onOpenSettings
-                        )
                     }
                 }
             }

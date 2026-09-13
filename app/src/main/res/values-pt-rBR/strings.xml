@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <!DOCTYPE resources [
-    <!ENTITY TERMUX_PACKAGE_NAME "com.termux">
+    <!ENTITY TERMUX_PACKAGE_NAME "com.estrin217.terminal">
     <!ENTITY TERMUX_APP_NAME "Terminal">
-    <!ENTITY TERMUX_API_APP_NAME "Termux:API">
-    <!ENTITY TERMUX_BOOT_APP_NAME "Termux:Boot">
-    <!ENTITY TERMUX_FLOAT_APP_NAME "Termux:Float">
-    <!ENTITY TERMUX_STYLING_APP_NAME "Termux:Styling">
-    <!ENTITY TERMUX_TASKER_APP_NAME "Termux:Tasker">
-    <!ENTITY TERMUX_WIDGET_APP_NAME "Termux:Widget">
+    <!ENTITY TERMUX_API_APP_NAME "Terminal:API">
+    <!ENTITY TERMUX_BOOT_APP_NAME "Terminal:Boot">
+    <!ENTITY TERMUX_FLOAT_APP_NAME "Terminal:Float">
+    <!ENTITY TERMUX_STYLING_APP_NAME "Terminal:Styling">
+    <!ENTITY TERMUX_TASKER_APP_NAME "Terminal:Tasker">
+    <!ENTITY TERMUX_WIDGET_APP_NAME "Terminal:Widget">
     ]>
 
 <resources>
@@ -18,14 +18,14 @@
 
 
 
-    <!-- Termux RUN_COMMAND permission -->
+    <!-- Terminal RUN_COMMAND permission -->
     <string name="permission_run_command_label">Executar comandos no ambiente &TERMUX_APP_NAME;</string>
     <string name="permission_run_command_description">executar comandos arbitrários dentro do ambiente &TERMUX_APP_NAME;
         e acessar arquivos</string>
 
 
 
-    <!-- Termux Bootstrap Packages Installation -->
+    <!-- Terminal Bootstrap Packages Installation -->
     <string name="bootstrap_installer_body">Instalando pacotes de bootstrap…</string>
     <string name="bootstrap_error_title">Não foi possível instalar o bootstrap</string>
     <string name="bootstrap_error_body">&TERMUX_APP_NAME; não conseguiu instalar os pacotes de bootstrap.</string>
@@ -105,14 +105,14 @@
 
 
 
-    <!-- Termux Notifications -->
+    <!-- Terminal Notifications -->
     <string name="notification_action_exit">Sair</string>
     <string name="notification_action_wake_lock">Adquirir wakelock</string>
     <string name="notification_action_wake_unlock">Liberar wakelock</string>
 
 
 
-    <!-- TermuxService -->
+    <!-- TerminalService -->
     <string name="error_display_over_other_apps_permission_not_granted_to_start_terminal">&TERMUX_APP_NAME; requer
         permissão \"Sobrepor outros aplicativos\" para iniciar sessões de terminal em segundo plano no Android >= 10.
         Conceda-a em Configurações -> Aplicativos -> &TERMUX_APP_NAME; -> Avançado</string>
@@ -123,7 +123,7 @@
 
 
 
-    <!-- Termux RunCommandService -->
+    <!-- Terminal RunCommandService -->
     <string name="error_run_command_service_invalid_intent_action">Ação de intent inválida para RunCommandService: `%1$s`</string>
     <string name="error_run_command_service_invalid_execution_command_runner">Executor de comando de execução inválido para RunCommandService: `%1$s`</string>
     <string name="error_run_command_service_mandatory_extra_missing">Extra obrigatório ausente para RunCommandService: \"%1$s\"</string>
@@ -131,7 +131,7 @@
 
 
 
-    <!-- Termux File Receiver -->
+    <!-- Terminal File Receiver -->
     <string name="title_file_received">Salvar arquivo em ~/downloads/</string>
     <string name="action_file_received_edit">Editar</string>
     <string name="action_file_received_open_directory">Abrir diretório</string>
@@ -144,10 +144,10 @@
 
 
 
-    <!-- Termux Settings -->
+    <!-- Terminal Settings -->
     <string name="title_activity_termux_settings">Configurações do &TERMUX_APP_NAME;</string>
 
-    <!-- Termux App Preferences -->
+    <!-- Terminal App Preferences -->
     <string name="termux_preferences_title">&TERMUX_APP_NAME;</string>
     <string name="termux_preferences_summary">Preferências do aplicativo &TERMUX_APP_NAME;</string>
 
@@ -214,25 +214,25 @@
 
 
 
-    <!-- Termux:API App Preferences -->
+    <!-- Terminal:API App Preferences -->
     <string name="termux_api_preferences_title">&TERMUX_API_APP_NAME;</string>
     <string name="termux_api_preferences_summary">Preferências do aplicativo &TERMUX_API_APP_NAME;</string>
 
 
 
-    <!-- Termux:Float App Preferences -->
+    <!-- Terminal:Float App Preferences -->
     <string name="termux_float_preferences_title">&TERMUX_FLOAT_APP_NAME;</string>
     <string name="termux_float_preferences_summary">Preferências do aplicativo &TERMUX_FLOAT_APP_NAME;</string>
 
 
 
-    <!-- Termux:Tasker App Preferences -->
+    <!-- Terminal:Tasker App Preferences -->
     <string name="termux_tasker_preferences_title">&TERMUX_TASKER_APP_NAME;</string>
     <string name="termux_tasker_preferences_summary">Preferências do aplicativo &TERMUX_TASKER_APP_NAME;</string>
 
 
 
-    <!-- Termux:Widget App Preferences -->
+    <!-- Terminal:Widget App Preferences -->
     <string name="termux_widget_preferences_title">&TERMUX_WIDGET_APP_NAME;</string>
     <string name="termux_widget_preferences_summary">Preferências do aplicativo &TERMUX_WIDGET_APP_NAME;</string>
 
