@@ -19,6 +19,10 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '17'
+    - name: Accept Android SDK licenses
+      run: |
+        yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+        "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;30.0.14904198" >/dev/null
     - name: Execute tests
       run: |
         ./gradlew test

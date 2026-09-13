@@ -19,7 +19,8 @@ import com.termux.view.TerminalViewClient
  */
 class ComposeTerminalViewClient(
     private val mViewModel: TermuxViewModel,
-    private val mProperties: TermuxAppSharedProperties
+    private val mProperties: TermuxAppSharedProperties,
+    private val mOnRemoveSession: (TerminalSession) -> Unit
 ) : TerminalViewClient {
 
     companion object {
@@ -66,6 +67,13 @@ class ComposeTerminalViewClient(
     }
 
     override fun onKeyDown(keyCode: Int, e: KeyEvent?, session: TerminalSession?): Boolean {
+        val s = session ?: return handleVirtualKeys(keyCode, e, true)
+        if (keyCode == KeyEvent.KEYCODE_ENTER && !s.isRunning()) {
+            // Enter on a finished session removes it, instead of writing to the
+            // dead process (mirrors TermuxTerminalViewClient.onKeyDown()).
+            mOnRemoveSession(s)
+            return true
+        }
         return handleVirtualKeys(keyCode, e, true)
     }
 
@@ -95,6 +103,12 @@ class ComposeTerminalViewClient(
     }
 
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession?): Boolean {
+        val s = session ?: return false
+        if (ctrlDown && codePoint == 106 /* Ctrl+j or \n */ && !s.isRunning()) {
+            // Mirrors TermuxTerminalViewClient.onCodePoint(): remove the finished session.
+            mOnRemoveSession(s)
+            return true
+        }
         // Let TerminalView write the code point to the session; Ctrl modifiers are
         // transformed there (inputCodePoint), matching the default terminal behavior.
         return false

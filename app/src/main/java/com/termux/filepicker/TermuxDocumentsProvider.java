@@ -35,7 +35,20 @@ public class TermuxDocumentsProvider extends DocumentsProvider {
 
     private static final String ALL_MIME_TYPES = "*/*";
 
-    private static final File BASE_DIR = TermuxConstants.TERMUX_HOME_DIR;
+    private static final File BASE_DIR = getHomeBaseDir();
+
+    /**
+     * The directory exposed as the SAF root: the Debian guest home when the Debian
+     * rootfs is installed, otherwise the legacy Termux home.
+     */
+    private static File getHomeBaseDir() {
+        // Mirror DebianInstaller.isInstalled() to avoid coupling to the package-private class.
+        File bash = new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/bin/bash");
+        File version = new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/etc/debian_version");
+        return bash.isFile() && version.isFile()
+            ? TermuxConstants.DEBIAN_GUEST_HOME_DIR
+            : TermuxConstants.TERMUX_HOME_DIR;
+    }
 
 
     // The default columns to return information about a root if no specific
@@ -171,7 +184,7 @@ public class TermuxDocumentsProvider extends DocumentsProvider {
             // through the whole SD card).
             boolean isInsideHome;
             try {
-                isInsideHome = file.getCanonicalPath().startsWith(TermuxConstants.TERMUX_HOME_DIR_PATH);
+                isInsideHome = file.getCanonicalPath().startsWith(BASE_DIR.getAbsolutePath());
             } catch (IOException e) {
                 isInsideHome = true;
             }

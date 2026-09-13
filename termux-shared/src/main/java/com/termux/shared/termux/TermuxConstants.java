@@ -606,6 +606,11 @@ public final class TermuxConstants {
     /** Debian rootfs staging directory */
     public static final File DEBIAN_STAGING_ROOTFS_DIR = new File(DEBIAN_STAGING_ROOTFS_DIR_PATH);
 
+    /** Debian guest $HOME directory path on the host filesystem */
+    public static final String DEBIAN_GUEST_HOME_DIR_PATH = DEBIAN_ROOTFS_DIR_PATH + "/root";
+    /** Debian guest $HOME directory on the host filesystem */
+    public static final File DEBIAN_GUEST_HOME_DIR = new File(DEBIAN_GUEST_HOME_DIR_PATH);
+
     /** App bin directory path (where proot lives) */
     public static final String APP_BIN_DIR_PATH = TERMUX_FILES_DIR_PATH + "/bin";
     /** App bin directory */

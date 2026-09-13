@@ -141,8 +141,8 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         mProperties = TermuxAppSharedProperties.getProperties()
         mPreferences = TermuxAppSharedPreferences.build(this, true)
         mViewModel = ViewModelProvider(this)[TermuxViewModel::class.java]
-        mTerminalSessionClient = ComposeTerminalSessionClient(mViewModel)
-        mTerminalViewClient = ComposeTerminalViewClient(mViewModel, mProperties)
+        mTerminalSessionClient = ComposeTerminalSessionClient(mViewModel, ::removeSession)
+        mTerminalViewClient = ComposeTerminalViewClient(mViewModel, mProperties, ::removeSession)
 
         // Apply keep screen on flag if previously enabled via the more options menu
         mIsKeepScreenOnEnabled = mPreferences.shouldKeepScreenOn()
@@ -592,7 +592,18 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
     private fun removeSession(session: TerminalSession) {
         val service = mTermuxService ?: return
 
-        service.removeTermuxSession(session)
+        val termuxSession = service.getTermuxSessionForTerminalSession(session)
+        if (termuxSession != null) {
+            if (session.isRunning()) {
+                // Kill the still-running process; this synchronously removes it from
+                // the service via onTermuxSessionExited().
+                termuxSession.killIfExecuting(this, true)
+            } else {
+                // Process already exited; just remove the session from the service.
+                service.removeTermuxSession(session)
+            }
+        }
+
         mViewModel.removeSession(session)
 
         if (service.getTermuxSessionsSize() == 0) {

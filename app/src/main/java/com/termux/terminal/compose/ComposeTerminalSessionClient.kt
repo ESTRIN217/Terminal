@@ -13,7 +13,8 @@ import com.termux.terminal.TerminalSession
  * binds, replacing the service client so that the view gets screen update notifications.
  */
 class ComposeTerminalSessionClient(
-    private val mViewModel: TermuxViewModel
+    private val mViewModel: TermuxViewModel,
+    private val mOnRemoveSession: (TerminalSession) -> Unit
 ) : TermuxTerminalSessionClientBase() {
 
     override fun onTextChanged(changedSession: TerminalSession) {
@@ -23,6 +24,15 @@ class ComposeTerminalSessionClient(
 
     override fun onTitleChanged(updatedSession: TerminalSession) {
         mViewModel.updateSessionTitle(updatedSession, updatedSession.title ?: "")
+    }
+
+    override fun onSessionFinished(finishedSession: TerminalSession) {
+        // Mirrors TermuxTerminalSessionActivityClient.onSessionFinished(): a clean
+        // exit (0) or Ctrl+C (130) removes the session right away.
+        val exitCode = finishedSession.exitStatus
+        if (exitCode == 0 || exitCode == 130) {
+            mOnRemoveSession(finishedSession)
+        }
     }
 
     override fun onCopyTextToClipboard(session: TerminalSession, text: String) {

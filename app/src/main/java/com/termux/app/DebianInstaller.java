@@ -99,7 +99,7 @@ final class DebianInstaller {
      * @return Returns {@code true} if {@code bin/bash} and {@code etc/debian_version}
      * exist under {@link TermuxConstants#DEBIAN_ROOTFS_DIR_PATH}.
      */
-    static boolean isInstalled() {
+    public static boolean isInstalled() {
         File bash = new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/bin/bash");
         File version = new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/etc/debian_version");
         return bash.isFile() && version.isFile();
