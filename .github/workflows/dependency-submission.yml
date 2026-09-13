@@ -24,4 +24,4 @@ jobs:
         yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
         "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;30.0.14904198" >/dev/null
     - name: Generate and submit dependency graph
-      uses: gradle/actions/dependency-submission@v5
+      uses: gradle/actions/dependency-submission@v6
