@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
@@ -70,12 +71,15 @@ import com.termux.app.filemanager.FileSortOption
 import kotlinx.coroutines.launch
 import java.io.File
 
-private enum class DialogKind { NONE, NEW_FOLDER, NEW_FILE, RENAME, DELETE, DETAILS, SORT, BOOKMARKS }
+private enum class DialogKind { NONE, NEW_FOLDER, NEW_FILE, NEW_SYMLINK, RENAME, DELETE, DETAILS, SORT, BOOKMARKS }
 
 /**
  * Expressive file manager screen. Ports all `FileManagerActivity`
  * operations: browse, search, sort, hidden, bookmarks, create, rename,
  * copy/cut/paste, trash + undo, share, details, multi-select.
+ *
+ * Symlinks show a link badge with their raw target, resolve to the canonical
+ * destination on open, and dangling links report a broken-link message.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -244,6 +248,15 @@ fun FileManagerScreen(
                         icon = { Icon(Icons.Default.Description, null) },
                         text = { Text("New file") }
                     )
+                    FloatingActionButtonMenuItem(
+                        onClick = {
+                            fabMenuExpanded = false
+                            nameInput = ""
+                            dialog = DialogKind.NEW_SYMLINK
+                        },
+                        icon = { Icon(Icons.Default.Link, null) },
+                        text = { Text("New symlink") }
+                    )
                 }
             }
         },
@@ -292,14 +305,30 @@ fun FileManagerScreen(
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(state.files, key = { it.absolutePath }) { file ->
                     val selected = state.selectedPaths.contains(file.absolutePath)
+                    val linkTarget = state.symlinkTargets[file.absolutePath]
+                    val isLink = linkTarget != null
+                    val isBroken = state.brokenLinks.contains(file.absolutePath)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .combinedClickable(
                                 onClick = {
                                     if (state.selectionMode) viewModel.toggleSelection(file.absolutePath)
-                                    else if (file.isDirectory) viewModel.navigateTo(file)
-                                    else onOpenFile(file)
+                                    else if (isBroken) viewModel.notifyBrokenSymlink(file)
+                                    else {
+                                        val resolved = if (isLink) viewModel.resolveForOpen(file) else file
+                                        if (resolved.isDirectory) {
+                                            if (FileOperationsHelper.isSharedStoragePath(resolved)) {
+                                                onEnsureStorageAccess(resolved) {
+                                                    viewModel.navigateTo(resolved)
+                                                }
+                                            } else {
+                                                viewModel.navigateTo(resolved)
+                                            }
+                                        } else {
+                                            onOpenFile(resolved)
+                                        }
+                                    }
                                 },
                                 onLongClick = { viewModel.toggleSelection(file.absolutePath) }
                             )
@@ -316,9 +345,13 @@ fun FileManagerScreen(
                             Spacer(Modifier.width(12.dp))
                         }
                         Icon(
-                            if (file.isDirectory) Icons.Default.Folder else Icons.Default.Description,
+                            if (isLink) Icons.Default.Link
+                            else if (file.isDirectory) Icons.Default.Folder
+                            else Icons.Default.Description,
                             contentDescription = null,
-                            tint = if (file.isDirectory) MaterialTheme.colorScheme.primary
+                            tint = if (isBroken) MaterialTheme.colorScheme.error
+                            else if (isLink) MaterialTheme.colorScheme.tertiary
+                            else if (file.isDirectory) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(28.dp)
                         )
@@ -331,10 +364,15 @@ fun FileManagerScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = if (file.isDirectory) "Folder"
+                                text = if (isBroken) "Broken link → $linkTarget"
+                                else if (isLink) "Link → $linkTarget"
+                                else if (file.isDirectory) "Folder"
                                 else FileOperationsHelper.formatSize(file.length()),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (isBroken) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         IconButton(onClick = {
@@ -375,6 +413,18 @@ fun FileManagerScreen(
                 onEnsureStorageAccess(target) {
                     if (!viewModel.createFile(name)) {
                         scope.launch { snackbarHostState.showSnackbar("Failed to create file") }
+                    }
+                }
+            }
+        )
+        DialogKind.NEW_SYMLINK -> SymlinkDialog(
+            onDismiss = { dialog = DialogKind.NONE },
+            onConfirm = { name, target ->
+                dialog = DialogKind.NONE
+                val dir = File(state.currentPath)
+                onEnsureStorageAccess(dir) {
+                    if (!viewModel.createSymlink(name, target)) {
+                        scope.launch { snackbarHostState.showSnackbar("Failed to create symlink") }
                     }
                 }
             }
@@ -425,12 +475,16 @@ fun FileManagerScreen(
         DialogKind.DETAILS -> {
             val f = dialogFile
             if (f != null) {
+                val linkTarget = state.symlinkTargets[f.absolutePath]
+                val isBroken = state.brokenLinks.contains(f.absolutePath)
                 AlertDialog(
                     onDismissRequest = { dialog = DialogKind.NONE },
                     title = { Text(f.name) },
                     text = {
                         Text(
                             (if (f.isDirectory) "Folder\n" else "") +
+                                (if (linkTarget != null) "Link → $linkTarget\n" else "") +
+                                (if (isBroken) "Status: broken (target not found)\n" else "") +
                                 "Path: ${f.absolutePath}\n" +
                                 "Size: ${FileOperationsHelper.formatSize(if (f.isDirectory) 0 else f.length())}\n" +
                                 "Type: ${FileOperationsHelper.getMimeType(f.name)}"
@@ -439,7 +493,22 @@ fun FileManagerScreen(
                     confirmButton = {
                         TextButton(onClick = {
                             dialog = DialogKind.NONE
-                            if (f.isDirectory) viewModel.navigateTo(f) else onOpenFile(f)
+                            if (isBroken) {
+                                viewModel.notifyBrokenSymlink(f)
+                            } else {
+                                val resolved = viewModel.resolveForOpen(f)
+                                if (resolved.isDirectory) {
+                                    if (FileOperationsHelper.isSharedStoragePath(resolved)) {
+                                        onEnsureStorageAccess(resolved) {
+                                            viewModel.navigateTo(resolved)
+                                        }
+                                    } else {
+                                        viewModel.navigateTo(resolved)
+                                    }
+                                } else {
+                                    onOpenFile(resolved)
+                                }
+                            }
                         }) { Text("Open") }
                     },
                     dismissButton = {
@@ -556,6 +625,53 @@ private fun NameDialog(
             TextButton(
                 onClick = { onConfirm(text.trim()) },
                 enabled = text.trim().isNotEmpty()
+            ) { Text("OK") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+/**
+ * Two-field dialog to create a symlink: link name plus its target.
+ *
+ * @param onDismiss Called when the dialog is cancelled.
+ * @param onConfirm Called with the trimmed link name and target.
+ */
+@Composable
+private fun SymlinkDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var target by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New symlink") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Link name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = target,
+                    onValueChange = { target = it },
+                    label = { Text("Target path") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(name.trim(), target.trim()) },
+                enabled = name.trim().isNotEmpty() && target.trim().isNotEmpty()
             ) { Text("OK") }
         },
         dismissButton = {

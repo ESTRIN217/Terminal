@@ -25,7 +25,7 @@ import java.io.File
  * Compose replacement for {@link FileManagerActivity}.
  *
  * Same operations (browse, search, sort, hidden, bookmarks, create,
- * rename, copy/cut/paste, trash + undo, share, details) backed by
+ * rename, copy/cut/paste, trash + undo, share, details, symlinks) backed by
  * [FileOperationsHelper]; IO for paste/delete runs on Dispatchers.IO
  * inside the ViewModel.
  */
@@ -136,19 +136,22 @@ class FileManagerComposeActivity : ComponentActivity() {
         )
 
     /** Whether {@code dir} lives on shared storage (phone/tablet storage). */
-    private fun isSharedStoragePath(dir: File): Boolean {
-        val path = dir.absolutePath
-        return path == "/sdcard" || path.startsWith("/sdcard/") ||
-            path == "/storage" || path.startsWith("/storage/")
-    }
+    private fun isSharedStoragePath(dir: File): Boolean =
+        FileOperationsHelper.isSharedStoragePath(dir)
 
     private fun openFile(file: File) {
+        if (FileOperationsHelper.isBrokenSymlink(file)) {
+            Toast.makeText(this, "Broken symlink: target not found", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // Open the canonical target so links share the destination's MIME type.
+        val target = FileOperationsHelper.resolveFileForOpen(file)
         try {
             val uri: Uri = FileProvider.getUriForFile(
-                this, "$packageName.fileprovider", file
+                this, "$packageName.fileprovider", target
             )
             val intent = Intent(Intent.ACTION_VIEW)
-            intent.setDataAndType(uri, FileOperationsHelper.getMimeType(file.name))
+            intent.setDataAndType(uri, FileOperationsHelper.getMimeType(target.name))
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             startActivity(Intent.createChooser(intent, "Open file"))
         } catch (e: Exception) {

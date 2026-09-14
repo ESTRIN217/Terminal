@@ -15,6 +15,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Method;
+import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -53,6 +55,235 @@ public class FileOperationsHelper {
         sClipboardOperation = ClipboardOperation.NONE;
     }
 
+    /**
+     * Whether {@code file} is a symbolic link.
+     *
+     * <p>Uses {@code android.system.Os.readlink} via reflection (available since
+     * API 21, so it also works below API 26 where {@code java.nio.file} is
+     * missing) with a {@code java.nio} fallback for JVM unit tests.
+     *
+     * @param file The file to check.
+     * @return {@code true} if it is a symlink, {@code false} otherwise.
+     */
+    public static boolean isSymlink(File file) {
+        if (file == null) return false;
+        if (readlinkViaOs(file.getAbsolutePath()) != null) return true;
+        try {
+            return Files.isSymbolicLink(file.toPath());
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * Raw target of a symlink as stored in the link (may be relative).
+     *
+     * @param file The symlink to read.
+     * @return The raw target, or {@code null} if not a symlink or unreadable.
+     */
+    public static String readSymlinkTargetRaw(File file) {
+        if (file == null) return null;
+        String raw = readlinkViaOs(file.getAbsolutePath());
+        if (raw != null) return raw;
+        try {
+            if (Files.isSymbolicLink(file.toPath()))
+                return Files.readSymbolicLink(file.toPath()).toString();
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /**
+     * Resolves the target of {@code file} against its parent when relative.
+     *
+     * @param file The symlink to resolve.
+     * @return The target file, or {@code null} if {@code file} is not a symlink.
+     */
+    public static File resolveSymlinkTarget(File file) {
+        String raw = readSymlinkTargetRaw(file);
+        if (raw == null) return null;
+        File rawFile = new File(raw);
+        if (rawFile.isAbsolute()) return rawFile;
+        File parent = file.getParentFile();
+        return parent != null ? new File(parent, raw) : rawFile;
+    }
+
+    /**
+     * Whether {@code file} is a symlink whose target does not exist.
+     *
+     * <p>Symlinks managed by Android for shared storage (e.g. {@code /sdcard}
+     * or {@code /storage/emulated/0}) are never treated as broken, even when
+     * their internal target chain ({@code /storage/self/primary} or
+     * {@code /mnt/user/0/...}) is not directly statable with
+     * {@code java.io.File}: those are system-managed paths, not dangling links.
+     *
+     * @param file The file to check.
+     * @return {@code true} for broken (dangling) symlinks.
+     */
+    public static boolean isBrokenSymlink(File file) {
+        if (!isSymlink(file)) return false;
+        File target = resolveSymlinkTarget(file);
+        if (target == null) return true;
+        if (isSharedStoragePath(file) || isSharedStoragePath(target)) return false;
+        return !target.exists();
+    }
+
+    /**
+     * Whether {@code file} is a symlink resolving to an existing directory.
+     *
+     * @param file The file to check.
+     * @return {@code true} if linked target is a directory.
+     */
+    public static boolean resolvesToDirectory(File file) {
+        if (!isSymlink(file)) return false;
+        File target = resolveSymlinkTarget(file);
+        return target != null && target.isDirectory();
+    }
+
+    /**
+     * File to actually open/share/navigate for {@code file}: the canonical
+     * target when it is a healthy symlink, otherwise {@code file} itself.
+     *
+     * @param file The file the user tapped.
+     * @return The resolved file, never {@code null} (falls back to input).
+     */
+    public static File resolveFileForOpen(File file) {
+        if (file == null) return null;
+        File target = resolveSymlinkTarget(file);
+        if (target == null || !target.exists()) return file;
+        // Never canonicalize inside shared storage: the FUSE-accessible paths
+        // (/sdcard, /storage/emulated/0/...) must be kept as-is, otherwise the
+        // chain to /storage/self/primary or /mnt/user/0/... cannot be listed
+        // by java.io.File even for an app granted MANAGE_EXTERNAL_STORAGE.
+        if (isSharedStoragePath(target)) return target;
+        try {
+            return target.getCanonicalFile();
+        } catch (IOException | SecurityException e) {
+            return target;
+        }
+    }
+
+    /**
+     * Whether {@code path} lives on Android shared storage. Such paths (and
+     * their symlink targets) must never be canonicalized or resolved, since
+     * only the FUSE-visible spelling is listable from {@code java.io.File}.
+     *
+     * @param file The file to check.
+     * @return {@code true} when the path is on shared storage.
+     */
+    public static boolean isSharedStoragePath(File file) {
+        if (file == null) return false;
+        String path = file.getAbsolutePath();
+        return path.equals("/sdcard") || path.startsWith("/sdcard/") ||
+            path.equals("/storage") || path.startsWith("/storage/");
+    }
+
+    /**
+     * Lists the children of {@code dir}, falling back to the native
+     * {@code android.system.Os.opendir}/{@code readdir} pair when
+     * {@code java.io.File.listFiles()} returns {@code null} (some shared
+     * storage mounts only enumerate through the raw syscalls the terminal
+     * uses). Returns {@code null} when the directory cannot be listed at all.
+     *
+     * @param dir The directory to list.
+     * @return The children, or {@code null} on failure.
+     */
+    public static File[] listFiles(File dir) {
+        if (dir == null) return null;
+        File[] listed = dir.listFiles();
+        if (listed != null) return listed;
+        if (!isSharedStoragePath(dir) && !dir.isDirectory()) return null;
+        List<String> names = listNamesViaOs(dir.getAbsolutePath());
+        if (names == null) return null;
+        File[] files = new File[names.size()];
+        for (int i = 0; i < names.size(); i++)
+            files[i] = new File(dir, names.get(i));
+        return files;
+    }
+
+    /**
+     * Lists entry names via {@code android.system.Os.opendir}/{@code readdir}
+     * reflectively (the same native calls {@code ls} uses) so it also degrades
+     * to {@code null} on JVM unit tests where the Android runtime is absent.
+     *
+     * @param path Directory to enumerate.
+     * @return Entry names without {@code .} and {@code ..}, or {@code null}.
+     */
+    private static List<String> listNamesViaOs(String path) {
+        try {
+            Class<?> osClass = Class.forName("android.system.Os");
+            Class<?> fdClass = Class.forName("android.system.StructDirFd");
+            Object dirFd = osClass.getMethod("opendir", String.class).invoke(null, path);
+            List<String> names = new ArrayList<>();
+            String name;
+            while ((name = (String) osClass.getMethod("readdir", fdClass).invoke(null, dirFd)) != null) {
+                if (name.equals(".") || name.equals("..")) continue;
+                names.add(name);
+            }
+            osClass.getMethod("closedir", fdClass).invoke(null, dirFd);
+            return names;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * Creates a symlink {@code name} inside {@code parent} pointing at {@code target}.
+     *
+     * @param parent The directory holding the new link.
+     * @param name   Name of the new link.
+     * @param target Link target (absolute or relative to {@code parent}).
+     * @return {@code true} on success.
+     */
+    public static boolean createSymlink(File parent, String name, String target) {
+        if (parent == null || name == null || name.isEmpty() || target == null || target.isEmpty())
+            return false;
+        File link = new File(parent, name);
+        if (link.exists() || isSymlink(link)) return false;
+        return createSymlinkAt(link, target);
+    }
+
+    /**
+     * Reads a link target via {@code android.system.Os.readlink} reflectively
+     * so the class stays loadable on JVM unit tests (no Android runtime).
+     *
+     * @param path Absolute path to read.
+     * @return The raw target, or {@code null} when not a link / on error.
+     */
+    private static String readlinkViaOs(String path) {
+        try {
+            Class<?> osClass = Class.forName("android.system.Os");
+            Method readlink = osClass.getMethod("readlink", String.class);
+            Object result = readlink.invoke(null, path);
+            return result instanceof String ? (String) result : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * Creates a symlink at {@code link} pointing at {@code target}.
+     *
+     * @param link   Full path of the link to create.
+     * @param target Raw target stored in the link.
+     * @return {@code true} on success.
+     */
+    private static boolean createSymlinkAt(File link, String target) {
+        try {
+            Class<?> osClass = Class.forName("android.system.Os");
+            Method symlink = osClass.getMethod("symlink", String.class, String.class);
+            symlink.invoke(null, target, link.getAbsolutePath());
+            return true;
+        } catch (Throwable ignored) {
+        }
+        try {
+            Files.createSymbolicLink(link.toPath(), new File(target).toPath());
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     public static boolean createFile(File parent, String name) {
         File file = new File(parent, name);
         try {
@@ -73,6 +304,10 @@ public class FileOperationsHelper {
     }
 
     public static boolean deleteFile(File file) {
+        if (file == null) return false;
+        // Unlink only: never recurse into a symlink to a directory, otherwise
+        // the target's contents would be deleted instead of just the link.
+        if (isSymlink(file)) return file.delete();
         if (file.isDirectory()) {
             File[] children = file.listFiles();
             if (children != null) {
@@ -85,6 +320,16 @@ public class FileOperationsHelper {
     }
 
     public static boolean copyFile(File source, File dest) {
+        if (source == null || dest == null) return false;
+        // Preserve links as links instead of copying the target's contents.
+        if (isSymlink(source)) {
+            String raw = readSymlinkTargetRaw(source);
+            if (raw == null) return false;
+            if (dest.exists() && !dest.delete()) return false;
+            if (dest.getParentFile() != null && !dest.getParentFile().exists())
+                dest.getParentFile().mkdirs();
+            return createSymlinkAt(dest, raw);
+        }
         if (source.isDirectory()) {
             if (!dest.mkdirs()) return false;
             File[] children = source.listFiles();
@@ -188,18 +433,20 @@ public class FileOperationsHelper {
 
     public static void shareFiles(Context context, List<File> files) {
         if (files.isEmpty()) return;
+        List<File> resolved = new ArrayList<>(files.size());
+        for (File f : files) resolved.add(resolveFileForOpen(f));
         Intent intent;
-        if (files.size() == 1) {
+        if (resolved.size() == 1) {
             intent = new Intent(Intent.ACTION_SEND);
             Uri uri = FileProvider.getUriForFile(context,
-                context.getPackageName() + ".fileprovider", files.get(0));
+                context.getPackageName() + ".fileprovider", resolved.get(0));
             intent.putExtra(Intent.EXTRA_STREAM, uri);
-            intent.setType(getMimeType(files.get(0).getName()));
+            intent.setType(getMimeType(resolved.get(0).getName()));
         } else {
             intent = new Intent(Intent.ACTION_SEND_MULTIPLE);
             ArrayList<Uri> uris = new ArrayList<>();
             String mimeType = "*/*";
-            for (File f : files) {
+            for (File f : resolved) {
                 Uri uri = FileProvider.getUriForFile(context,
                     context.getPackageName() + ".fileprovider", f);
                 uris.add(uri);

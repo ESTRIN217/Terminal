@@ -86,11 +86,24 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun navigateTo(dir: File) {
+        if (!FileOperationsHelper.isSharedStoragePath(dir) &&
+            FileOperationsHelper.isBrokenSymlink(dir)
+        ) {
+            notifyBrokenSymlink(dir)
+            return
+        }
+        // Shared storage must keep its FUSE-accessible path (/sdcard,
+        // /storage/emulated/0): resolving the symlink chain would land on
+        // /storage/self/primary or /mnt/user/0/... which java.io cannot list.
+        // Other symlinks resolve to their canonical target so the breadcrumb
+        // shows the real location and symlink loops cannot nest.
+        val resolved = if (FileOperationsHelper.isSharedStoragePath(dir)) dir
+        else FileOperationsHelper.resolveFileForOpen(dir)
         currentDir?.let {
             backStack.addLast(it.absolutePath)
             forwardStack.clear()
         }
-        navigateToInternal(dir, pushHistory = false, clearSearch = true)
+        navigateToInternal(resolved, pushHistory = false, clearSearch = true)
     }
 
     fun goBack() {
@@ -109,7 +122,7 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
 
     fun goUp(): Boolean {
         val parent = currentDir?.parentFile ?: return false
-        if (!parent.exists()) return false
+        if (!parent.exists() && !FileOperationsHelper.isSharedStoragePath(parent)) return false
         currentDir?.let {
             backStack.addLast(it.absolutePath)
             forwardStack.clear()
@@ -133,8 +146,20 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private fun navigateToInternal(dir: File, pushHistory: Boolean, clearSearch: Boolean) {
-        if (!dir.exists()) return
-        val target = if (dir.isDirectory) dir else dir.parentFile ?: return
+        if (!dir.exists() && !FileOperationsHelper.isSharedStoragePath(dir)) {
+            if (FileOperationsHelper.isBrokenSymlink(dir)) notifyBrokenSymlink(dir)
+            return
+        }
+        // Shared storage keeps its own path; everything else is canonicalized so
+        // the breadcrumb shows the real location and symlink loops cannot nest.
+        val isShared = FileOperationsHelper.isSharedStoragePath(dir)
+        val canonical = if (isShared) dir else try {
+            dir.canonicalFile
+        } catch (e: Exception) {
+            dir
+        }
+        val target = if (isShared) dir
+        else if (canonical.isDirectory) canonical else canonical.parentFile ?: return
         currentDir = target
         if (clearSearch) _uiState.update { it.copy(searchQuery = "") }
         refresh()
@@ -143,7 +168,7 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     fun refresh() {
         val dir = currentDir ?: return
         val s = _uiState.value
-        val listed = dir.listFiles()
+        val listed = FileOperationsHelper.listFiles(dir)
         if (listed == null) {
             _uiState.update {
                 it.copy(
@@ -153,7 +178,10 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
                     canGoBack = backStack.isNotEmpty(),
                     canGoForward = forwardStack.isNotEmpty(),
                     hasClipboard = FileOperationsHelper.hasClipboard(),
-                    statusMessage = "Cannot read " + dir.absolutePath
+                    statusMessage = if (FileOperationsHelper.isSharedStoragePath(dir))
+                        "Cannot read " + dir.absolutePath + ". Check \"All files access\" permission."
+                    else
+                        "Cannot read " + dir.absolutePath
                 )
             }
             return
@@ -162,6 +190,15 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         val filtered = if (s.searchQuery.isEmpty()) visible
         else visible.filter { it.name.contains(s.searchQuery, ignoreCase = true) }
         val sorted = filtered.sortedWith(s.sortOption.getComparator(s.sortAscending))
+        val symlinkTargets = HashMap<String, String?>()
+        val brokenLinks = HashSet<String>()
+        for (f in listed) {
+            val raw = FileOperationsHelper.readSymlinkTargetRaw(f)
+            if (raw != null) {
+                symlinkTargets[f.absolutePath] = raw
+                if (FileOperationsHelper.isBrokenSymlink(f)) brokenLinks.add(f.absolutePath)
+            }
+        }
         _uiState.update {
             it.copy(
                 currentPath = dir.absolutePath,
@@ -169,7 +206,9 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
                 files = sorted,
                 canGoBack = backStack.isNotEmpty(),
                 canGoForward = forwardStack.isNotEmpty(),
-                hasClipboard = FileOperationsHelper.hasClipboard()
+                hasClipboard = FileOperationsHelper.hasClipboard(),
+                symlinkTargets = symlinkTargets,
+                brokenLinks = brokenLinks
             )
         }
     }
@@ -237,6 +276,42 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         val ok = FileOperationsHelper.createFile(dir, name.trim())
         if (ok) refresh()
         return ok
+    }
+
+    /**
+     * Creates a symlink in the current directory.
+     *
+     * @param name Name of the new link.
+     * @param target Link target (absolute or relative to the current dir).
+     * @return true on success.
+     */
+    fun createSymlink(name: String, target: String): Boolean {
+        val dir = currentDir ?: return false
+        val ok = FileOperationsHelper.createSymlink(dir, name.trim(), target.trim())
+        if (ok) refresh()
+        return ok
+    }
+
+    /**
+     * Resolves a tapped file to what should actually be opened: the canonical
+     * target for healthy symlinks, the file itself otherwise.
+     *
+     * @param file The tapped file.
+     * @return The file to open or navigate to.
+     */
+    fun resolveForOpen(file: File): File =
+        FileOperationsHelper.resolveFileForOpen(file)
+
+    /**
+     * Posts a "broken symlink" status message for [file].
+     *
+     * @param file The dangling symlink the user tried to open.
+     */
+    fun notifyBrokenSymlink(file: File) {
+        val raw = FileOperationsHelper.readSymlinkTargetRaw(file)
+        _uiState.update {
+            it.copy(statusMessage = "Broken symlink: " + file.name + " → " + (raw ?: "?") + " not found")
+        }
     }
 
     fun renameFile(file: File, newName: String): Boolean {

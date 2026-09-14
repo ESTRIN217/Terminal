@@ -8,6 +8,10 @@ import java.io.File
  *
  * Ports the state previously held by `FileManagerActivity` fields
  * (current dir, back/forward stacks, sort, hidden, search, selection).
+ *
+ * Symlink support: [symlinkTargets] maps absolute path to the raw link
+ * target for every symlink in the current listing; [brokenLinks] holds the
+ * absolute paths of dangling links whose target does not exist.
  */
 data class FileManagerUiState(
     val currentPath: String = "",
@@ -22,5 +26,7 @@ data class FileManagerUiState(
     val canGoBack: Boolean = false,
     val canGoForward: Boolean = false,
     val hasClipboard: Boolean = false,
-    val statusMessage: String? = null
+    val statusMessage: String? = null,
+    val symlinkTargets: Map<String, String?> = emptyMap(),
+    val brokenLinks: Set<String> = emptySet()
 )
