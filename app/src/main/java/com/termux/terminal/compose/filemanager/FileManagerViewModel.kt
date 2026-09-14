@@ -61,8 +61,8 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private fun defaultDir(): File {
-        val home = File(TermuxConstants.TERMUX_FILES_DIR_PATH + "/home")
-        if (home.exists()) return home
+        val debianHome = File(TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH)
+        if (debianHome.isDirectory) return debianHome
         return Environment.getExternalStorageDirectory()
     }
 
@@ -78,8 +78,8 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
 
     fun bookmarkDirs(): List<Pair<String, File>> {
         val list = mutableListOf<Pair<String, File>>()
-        val home = File(TermuxConstants.TERMUX_FILES_DIR_PATH + "/home")
-        if (home.exists()) list.add("Home" to home)
+        val debianHome = File(TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH)
+        if (debianHome.isDirectory) list.add("Home" to debianHome)
         list.add("SDCard" to Environment.getExternalStorageDirectory())
         list.add("Root" to File("/"))
         return list
@@ -143,8 +143,22 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     fun refresh() {
         val dir = currentDir ?: return
         val s = _uiState.value
-        val all = dir.listFiles()?.toList() ?: emptyList()
-        val visible = all.filter { s.showHidden || !it.name.startsWith(".") }
+        val listed = dir.listFiles()
+        if (listed == null) {
+            _uiState.update {
+                it.copy(
+                    currentPath = dir.absolutePath,
+                    title = titleFor(dir),
+                    files = emptyList(),
+                    canGoBack = backStack.isNotEmpty(),
+                    canGoForward = forwardStack.isNotEmpty(),
+                    hasClipboard = FileOperationsHelper.hasClipboard(),
+                    statusMessage = "Cannot read " + dir.absolutePath
+                )
+            }
+            return
+        }
+        val visible = listed.filter { s.showHidden || !it.name.startsWith(".") }
         val filtered = if (s.searchQuery.isEmpty()) visible
         else visible.filter { it.name.contains(s.searchQuery, ignoreCase = true) }
         val sorted = filtered.sortedWith(s.sortOption.getComparator(s.sortAscending))
@@ -162,6 +176,7 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
 
     private fun titleFor(dir: File): String {
         if (dir.absolutePath == "/") return "Root"
+        if (dir.absolutePath == TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH) return "Home"
         if (dir.name == "home" && (dir.parent ?: "").endsWith("/files")) return "Home"
         return dir.name.ifEmpty { dir.absolutePath }
     }

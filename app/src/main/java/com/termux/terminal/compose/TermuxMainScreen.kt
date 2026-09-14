@@ -1,6 +1,6 @@
 package com.termux.terminal.compose
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.termux.app.TermuxComposeActivity
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.bridge.TerminalKeyHandler
@@ -104,12 +105,21 @@ fun TermuxMainScreen(
                             sessions = uiState.sessions,
                             activeSessionIndex = uiState.activeSessionIndex,
                             onSessionSelected = { viewModel.switchSession(it) },
-                            onNewSessionClick = onCreateSession,
                             onCloseSessionClick = { session ->
                                 onRemoveSession(session)
                             },
                             modifier = Modifier.weight(1f)
                         )
+                        // New session Button
+                        IconButton(
+                           onClick = onCreateSession
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "New Session",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }

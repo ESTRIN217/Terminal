@@ -1,11 +1,11 @@
 package com.termux.terminal.compose
 
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,7 +36,6 @@ fun SessionTabs(
     sessions: List<TerminalSessionUiModel>,
     activeSessionIndex: Int,
     onSessionSelected: (Int) -> Unit,
-    onNewSessionClick: () -> Unit,
     onCloseSessionClick: (TerminalSession) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -48,10 +47,15 @@ fun SessionTabs(
         edgePadding = 0.dp,
         indicator = { tabPositions ->
             if (activeSessionIndex in tabPositions.indices) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.TopStart // 3. Forzamos la alineación ARRIBA
+                ) {
                 SecondaryIndicator(
                     modifier = Modifier.tabIndicatorOffset(tabPositions[activeSessionIndex]),
                     color = MaterialTheme.colorScheme.primary
                 )
+                }
             }
         },
         divider = {}
@@ -64,19 +68,6 @@ fun SessionTabs(
                 onClose = { onCloseSessionClick(session.session) }
             )
         }
-
-        // New session tab
-        Tab(
-            selected = false,
-            onClick = onNewSessionClick,
-            text = {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "New Session",
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        )
     }
 }
 
@@ -105,6 +96,12 @@ private fun SessionTab(
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Icon(
+                    imageVector = Icons.Default.Terminal,
+                    contentDescription = "Session",
+                    modifier = Modifier.size(18.dp).padding(end = 4.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
                 Text(
                     text = session.name.ifEmpty { session.title.ifEmpty { "Terminal" } },
                     maxLines = 1,

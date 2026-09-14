@@ -92,7 +92,8 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
 
     /**
      * Build the default proot guest command: {@code proot -r <rootfs> -0 -w /root
-     * -b /dev -b /dev/shm -b /dev/pts -b /proc -b /sys -b /sdcard -b /storage /bin/bash --login [extraArgs...]}.
+     * -b /dev -b /dev/shm -b /dev/pts -b /proc -b /sys -b /sdcard:/root/sdcard
+     * -b /storage:/root/storage /bin/bash --login [extraArgs...]}.
      *
      * <p>When the linkfix shim is installed, the guest program is wrapped as
      * {@code /usr/bin/env LD_PRELOAD=<shim> /bin/bash --login ...} so the
@@ -100,7 +101,10 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
      * the host process environment: the host proot binary (Bionic) would fail
      * to start trying to preload a guest-absolute path.</p>
      *
-     * <p>Storage binds mirror proot-distro's default mode. A missing source is inert
+     * <p>Storage binds mirror proot-distro's default mode but land under the guest
+     * home ({@code /root/sdcard}, {@code /root/storage}) so the shared storage is
+     * reachable from the file manager home without cluttering the rootfs top level.
+     * A missing source is inert
      * (proot only warns) and the kernel still enforces the Android storage permission,
      * so no permission is bypassed. {@code /dev/shm} and {@code /dev/pts} are bound
      * explicitly because some Android devices ship a minimal {@code /dev} without
@@ -143,9 +147,9 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
         command.add("-b");
         command.add("/sys");
         command.add("-b");
-        command.add("/sdcard");
+        command.add("/sdcard:" + GUEST_HOME + "/sdcard");
         command.add("-b");
-        command.add("/storage");
+        command.add("/storage:" + GUEST_HOME + "/storage");
         if (withLinkfix) {
             command.add("/usr/bin/env");
             command.add(ENV_LD_PRELOAD + "=" + TermuxConstants.LINKFIX_GUEST_SO_PATH);

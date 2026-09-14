@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CheckBox
@@ -38,7 +39,8 @@ import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonMenu
+import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,8 +51,10 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -80,10 +84,17 @@ fun FileManagerScreen(
     onNavigateUp: () -> Unit,
     onOpenFile: (File) -> Unit,
     onShareFiles: (List<File>) -> Unit,
+    onEnsureStorageAccess: (File, () -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(state.statusMessage) {
+        state.statusMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.consumeStatusMessage()
+        }
+    }
     val scope = rememberCoroutineScope()
     var dialog by remember { mutableStateOf(DialogKind.NONE) }
     var dialogFile by remember { mutableStateOf<File?>(null) }
@@ -201,30 +212,37 @@ fun FileManagerScreen(
         },
         floatingActionButton = {
             if (!state.selectionMode) {
-                FloatingActionButton(onClick = { fabMenuExpanded = true }) {
-                    Icon(Icons.Default.Add, contentDescription = "New")
-                }
-                DropdownMenu(
+                FloatingActionButtonMenu(
                     expanded = fabMenuExpanded,
-                    onDismissRequest = { fabMenuExpanded = false }
+                    button = {
+                        ToggleFloatingActionButton(
+                            checked = fabMenuExpanded,
+                            onCheckedChange = { fabMenuExpanded = !fabMenuExpanded }
+                        ) {
+                            Icon(
+                                if (fabMenuExpanded) Icons.Default.Close else Icons.Default.Add,
+                                contentDescription = "New"
+                            )
+                        }
+                    }
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("New folder") },
-                        leadingIcon = { Icon(Icons.Default.Folder, null) },
+                    FloatingActionButtonMenuItem(
                         onClick = {
                             fabMenuExpanded = false
                             nameInput = ""
                             dialog = DialogKind.NEW_FOLDER
-                        }
+                        },
+                        icon = { Icon(Icons.Default.Folder, null) },
+                        text = { Text("New folder") }
                     )
-                    DropdownMenuItem(
-                        text = { Text("New file") },
-                        leadingIcon = { Icon(Icons.Default.Description, null) },
+                    FloatingActionButtonMenuItem(
                         onClick = {
                             fabMenuExpanded = false
                             nameInput = ""
                             dialog = DialogKind.NEW_FILE
-                        }
+                        },
+                        icon = { Icon(Icons.Default.Description, null) },
+                        text = { Text("New file") }
                     )
                 }
             }
@@ -338,10 +356,13 @@ fun FileManagerScreen(
             initial = "",
             onDismiss = { dialog = DialogKind.NONE },
             onConfirm = { name ->
-                if (!viewModel.createFolder(name)) {
-                    scope.launch { snackbarHostState.showSnackbar("Failed to create folder") }
-                }
                 dialog = DialogKind.NONE
+                val target = File(state.currentPath)
+                onEnsureStorageAccess(target) {
+                    if (!viewModel.createFolder(name)) {
+                        scope.launch { snackbarHostState.showSnackbar("Failed to create folder") }
+                    }
+                }
             }
         )
         DialogKind.NEW_FILE -> NameDialog(
@@ -349,10 +370,13 @@ fun FileManagerScreen(
             initial = "",
             onDismiss = { dialog = DialogKind.NONE },
             onConfirm = { name ->
-                if (!viewModel.createFile(name)) {
-                    scope.launch { snackbarHostState.showSnackbar("Failed to create file") }
-                }
                 dialog = DialogKind.NONE
+                val target = File(state.currentPath)
+                onEnsureStorageAccess(target) {
+                    if (!viewModel.createFile(name)) {
+                        scope.launch { snackbarHostState.showSnackbar("Failed to create file") }
+                    }
+                }
             }
         )
         DialogKind.RENAME -> NameDialog(
@@ -482,8 +506,8 @@ fun FileManagerScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .combinedClickable(onClick = {
-                                        viewModel.navigateTo(dir)
                                         dialog = DialogKind.NONE
+                                        onEnsureStorageAccess(dir) { viewModel.navigateTo(dir) }
                                     })
                                     .padding(vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically

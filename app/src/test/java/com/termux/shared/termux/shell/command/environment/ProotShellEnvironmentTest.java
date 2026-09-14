@@ -19,7 +19,7 @@ public class ProotShellEnvironmentTest {
             "-0", "-w", "/root",
             "-b", "/dev", "-b", "/dev/shm", "-b", "/dev/pts",
             "-b", "/proc", "-b", "/sys",
-            "-b", "/sdcard", "-b", "/storage",
+            "-b", "/sdcard:/root/sdcard", "-b", "/storage:/root/storage",
             "/bin/bash", "--login"
         };
         Assert.assertArrayEquals(expected, command);
