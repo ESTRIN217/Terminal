@@ -161,6 +161,28 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
+     * Toggle a sticky modifier key of the extra keys bar (CTRL, ALT, SHIFT, FN).
+     *
+     * The modifier stays active until toggled again, so it also applies to keys
+     * typed on the system keyboard via [com.termux.view.TerminalViewClient.readControlKey]
+     * and friends (matched to classic Termux behavior).
+     *
+     * @param modifier The modifier key name (e.g., "CTRL")
+     */
+    fun toggleExtraKeysModifier(modifier: String) {
+        viewModelScope.launch {
+            _uiState.update { state ->
+                val newModifiers = if (modifier in state.extraKeysModifiers) {
+                    state.extraKeysModifiers - modifier
+                } else {
+                    state.extraKeysModifiers + modifier
+                }
+                state.copy(extraKeysModifiers = newModifiers)
+            }
+        }
+    }
+
+    /**
      * Set the soft keyboard visibility.
      *
      * @param visible Whether the soft keyboard is visible

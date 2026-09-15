@@ -87,19 +87,33 @@ class ComposeTerminalViewClient(
     }
 
     override fun readControlKey(): Boolean {
-        return mVirtualControlKeyDown
+        return isExtraKeyModifierActive("CTRL") || mVirtualControlKeyDown
     }
 
     override fun readAltKey(): Boolean {
-        return false
+        return isExtraKeyModifierActive("ALT")
     }
 
     override fun readShiftKey(): Boolean {
-        return false
+        return isExtraKeyModifierActive("SHIFT")
     }
 
     override fun readFnKey(): Boolean {
-        return mVirtualFnKeyDown
+        return isExtraKeyModifierActive("FN") || mVirtualFnKeyDown
+    }
+
+    /**
+     * Whether a sticky modifier key from the extra keys bar is currently active.
+     *
+     * The bar holds its sticky toggle state in the ViewModel so that keys typed on
+     * the system keyboard (via [TerminalView]'s `inputCodePoint`) get the modifier
+     * applied, mirroring classic Termux behavior.
+     *
+     * @param modifier The modifier key name (e.g., "CTRL")
+     * @return True if the modifier is active on the extra keys bar
+     */
+    private fun isExtraKeyModifierActive(modifier: String): Boolean {
+        return modifier in mViewModel.uiState.value.extraKeysModifiers
     }
 
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession?): Boolean {

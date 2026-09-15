@@ -68,6 +68,7 @@ fun TermuxNavigationDrawer(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        modifier = modifier,
         drawerContent = {
             ModalDrawerSheet(
                 modifier = Modifier.width(280.dp),

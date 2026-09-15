@@ -1,29 +1,37 @@
 package com.termux.terminal.compose
 
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-/** Default long-press timeout before repeat starts. */
-private const val LONG_PRESS_TIMEOUT = 400L
+import kotlinx.coroutines.delay
 
 /** Repeat interval in milliseconds. */
 private const val REPEAT_DELAY = 80L
@@ -48,28 +56,25 @@ fun interface ExtraKeysCallback {
  * Supports long-press repeat for navigation and editing keys, and modifier lock on long-press.
  *
  * @param config The extra keys configuration
+ * @param activeModifiers Sticky modifier keys currently active (e.g. "CTRL")
+ * @param onToggleModifier Callback to toggle a sticky modifier key
  * @param callback Callback for key clicks
  * @param modifier Modifier to apply
  */
 @Composable
 fun ExtraKeysBar(
     config: ExtraKeysConfig = ExtraKeysConfig.DEFAULT,
+    activeModifiers: Set<String> = emptySet(),
+    onToggleModifier: (String) -> Unit = {},
     callback: ExtraKeysCallback,
     modifier: Modifier = Modifier
 ) {
-    val activeModifiers = remember { mutableStateMapOf<String, Boolean>() }
-
-    fun toggleModifier(key: String) {
-        val current = activeModifiers[key] ?: false
-        activeModifiers[key] = !current
-    }
-
     fun getModifierPrefix(): String {
         val prefix = StringBuilder()
-        if (activeModifiers["CTRL"] == true) prefix.append("CTRL ")
-        if (activeModifiers["ALT"] == true) prefix.append("ALT ")
-        if (activeModifiers["SHIFT"] == true) prefix.append("SHIFT ")
-        if (activeModifiers["FN"] == true) prefix.append("FN ")
+        if (activeModifiers.contains("CTRL")) prefix.append("CTRL ")
+        if (activeModifiers.contains("ALT")) prefix.append("ALT ")
+        if (activeModifiers.contains("SHIFT")) prefix.append("SHIFT ")
+        if (activeModifiers.contains("FN")) prefix.append("FN ")
         return prefix.toString()
     }
 
@@ -77,7 +82,6 @@ fun ExtraKeysBar(
         val prefix = getModifierPrefix()
         val fullKey = if (prefix.isNotEmpty()) "$prefix$key" else key
         callback.onKeyClick(fullKey, prefix.isNotEmpty())
-        activeModifiers.clear()
     }
 
     Column(
@@ -95,10 +99,10 @@ fun ExtraKeysBar(
                 row.forEach { keyConfig ->
                     ExtraKeyButton(
                         config = keyConfig,
-                        isActive = activeModifiers[keyConfig.key] == true,
+                        isActive = keyConfig.key in activeModifiers,
                         onClick = {
                             if (keyConfig.isModifier) {
-                                toggleModifier(keyConfig.key)
+                                onToggleModifier(keyConfig.key)
                             } else {
                                 onKeyAction(keyConfig.key)
                             }
@@ -133,46 +137,40 @@ private fun ExtraKeyButton(
     onLongPressRepeat: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val backgroundColor = if (isActive) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant
-    }
-
     val contentColor = if (isActive) {
-        MaterialTheme.colorScheme.onPrimary
+        MaterialTheme.colorScheme.primary
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
+
+    val displayFontSize = if (config.key in setOf("UP", "DOWN", "LEFT", "RIGHT")) 18.sp else 11.sp
 
     if (config.isRepetitive && !config.isModifier) {
         LongPressRepeatButton(
             onClick = onClick,
             onLongPressRepeat = onLongPressRepeat,
             modifier = modifier.height(36.dp),
-            containerColor = backgroundColor,
             contentColor = contentColor
         ) {
             Text(
                 text = config.display,
-                fontSize = 11.sp,
+                fontSize = displayFontSize,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1
             )
         }
     } else {
-        Button(
+        TextButton(
             onClick = onClick,
             modifier = modifier.height(36.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = backgroundColor,
+            colors = ButtonDefaults.textButtonColors(
                 contentColor = contentColor
             ),
             shape = MaterialTheme.shapes.small
         ) {
             Text(
                 text = config.display,
-                fontSize = 11.sp,
+                fontSize = displayFontSize,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1
             )
@@ -181,29 +179,63 @@ private fun ExtraKeyButton(
 }
 
 /**
- * A button that triggers [onLongPressRepeat] at regular intervals while held down.
+ * A text-style button that triggers [onLongPressRepeat] at regular intervals while held down.
  *
- * Uses a Handler-based approach for reliable repeat timing without requiring
- * Compose pointer input detection.
+ * A tap fires [onClick] once. Holding past the platform long-press timeout starts
+ * repeating [onLongPressRepeat] every [REPEAT_DELAY] until the finger is released.
+ * Uses a single [androidx.compose.foundation.combinedClickable] detector so taps are
+ * not swallowed by competing gesture handlers. Ripple is drawn via [LocalIndication]
+ * and the text keeps the flat "TextButton" look through a transparent [Surface].
+ *
+ * @param onClick Callback for a single tap
+ * @param onLongPressRepeat Callback for each repeat tick while held down
+ * @param modifier Modifier to apply
+ * @param contentColor Text/icon color
+ * @param content Button content
  */
 @Composable
 private fun LongPressRepeatButton(
     onClick: () -> Unit,
     onLongPressRepeat: () -> Unit,
     modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     content: @Composable () -> Unit
 ) {
-    Button(
-        onClick = onClick,
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val latestRepeat by rememberUpdatedState(onLongPressRepeat)
+    val latestClick by rememberUpdatedState(onClick)
+    var isRepeating by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isRepeating, isPressed) {
+        if (isRepeating && isPressed) {
+            while (isPressed) {
+                latestRepeat()
+                delay(REPEAT_DELAY)
+            }
+            isRepeating = false
+        }
+    }
+
+    Surface(
         modifier = modifier,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = containerColor,
-            contentColor = contentColor
-        ),
+        color = Color.Transparent,
+        contentColor = contentColor,
         shape = MaterialTheme.shapes.small
     ) {
-        content()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(MaterialTheme.shapes.small)
+                .combinedClickable(
+                    onClick = { latestClick() },
+                    onLongClick = { isRepeating = true },
+                    interactionSource = interactionSource,
+                    indication = LocalIndication.current
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            content()
+        }
     }
 }

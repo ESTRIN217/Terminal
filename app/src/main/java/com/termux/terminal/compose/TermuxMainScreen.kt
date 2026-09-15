@@ -69,72 +69,71 @@ fun TermuxMainScreen(
         viewModel.setSoftKeyboardVisible(isImeVisible)
     }
 
-    TermuxNavigationDrawer(
-        isOpen = uiState.isDrawerOpen,
-        onOpenChange = { viewModel.setDrawerOpen(it) },
-        onFileManagerClick = {
-            viewModel.setDrawerOpen(false)
-            onOpenFileManager()
-        },
-        onSettingsClick = {
-            viewModel.setDrawerOpen(false)
-            onOpenSettings()
-        },
-        onToggleKeyboardClick = {
-            viewModel.setDrawerOpen(false)
-            onToggleKeyboard()
-        }
-    ) {
-        Scaffold(
-            modifier = Modifier
+    Column(
+        modifier = modifier
+            .fillMaxSize()
             .statusBarsPadding()
-            .navigationBarsPadding(),
-            topBar = {
-                if (uiState.sessions.isNotEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Hamburger to open the navigation drawer, which is otherwise only
-                        // reachable through an edge swipe or keyboard shortcuts.
-                        IconButton(onClick = { viewModel.setDrawerOpen(true) }) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "Open Navigation Drawer",
-                                tint = MaterialTheme.colorScheme.onSurface
+            .navigationBarsPadding()
+            .imePadding()
+    ) {
+        TermuxNavigationDrawer(
+            isOpen = uiState.isDrawerOpen,
+            onOpenChange = { viewModel.setDrawerOpen(it) },
+            onFileManagerClick = {
+                viewModel.setDrawerOpen(false)
+                onOpenFileManager()
+            },
+            onSettingsClick = {
+                viewModel.setDrawerOpen(false)
+                onOpenSettings()
+            },
+            onToggleKeyboardClick = {
+                viewModel.setDrawerOpen(false)
+                onToggleKeyboard()
+            },
+            modifier = Modifier.weight(1f)
+        ) {
+            Scaffold(
+                topBar = {
+                    if (uiState.sessions.isNotEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Hamburger to open the navigation drawer, which is otherwise only
+                            // reachable through an edge swipe or keyboard shortcuts.
+                            IconButton(onClick = { viewModel.setDrawerOpen(true) }) {
+                                Icon(
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = "Open Navigation Drawer",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            SessionTabs(
+                                sessions = uiState.sessions,
+                                activeSessionIndex = uiState.activeSessionIndex,
+                                onSessionSelected = { viewModel.switchSession(it) },
+                                onCloseSessionClick = { session ->
+                                    onRemoveSession(session)
+                                },
+                                modifier = Modifier.weight(1f)
                             )
-                        }
-                        SessionTabs(
-                            sessions = uiState.sessions,
-                            activeSessionIndex = uiState.activeSessionIndex,
-                            onSessionSelected = { viewModel.switchSession(it) },
-                            onCloseSessionClick = { session ->
-                                onRemoveSession(session)
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                        // New session Button
-                        IconButton(
-                           onClick = onCreateSession
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "New Session",
-                                modifier = Modifier.size(18.dp)
-                            )
+                            // New session Button
+                            IconButton(
+                               onClick = onCreateSession
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "New Session",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }
-            }
-        ) { paddingValues ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .imePadding()
-                    .padding(paddingValues)
-            ) {
+            ) { paddingValues ->
                 // Terminal content
                 Box(
                     modifier = Modifier
-                        .weight(1f)
                         .fillMaxSize()
+                        .padding(paddingValues)
                 ) {
                     if (uiState.hasSessions) {
                         uiState.sessions.forEachIndexed { index, sessionModel ->
@@ -151,40 +150,46 @@ fun TermuxMainScreen(
                         }
                     }
                 }
-                // Extra keys bar
-                if (uiState.isExtraKeysVisible) {
-                    ExtraKeysBar(
-                        config = uiState.extraKeysConfig,
-                        callback = object : ExtraKeysCallback {
-                            override fun onKeyClick(key: String, isMacro: Boolean) {
-                                val session = uiState.activeSession ?: return@onKeyClick
-                                if (isMacro) {
-                                    val keys = key.split(" ")
-                                    var ctrlActive = false
-                                    var altActive = false
-                                    var shiftActive = false
-                                    for (k in keys) {
-                                        when (k) {
-                                            "CTRL" -> ctrlActive = true
-                                            "ALT" -> altActive = true
-                                            "SHIFT" -> shiftActive = true
-                                            else -> {
-                                                sendKeyToSession(session, k, ctrlActive, altActive, shiftActive)
-                                                ctrlActive = false
-                                                altActive = false
-                                                shiftActive = false
-                                            }
-                                        }
+            }
+        }
+        // Extra keys bar: outside the drawer so it is never dimmed by the drawer
+        // scrim, and inside the imePadding column so it rides above the keyboard.
+        if (uiState.isExtraKeysVisible) {
+            ExtraKeysBar(
+                config = uiState.extraKeysConfig,
+                activeModifiers = uiState.extraKeysModifiers,
+                onToggleModifier = viewModel::toggleExtraKeysModifier,
+                callback = object : ExtraKeysCallback {
+                    override fun onKeyClick(key: String, isMacro: Boolean) {
+                        val session = uiState.activeSession ?: return@onKeyClick
+                        if (isMacro) {
+                            val keys = key.split(" ")
+                            var ctrlActive = false
+                            var altActive = false
+                            var shiftActive = false
+                            for (k in keys) {
+                                when (k) {
+                                    "CTRL" -> ctrlActive = true
+                                    "ALT" -> altActive = true
+                                    "SHIFT" -> shiftActive = true
+                                    // Consumed: FN only modifies hardware key events
+                                    // (legacy parity), never bar-to-bar combos.
+                                    "FN" -> Unit
+                                    else -> {
+                                        sendKeyToSession(session, k, ctrlActive, altActive, shiftActive)
+                                        ctrlActive = false
+                                        altActive = false
+                                        shiftActive = false
                                     }
-                                } else {
-                                    sendKeyToSession(session, key)
                                 }
                             }
-                        },
-                        modifier = Modifier
-                    )
-                }
-            }
+                        } else {
+                            sendKeyToSession(session, key)
+                        }
+                    }
+                },
+                modifier = Modifier
+            )
         }
     }
 }

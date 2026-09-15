@@ -52,7 +52,12 @@ object TerminalKeyHandler {
     /**
      * Get the escape sequence for an extra key button name.
      *
-     * @param key The key name (e.g., "UP", "ESC", "TAB", "ENTER")
+     * Control keys in [KEY_CODE_MAP] go through [com.termux.terminal.KeyHandler.getCode]
+     * with the active modifiers. A single character with Ctrl active is mapped with
+     * [applyCtrl] (mirrors `TerminalView.inputCodePoint(..., controlDown=true)` from the
+     * legacy path), and with Alt active it is prefixed with ESC.
+     *
+     * @param key The key name (e.g., "UP", "ESC", "TAB", "ENTER", "C")
      * @param ctrlActive Whether Ctrl modifier is active
      * @param altActive Whether Alt modifier is active
      * @param shiftActive Whether Shift modifier is active
@@ -76,7 +81,7 @@ object TerminalKeyHandler {
             if (seq != null) return seq
         }
 
-        return when (key) {
+        val base = when (key) {
             "ESC" -> "\u001B"
             "TAB" -> "\u0009"
             "ENTER" -> "\r"
@@ -86,6 +91,17 @@ object TerminalKeyHandler {
             "INS" -> "\u001B[2~"
             else -> key
         }
+
+        // Single character with modifiers: apply the Ctrl mapping and the Alt
+        // ESC-prefix. Without this CTRL+C sent a literal "C" (modifiers ignored).
+        if (base.length == 1 && (ctrlActive || altActive)) {
+            var codePoint = base[0].code
+            if (ctrlActive) codePoint = applyCtrl(codePoint)
+            val result = codePoint.toChar().toString()
+            return if (altActive) "\u001B$result" else result
+        }
+
+        return base
     }
 
     /**

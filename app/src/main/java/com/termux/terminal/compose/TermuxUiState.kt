@@ -9,6 +9,7 @@ import com.termux.terminal.TerminalSession
  * @param activeSessionIndex Index of the currently active session
  * @param isDrawerOpen Whether the navigation drawer is open
  * @param isExtraKeysVisible Whether the extra keys bar is visible
+ * @param extraKeysModifiers Sticky modifier keys active on the extra keys bar
  * @param isSoftKeyboardVisible Whether the soft keyboard is visible
  * @param fontSize Font size for the terminal, in density-independent pixels
  * @param debianInstaller Debian rootfs installer overlay state
@@ -18,6 +19,7 @@ data class TermuxUiState(
     val activeSessionIndex: Int = 0,
     val isDrawerOpen: Boolean = false,
     val isExtraKeysVisible: Boolean = true,
+    val extraKeysModifiers: Set<String> = emptySet(),
     val isSoftKeyboardVisible: Boolean = false,
     val fontSize: Float = 14f,
     val extraKeysConfig: ExtraKeysConfig = ExtraKeysConfig(rows = emptyList()),

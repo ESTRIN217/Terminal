@@ -143,8 +143,10 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
 
-        // Load configurations
+        // Load configurations from preferences into the ViewModel
         loadExtraKeysConfig()
+        mViewModel.setExtraKeysVisible(mPreferences.shouldShowTerminalToolbar())
+        mViewModel.setFontSize(mPreferences.getFontSize().toFloat())
 
         val serviceIntent = Intent(this, TermuxService::class.java)
         startService(serviceIntent)
@@ -216,6 +218,10 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
     override fun onResume() {
         super.onResume()
         Logger.logDebug(LOG_TAG, "onResume")
+
+        // Sync SharedPreferences → TermuxViewModel (bridge from Settings screen)
+        mViewModel.setExtraKeysVisible(mPreferences.shouldShowTerminalToolbar())
+        mViewModel.setFontSize(mPreferences.getFontSize().toFloat())
     }
 
     override fun onPause() {
