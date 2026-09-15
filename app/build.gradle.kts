@@ -163,12 +163,18 @@ dependencies {
     implementation(libs.compose.material.icons)
     implementation(libs.compose.foundation)
     implementation(libs.compose.runtime)
+    implementation(libs.compose.ui.tooling.preview)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
+    debugImplementation(libs.compose.ui.tooling)
 
     // Kotlin coroutines
     implementation(libs.kotlinx.coroutines.android)
+
+    // Imágenes (logos, avatar)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 
     // Fase 3: extraccion del rootfs Debian (.tar.gz OCI; gzip va en commons-compress)
     implementation(libs.commons.compress)

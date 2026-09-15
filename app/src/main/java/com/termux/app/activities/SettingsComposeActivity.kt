@@ -1,22 +1,25 @@
 package com.termux.app.activities
 
 import android.os.Bundle
-import android.os.Environment
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModelProvider
-import com.termux.app.models.UserAction
-import com.termux.shared.activities.ReportActivity
-import com.termux.shared.android.AndroidUtils
-import com.termux.shared.file.FileUtils
-import com.termux.shared.logger.Logger
-import com.termux.shared.models.ReportInfo
-import com.termux.shared.termux.TermuxConstants
-import com.termux.shared.termux.TermuxUtils
 import com.termux.terminal.compose.TermuxExpressiveTheme
+import com.termux.terminal.compose.settings.AboutScreen
+import com.termux.terminal.compose.settings.LicensesScreen
 import com.termux.terminal.compose.settings.SettingsScreen
 import com.termux.terminal.compose.settings.SettingsViewModel
+
+private enum class SettingsDestination {
+    SETTINGS,
+    ABOUT,
+    LICENSES
+}
 
 /**
  * Compose replacement for {@link SettingsActivity}.
@@ -40,11 +43,21 @@ class SettingsComposeActivity : ComponentActivity() {
 
         setContent {
             TermuxExpressiveTheme {
-                SettingsScreen(
-                    viewModel = mViewModel,
-                    onNavigateUp = { finish() },
-                    onAboutClick = { openAbout() }
-                )
+                var destination by rememberSaveable { mutableStateOf(SettingsDestination.SETTINGS) }
+                when (destination) {
+                    SettingsDestination.SETTINGS -> SettingsScreen(
+                        viewModel = mViewModel,
+                        onNavigateUp = { finish() },
+                        onAboutClick = { destination = SettingsDestination.ABOUT }
+                    )
+                    SettingsDestination.ABOUT -> AboutScreen(
+                        onBack = { destination = SettingsDestination.SETTINGS },
+                        onNavigateToLicenses = { destination = SettingsDestination.LICENSES }
+                    )
+                    SettingsDestination.LICENSES -> LicensesScreen(
+                        onBack = { destination = SettingsDestination.ABOUT }
+                    )
+                }
             }
         }
     }
@@ -52,41 +65,5 @@ class SettingsComposeActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         mViewModel.reload()
-    }
-
-    private fun openAbout() {
-        Thread {
-            try {
-                val title = "About"
-                val aboutString = StringBuilder()
-                aboutString.append(
-                    TermuxUtils.getAppInfoMarkdownString(
-                        this, TermuxUtils.AppInfoMode.TERMUX_AND_PLUGIN_PACKAGES
-                    )
-                )
-                aboutString.append("\n\n")
-                    .append(AndroidUtils.getDeviceInfoMarkdownString(this, true))
-                aboutString.append("\n\n")
-                    .append(TermuxUtils.getImportantLinksMarkdownString(this))
-
-                val userActionName = UserAction.ABOUT.getName()
-                val reportInfo = ReportInfo(
-                    userActionName,
-                    TermuxConstants.TERMUX_APP.TERMUX_SETTINGS_ACTIVITY_NAME, title
-                )
-                reportInfo.setReportString(aboutString.toString())
-                reportInfo.setReportSaveFileLabelAndPath(
-                    userActionName,
-                    Environment.getExternalStorageDirectory().toString() + "/" +
-                        FileUtils.sanitizeFileName(
-                            TermuxConstants.TERMUX_APP_NAME + "-" + userActionName + ".log",
-                            true, true
-                        )
-                )
-                ReportActivity.startReportActivity(this, reportInfo)
-            } catch (e: Exception) {
-                Logger.logStackTraceWithMessage(LOG_TAG, "Failed to open About", e)
-            }
-        }.start()
     }
 }
