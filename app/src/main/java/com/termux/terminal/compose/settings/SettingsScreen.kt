@@ -29,6 +29,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.termux.R
 import com.termux.shared.logger.Logger
 import com.termux.terminal.compose.SettingsCardGroup
 import com.termux.terminal.compose.SettingsDialogTile
@@ -37,7 +39,13 @@ import com.termux.terminal.compose.SettingsSectionTitle
 import com.termux.terminal.compose.SettingsSliderTile
 import com.termux.terminal.compose.SettingsSwitchTile
 
-private val LOG_LEVEL_LABELS = listOf("Off", "Normal", "Debug", "Verbose")
+@Composable
+private fun logLevelLabels(): List<String> = listOf(
+    stringResource(R.string.log_level_off),
+    stringResource(R.string.log_level_normal),
+    stringResource(R.string.log_level_debug),
+    stringResource(R.string.log_level_verbose)
+)
 
 /**
  * Root settings screen: Termux + terminal I/O + debugging + plugins + about.
@@ -58,12 +66,12 @@ fun SettingsScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(R.string.title_activity_termux_settings)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.action_go_back)
                         )
                     }
                 }
@@ -76,32 +84,32 @@ fun SettingsScreen(
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
         ) {
-            SettingsSectionTitle(title = "Terminal")
+            SettingsSectionTitle(title = stringResource(R.string.application_name))
             SettingsCardGroup {
                 SettingsSwitchTile(
-                    title = "Show extra keys",
-                    subtitle = "Toolbar with extra keys above the keyboard",
+                    title = stringResource(R.string.show_extra_keys),
+                    subtitle = stringResource(R.string.show_extra_keys_desc),
                     icon = Icons.Default.Keyboard,
                     checked = state.showTerminalToolbar,
                     onCheckedChange = viewModel::setShowTerminalToolbar
                 )
                 SettingsSwitchTile(
-                    title = "Terminal margin adjustment",
-                    subtitle = "Prevent keyboard from covering the terminal",
+                    title = stringResource(R.string.termux_terminal_view_terminal_margin_adjustment_title),
+                    subtitle = if (state.terminalMarginAdjustment) stringResource(R.string.termux_terminal_view_terminal_margin_adjustment_on) else stringResource(R.string.termux_terminal_view_terminal_margin_adjustment_off),
                     icon = Icons.Default.Monitor,
                     checked = state.terminalMarginAdjustment,
                     onCheckedChange = viewModel::setTerminalMarginAdjustment
                 )
                 SettingsSwitchTile(
-                    title = "Keep screen on",
-                    subtitle = "Never turn the screen off while in a session",
+                    title = stringResource(R.string.action_toggle_keep_screen_on),
+                    subtitle = stringResource(R.string.action_toggle_keep_screen_on_desc),
                     icon = Icons.Default.Visibility,
                     checked = state.keepScreenOn,
                     onCheckedChange = viewModel::setKeepScreenOn
                 )
                 SettingsSliderTile(
-                    title = "Font size",
-                    subtitle = "Terminal text size in pixels",
+                    title = stringResource(R.string.font_size),
+                    subtitle = stringResource(R.string.font_size_desc),
                     icon = Icons.Default.TextFields,
                     value = state.fontSize.toFloat(),
                     valueRange = state.minFontSize.toFloat()..state.maxFontSize.toFloat(),
@@ -110,50 +118,50 @@ fun SettingsScreen(
                 )
             }
 
-            SettingsSectionTitle(title = "Keyboard")
+            SettingsSectionTitle(title = stringResource(R.string.action_toggle_soft_keyboard))
             SettingsCardGroup {
                 SettingsSwitchTile(
-                    title = "Soft keyboard enabled",
-                    subtitle = "Show the on-screen keyboard",
+                    title = stringResource(R.string.termux_soft_keyboard_enabled_title),
+                    subtitle = if (state.softKeyboardEnabled) stringResource(R.string.termux_soft_keyboard_enabled_on) else stringResource(R.string.termux_soft_keyboard_enabled_off),
                     icon = Icons.Default.Keyboard,
                     checked = state.softKeyboardEnabled,
                     onCheckedChange = viewModel::setSoftKeyboardEnabled
                 )
                 SettingsSwitchTile(
-                    title = "Only if no hardware keyboard",
-                    subtitle = "Skip soft keyboard when hardware is attached",
+                    title = stringResource(R.string.termux_soft_keyboard_enabled_only_if_no_hardware_title),
+                    subtitle = if (state.softKeyboardOnlyIfNoHardware) stringResource(R.string.termux_soft_keyboard_enabled_only_if_no_hardware_on) else stringResource(R.string.termux_soft_keyboard_enabled_only_if_no_hardware_off),
                     icon = Icons.Default.Smartphone,
                     checked = state.softKeyboardOnlyIfNoHardware,
                     onCheckedChange = viewModel::setSoftKeyboardOnlyIfNoHardware
                 )
             }
 
-            SettingsSectionTitle(title = "Debugging")
+            SettingsSectionTitle(title = stringResource(R.string.termux_debugging_preferences_title))
             SettingsCardGroup {
                 SettingsDialogTile(
                     leadingIcon = Icons.Default.BugReport,
-                    title = "Log level",
-                    options = LOG_LEVEL_LABELS,
+                    title = stringResource(R.string.termux_log_level_title),
+                    options = logLevelLabels(),
                     selectedIndex = state.logLevel.coerceIn(0, 3),
                     onSelected = viewModel::setLogLevel
                 )
                 SettingsSwitchTile(
-                    title = "Terminal view key logging",
-                    subtitle = "Log hardware key events for debugging",
+                    title = stringResource(R.string.termux_terminal_view_key_logging_enabled_title),
+                    subtitle = if (state.terminalViewKeyLogging) stringResource(R.string.termux_terminal_view_key_logging_enabled_on) else stringResource(R.string.termux_terminal_view_key_logging_enabled_off),
                     icon = Icons.Default.Tune,
                     checked = state.terminalViewKeyLogging,
                     onCheckedChange = viewModel::setTerminalViewKeyLogging
                 )
                 SettingsSwitchTile(
-                    title = "Plugin error notifications",
-                    subtitle = "Notify when a plugin command fails",
+                    title = stringResource(R.string.termux_plugin_error_notifications_enabled_title),
+                    subtitle = if (state.pluginErrorNotifications) stringResource(R.string.termux_plugin_error_notifications_enabled_on) else stringResource(R.string.termux_plugin_error_notifications_enabled_off),
                     icon = Icons.Default.ErrorOutline,
                     checked = state.pluginErrorNotifications,
                     onCheckedChange = viewModel::setPluginErrorNotifications
                 )
                 SettingsSwitchTile(
-                    title = "Crash report notifications",
-                    subtitle = "Notify when the app crashes",
+                    title = stringResource(R.string.termux_crash_report_notifications_enabled_title),
+                    subtitle = if (state.crashReportNotifications) stringResource(R.string.termux_crash_report_notifications_enabled_on) else stringResource(R.string.termux_crash_report_notifications_enabled_off),
                     icon = Icons.Default.BugReport,
                     checked = state.crashReportNotifications,
                     onCheckedChange = viewModel::setCrashReportNotifications
@@ -163,13 +171,13 @@ fun SettingsScreen(
             if (state.apiInstalled || state.floatInstalled ||
                 state.taskerInstalled || state.widgetInstalled
             ) {
-                SettingsSectionTitle(title = "Plugins")
+                SettingsSectionTitle(title = stringResource(R.string.settings_plugins))
                 SettingsCardGroup {
                     if (state.apiInstalled) {
                         SettingsDialogTile(
                             leadingIcon = Icons.Default.Extension,
-                            title = "Terminal:API log level",
-                            options = LOG_LEVEL_LABELS,
+                            title = stringResource(R.string.settings_plugin_api_log_level),
+                            options = logLevelLabels(),
                             selectedIndex = state.apiLogLevel.coerceIn(0, 3),
                             onSelected = { viewModel.setPluginLogLevel("api", it) }
                         )
@@ -177,8 +185,8 @@ fun SettingsScreen(
                     if (state.floatInstalled) {
                         SettingsDialogTile(
                             leadingIcon = Icons.Default.Widgets,
-                            title = "Terminal:Float log level",
-                            options = LOG_LEVEL_LABELS,
+                            title = stringResource(R.string.settings_plugin_float_log_level),
+                            options = logLevelLabels(),
                             selectedIndex = state.floatLogLevel.coerceIn(0, 3),
                             onSelected = { viewModel.setPluginLogLevel("float", it) }
                         )
@@ -186,8 +194,8 @@ fun SettingsScreen(
                     if (state.taskerInstalled) {
                         SettingsDialogTile(
                             leadingIcon = Icons.Default.Tune,
-                            title = "Terminal:Tasker log level",
-                            options = LOG_LEVEL_LABELS,
+                            title = stringResource(R.string.settings_plugin_tasker_log_level),
+                            options = logLevelLabels(),
                             selectedIndex = state.taskerLogLevel.coerceIn(0, 3),
                             onSelected = { viewModel.setPluginLogLevel("tasker", it) }
                         )
@@ -195,8 +203,8 @@ fun SettingsScreen(
                     if (state.widgetInstalled) {
                         SettingsDialogTile(
                             leadingIcon = Icons.Default.Extension,
-                            title = "Terminal:Widget log level",
-                            options = LOG_LEVEL_LABELS,
+                            title = stringResource(R.string.settings_plugin_widget_log_level),
+                            options = logLevelLabels(),
                             selectedIndex = state.widgetLogLevel.coerceIn(0, 3),
                             onSelected = { viewModel.setPluginLogLevel("widget", it) }
                         )
@@ -204,12 +212,12 @@ fun SettingsScreen(
                 }
             }
 
-            SettingsSectionTitle(title = "About")
+            SettingsSectionTitle(title = stringResource(R.string.about_preference_title))
             SettingsCardGroup {
                 SettingsListTile(
                     leadingIcon = Icons.Default.Info,
-                    title = "About",
-                    subtitle = "App, device and important links",
+                    title = stringResource(R.string.about_preference_title),
+                    subtitle = stringResource(R.string.about_preference_desc),
                     trailingIcon = Icons.Default.ChevronRight,
                     onClick = {
                         try {

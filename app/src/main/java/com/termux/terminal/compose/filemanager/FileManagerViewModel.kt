@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.termux.R
 import com.termux.app.filemanager.FileOperationsHelper
 import com.termux.app.filemanager.FileSortOption
 import com.termux.shared.termux.TermuxConstants
@@ -179,9 +180,9 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
                     canGoForward = forwardStack.isNotEmpty(),
                     hasClipboard = FileOperationsHelper.hasClipboard(),
                     statusMessage = if (FileOperationsHelper.isSharedStoragePath(dir))
-                        "Cannot read " + dir.absolutePath + ". Check \"All files access\" permission."
+                        getApplication<Application>().getString(R.string.filemanager_error_cannot_read_access, dir.absolutePath)
                     else
-                        "Cannot read " + dir.absolutePath
+                        getApplication<Application>().getString(R.string.filemanager_error_cannot_read, dir.absolutePath)
                 )
             }
             return
@@ -310,7 +311,7 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     fun notifyBrokenSymlink(file: File) {
         val raw = FileOperationsHelper.readSymlinkTargetRaw(file)
         _uiState.update {
-            it.copy(statusMessage = "Broken symlink: " + file.name + " → " + (raw ?: "?") + " not found")
+            it.copy(statusMessage = getApplication<Application>().getString(R.string.filemanager_error_broken_symlink, file.name, raw ?: "?"))
         }
     }
 

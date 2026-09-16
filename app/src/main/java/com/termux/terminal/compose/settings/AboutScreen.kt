@@ -89,7 +89,7 @@ fun AboutScreen(
     val context = LocalContext.current
 
     val versionName = remember { PackageUtils.getVersionNameForPackage(context) }
-    val platformLabel = "Android"
+    val platformLabel = stringResource(R.string.about_platform_android)
     val archLabel = remember {
         if (Build.SUPPORTED_ABIS.isNotEmpty()) {
             Build.SUPPORTED_ABIS[0].uppercase()
@@ -112,26 +112,26 @@ fun AboutScreen(
                 withContext(Dispatchers.IO) { buildAboutReport(context) }
             } catch (e: Exception) {
                 Log.e(LOG_TAG, "Failed to build about report", e)
-                Toast.makeText(context, "No se pudo generar la información", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.about_generate_info_failed), Toast.LENGTH_SHORT).show()
                 return@launch
             }
             try {
                 when (action) {
                     AboutAction.SHARE -> ShareUtils.shareText(
                         context,
-                        context.getString(R.string.application_name) + " - Información",
+                        context.getString(R.string.about_share_subject, context.getString(R.string.application_name)),
                         report,
-                        "Compartir información"
+                        context.getString(R.string.about_share_chooser_title)
                     )
                     AboutAction.COPY -> ShareUtils.copyTextToClipboard(
                         context,
-                        "Información",
+                        context.getString(R.string.about_copy_label),
                         report,
-                        "Información copiada al portapapeles"
+                        context.getString(R.string.about_info_copied)
                     )
                     AboutAction.SAVE -> ShareUtils.saveTextToFile(
                         context,
-                        "about report",
+                        context.getString(R.string.about_report_label),
                         Environment.getExternalStorageDirectory().toString() + "/" + ABOUT_SAVE_FILE_NAME,
                         report,
                         true,
@@ -140,7 +140,7 @@ fun AboutScreen(
                 }
             } catch (e: Exception) {
                 Log.e(LOG_TAG, "About report action failed", e)
-                Toast.makeText(context, "La acción falló", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.about_action_failed), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -154,7 +154,7 @@ fun AboutScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Acerca de",
+                        text = stringResource(R.string.about_preference_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -164,7 +164,7 @@ fun AboutScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Volver"
+                            contentDescription = stringResource(R.string.action_go_back)
                         )
                     }
                 },
@@ -181,7 +181,7 @@ fun AboutScreen(
                             onDismissRequest = { menuExpanded = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Compartir información") },
+                                text = { Text(stringResource(R.string.action_share)) },
                                 leadingIcon = {
                                     Icon(Icons.Default.Share, contentDescription = null)
                                 },
@@ -191,7 +191,7 @@ fun AboutScreen(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Copiar al portapapeles") },
+                                text = { Text(stringResource(R.string.action_copy)) },
                                 leadingIcon = {
                                     Icon(Icons.Default.ContentCopy, contentDescription = null)
                                 },
@@ -201,7 +201,7 @@ fun AboutScreen(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Guardar en un archivo") },
+                                text = { Text(stringResource(R.string.save_to_a_files)) },
                                 leadingIcon = {
                                     Icon(Icons.Default.Save, contentDescription = null)
                                 },
@@ -238,7 +238,7 @@ fun AboutScreen(
                     HeaderCard(
                         image = null,
                         imageFallbackIcon = Icons.Default.Terminal,
-                        appName = "Proot",
+                        appName = stringResource(R.string.about_proot),
                         platformLabel = platformLabel,
                         version = null,
                         archLabel = archLabel
@@ -247,7 +247,7 @@ fun AboutScreen(
                     HeaderCard(
                         image = if (debianInfo.hasLogo) File(DEBIAN_LOGO_PATH) else null,
                         imageFallbackIcon = Icons.Default.Code,
-                        appName = debianInfo.prettyName ?: "Debian",
+                        appName = debianInfo.prettyName ?: stringResource(R.string.about_debian),
                         platformLabel = platformLabel,
                         version = debianInfo.version,
                         archLabel = archLabel
@@ -258,27 +258,27 @@ fun AboutScreen(
                 SettingsCardGroup {
                     SettingsListTile(
                         leadingIcon = Icons.Default.Description,
-                        title = "Terminal usa proot para ejecutar Debian",
-                        subtitle = "Esto es un fork de termux y no está asociado a el ni a su equipo",
+                        title = stringResource(R.string.about_proot_uses_debian),
+                        subtitle = stringResource(R.string.about_fork_subtitle),
                         onClick = {}
                     )
                 }
             }
 
             item {
-                SettingsSectionTitle(title = "Desarrollador")
+                SettingsSectionTitle(title = stringResource(R.string.about_section_developer))
                 DeveloperCard(
                     onGithubClick = { openUrl(GITHUB_DEV_URL) }
                 )
             }
 
             item {
-                SettingsSectionTitle(title = "Enlaces útiles")
+                SettingsSectionTitle(title = stringResource(R.string.about_section_useful_links))
                 SettingsCardGroup {
                     SettingsListTile(
                         leadingIcon = Icons.Default.Description,
-                        title = "Licencias de código abierto",
-                        subtitle = "Biblioteca de terceros",
+                        title = stringResource(R.string.open_source_licenses),
+                        subtitle = stringResource(R.string.about_third_party_library),
                         trailingIcon = Icons.Default.ChevronRight,
                         onClick = onNavigateToLicenses
                     )
@@ -288,8 +288,8 @@ fun AboutScreen(
                     )
                     SettingsListTile(
                         leadingIcon = Icons.Default.Code,
-                        title = "Ver repositorio",
-                        subtitle = "ESTRIN217/Terminal",
+                        title = stringResource(R.string.about_view_repository),
+                        subtitle = stringResource(R.string.about_repository_name),
                         trailingIcon = Icons.Default.ChevronRight,
                         onClick = { openUrl(GITHUB_REPO_URL) }
                     )
@@ -299,8 +299,8 @@ fun AboutScreen(
                     )
                     SettingsListTile(
                         leadingIcon = Icons.Default.BugReport,
-                        title = "Reportar un problema",
-                        subtitle = "ESTRIN217/Terminal/issues",
+                        title = stringResource(R.string.about_report_issue),
+                        subtitle = stringResource(R.string.about_issues_path),
                         trailingIcon = Icons.Default.ChevronRight,
                         onClick = { openUrl(GITHUB_ISSUES_URL) }
                     )
@@ -310,8 +310,8 @@ fun AboutScreen(
                     )
                     SettingsListTile(
                         leadingIcon = Icons.Default.Description,
-                        title = "Licencia GPLv3",
-                        subtitle = "Software de código abierto",
+                        title = stringResource(R.string.about_license_gplv3),
+                        subtitle = stringResource(R.string.about_open_source_software),
                         trailingIcon = Icons.Default.ChevronRight,
                         onClick = { openUrl(GITHUB_LICENSE_URL) }
                     )
@@ -321,7 +321,7 @@ fun AboutScreen(
             item {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Hecho con ❤ en Venezuela",
+                    text = stringResource(R.string.about_made_with),
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center,
@@ -395,7 +395,7 @@ private fun HeaderCard(
                 ) {
                     SettingsBadge(text = platformLabel)
                     if (version != null) {
-                        SettingsBadge(text = "v" + version)
+                        SettingsBadge(text = stringResource(R.string.about_version_prefix) + version)
                     }
                     SettingsBadge(text = archLabel)
                 }
@@ -436,13 +436,13 @@ private fun DeveloperCard(
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "ESTRIN217",
+                        text = stringResource(R.string.about_developer_name),
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold
                         )
                     )
                     Text(
-                        text = "Desarrollador principal",
+                        text = stringResource(R.string.about_main_developer),
                         style = MaterialTheme.typography.bodyMedium.copy(
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -457,7 +457,7 @@ private fun DeveloperCard(
             ) {
                 SocialButton(
                     icon = Icons.Default.Code,
-                    label = "Ver en GitHub",
+                    label = stringResource(R.string.about_view_on_github),
                     modifier = Modifier.fillMaxWidth(),
                     onClick = onGithubClick
                 )

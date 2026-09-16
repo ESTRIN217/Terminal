@@ -113,7 +113,7 @@
     <string name="action_copy">Copy</string>
     <string name="action_cut">Cut</string>
     <string name="action_paste">Paste</string>
-    <string name="action_share">Share</string>
+    <string name="action_share">Share information</string>
     <string name="action_details">Details</string>
     <string name="action_select_all">Select all</string>
     <string name="action_deselect_all">Deselect all</string>
@@ -148,6 +148,33 @@
     <string name="msg_error_copy">Failed to copy %1$s</string>
     <string name="msg_error_move">Failed to move %1$s</string>
     <string name="msg_error_paste">Failed to paste items</string>
+
+    <!-- File Manager UI -->
+    <string name="filemanager_more">More</string>
+    <string name="filemanager_clear">Clear</string>
+    <string name="filemanager_new">New</string>
+    <string name="action_new_symlink">New symlink</string>
+    <string name="filemanager_up">Up</string>
+    <string name="filemanager_broken_link">Broken link → %1$s</string>
+    <string name="filemanager_link_target">Link → %1$s</string>
+    <string name="filemanager_folder">Folder</string>
+    <string name="filemanager_error_create_folder">Failed to create folder</string>
+    <string name="filemanager_error_create_file">Failed to create file</string>
+    <string name="filemanager_error_create_symlink">Failed to create symlink</string>
+    <string name="filemanager_confirm_delete">Delete?</string>
+    <string name="filemanager_move_to_trash">Move %1$d item(s) to trash?</string>
+    <string name="filemanager_moved_to_trash">Moved to trash</string>
+    <string name="filemanager_delete_failed">Delete failed</string>
+    <string name="filemanager_broken_status">Status: broken (target not found)</string>
+    <string name="filemanager_detail_path">Path: %1$s</string>
+    <string name="filemanager_detail_size">Size: %1$s</string>
+    <string name="filemanager_detail_type">Type: %1$s</string>
+    <string name="filemanager_open">Open</string>
+    <string name="filemanager_close">Close</string>
+    <string name="filemanager_sort_by">Sort by</string>
+    <string name="filemanager_link_name">Link name</string>
+    <string name="filemanager_target_path">Target path</string>
+    <string name="filemanager_ok">OK</string>
 
     <!-- Sort Options -->
     <string name="sort_name">Name</string>
@@ -262,7 +289,6 @@
         <string name="termux_terminal_io_preferences_summary">Preferences for terminal I/O</string>
 
             <!-- Keyboard Category -->
-            <string name="termux_keyboard_header">Keyboard</string>
 
                 <!-- Soft Keyboard -->
                 <string name="termux_soft_keyboard_enabled_title">Soft Keyboard Enabled</string>
@@ -319,6 +345,75 @@
 
     <!-- About Preference -->
     <string name="about_preference_title">About</string>
+    <string name="about_preference_desc">App and important links</string>
+    
+    <!-- Compose -->
+    <string name="open_navigation_drawer">Open Navigation Drawer</string>
+    <string name="toggle_keyboard">Toggle Keyboard</string>
+    <string name="session">Session</string>
+    <string name="close_session">Close Session</string>
+    <string name="show_extra_keys">Show extra keys</string>
+    <string name="show_extra_keys_desc">Toolbar with extra keys above the keyboard</string>
+    <string name="action_toggle_keep_screen_on_desc">Never turn the screen off while in a session</string>
+    <string name="font_size">Font size</string>
+    <string name="font_size_desc">Terminal text size in pixels</string>
+    <string name="save_to_a_files">Save to a files</string>
 
+    <!-- About Screen -->
+    <string name="about_platform_android">Android</string>
+    <string name="about_generate_info_failed">Failed to generate the information</string>
+    <string name="about_share_subject">%1$s - Info</string>
+    <string name="about_share_chooser_title">Share information</string>
+    <string name="about_copy_label">Info</string>
+    <string name="about_info_copied">Information copied to clipboard</string>
+    <string name="about_report_label">about report</string>
+    <string name="about_action_failed">The action failed</string>
+    <string name="about_proot">Proot</string>
+    <string name="about_debian">Debian</string>
+    <string name="about_proot_uses_debian">Terminal uses proot to run Debian</string>
+    <string name="about_fork_subtitle">This is a fork of Termux and is not associated with it or its team</string>
+    <string name="about_section_developer">Developer</string>
+    <string name="about_section_useful_links">Useful links</string>
+    <string name="open_source_licenses">Open source licenses</string>
+    <string name="about_third_party_library">Third-party library</string>
+    <string name="about_view_repository">View repository</string>
+    <string name="about_repository_name">ESTRIN217/Terminal</string>
+    <string name="about_report_issue">Report a problem</string>
+    <string name="about_issues_path">ESTRIN217/Terminal/issues</string>
+    <string name="about_license_gplv3">GPLv3 license</string>
+    <string name="about_open_source_software">Open source software</string>
+    <string name="about_made_with">Made with ♥ in Venezuela</string>
+    <string name="about_version_prefix">v</string>
+    <string name="about_developer_name">ESTRIN217</string>
+    <string name="about_main_developer">Lead developer</string>
+    <string name="about_view_on_github">View on GitHub</string>
+
+    <!-- Licenses Screen -->
+    <string name="licenses_title">Licenses</string>
+    <string name="license_gplv3">GPLv3</string>
+    <string name="license_terminal_project">Terminal project license</string>
+    <string name="license_apache2">Apache 2.0</string>
+    <string name="license_termux_libraries">terminal-emulator and terminal-view libraries</string>
+    <string name="license_mit">MIT</string>
+    <string name="license_termux_constants">TermuxConstants and TermuxPropertyConstants</string>
+    <string name="license_gplv2_classpath">GPLv2 with Classpath exception</string>
+    <string name="license_openjdk">OpenJDK and class libraries</string>
+    <string name="licenses_footer">Terminal is distributed under GPLv3 and includes third-party components with their respective licenses.</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_plugins">Plugins</string>
+    <string name="settings_plugin_api_log_level">Terminal:API log level</string>
+    <string name="settings_plugin_float_log_level">Terminal:Float log level</string>
+    <string name="settings_plugin_tasker_log_level">Terminal:Tasker log level</string>
+    <string name="settings_plugin_widget_log_level">Terminal:Widget log level</string>
+    <string name="log_level_off">Off</string>
+    <string name="log_level_normal">Normal</string>
+    <string name="log_level_debug">Debug</string>
+    <string name="log_level_verbose">Verbose</string>
+
+    <!-- File Manager Errors -->
+    <string name="filemanager_error_cannot_read">Cannot read %1$s</string>
+    <string name="filemanager_error_cannot_read_access">Cannot read %1$s. Check \"All files access\" permission.</string>
+    <string name="filemanager_error_broken_symlink">Broken symlink: %1$s → %2$s not found</string>
 
 </resources>

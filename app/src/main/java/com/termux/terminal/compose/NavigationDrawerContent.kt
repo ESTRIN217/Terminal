@@ -26,7 +26,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.launch
+import com.termux.R
 
 /**
  * Navigation drawer content for the Termux main screen.
@@ -80,32 +82,32 @@ fun TermuxNavigationDrawer(
                         .padding(16.dp)
                 ) {
                     Text(
-                        text = "Terminal",
+                        text = stringResource(R.string.application_name),
                         style = MaterialTheme.typography.headlineMedium,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
                     NavigationDrawerItem(
-                        label = { Text("File Manager") },
+                        label = { Text(stringResource(R.string.title_activity_file_manager)) },
                         selected = false,
                         onClick = onFileManagerClick,
                         icon = {
                             Icon(
                                 imageVector = Icons.Default.Folder,
-                                contentDescription = "File Manager"
+                                contentDescription = stringResource(R.string.title_activity_file_manager)
                             )
                         },
                         modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                     )
 
                     NavigationDrawerItem(
-                        label = { Text("Settings") },
+                        label = { Text(stringResource(R.string.action_open_settings)) },
                         selected = false,
                         onClick = onSettingsClick,
                         icon = {
                             Icon(
                                 imageVector = Icons.Default.Settings,
-                                contentDescription = "Settings"
+                                contentDescription = stringResource(R.string.action_open_settings)
                             )
                         },
                         modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
@@ -114,13 +116,13 @@ fun TermuxNavigationDrawer(
                     Spacer(modifier = Modifier.weight(1f))
 
                     NavigationDrawerItem(
-                        label = { Text("Toggle Keyboard") },
+                        label = { Text(stringResource(R.string.toggle_keyboard)) },
                         selected = false,
                         onClick = onToggleKeyboardClick,
                         icon = {
                             Icon(
                                 imageVector = Icons.Default.Keyboard,
-                                contentDescription = "Toggle Keyboard"
+                                contentDescription = stringResource(R.string.toggle_keyboard)
                             )
                         },
                         modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)

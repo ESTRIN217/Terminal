@@ -64,8 +64,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.termux.R
 import com.termux.app.filemanager.FileOperationsHelper
 import com.termux.app.filemanager.FileSortOption
 import kotlinx.coroutines.launch
@@ -92,6 +95,7 @@ fun FileManagerScreen(
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(state.statusMessage) {
         state.statusMessage?.let {
@@ -114,7 +118,7 @@ fun FileManagerScreen(
                 title = {
                     Column {
                         Text(
-                            text = if (state.selectionMode) "${state.selectedPaths.size} selected" else state.title,
+                            text = if (state.selectionMode) stringResource(R.string.selection_mode_title, state.selectedPaths.size) else state.title,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -131,27 +135,27 @@ fun FileManagerScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_go_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { searchActive = !searchActive }) {
-                        Icon(Icons.Default.Search, contentDescription = "Search")
+                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.action_search))
                     }
                     IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More")
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.filemanager_more))
                     }
                     DropdownMenu(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Sort: ${state.sortOption.getDisplayName()} ${if (state.sortAscending) "↑" else "↓"}") },
+                            text = { Text(stringResource(R.string.action_sort) + ": ${state.sortOption.getDisplayName()} ${if (state.sortAscending) "↑" else "↓"}") },
                             leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, null) },
                             onClick = { menuExpanded = false; dialog = DialogKind.SORT }
                         )
                         DropdownMenuItem(
-                            text = { Text(if (state.showHidden) "Hide hidden files" else "Show hidden files") },
+                            text = { Text(if (state.showHidden) stringResource(R.string.action_hide_hidden) else stringResource(R.string.action_show_hidden)) },
                             leadingIcon = {
                                 Icon(
                                     if (state.showHidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
@@ -161,26 +165,26 @@ fun FileManagerScreen(
                             onClick = { menuExpanded = false; viewModel.toggleHidden() }
                         )
                         DropdownMenuItem(
-                            text = { Text("Bookmarks") },
+                            text = { Text(stringResource(R.string.action_bookmarks)) },
                             leadingIcon = { Icon(Icons.Default.Bookmark, null) },
                             onClick = { menuExpanded = false; dialog = DialogKind.BOOKMARKS }
                         )
                         if (state.hasClipboard) {
                             DropdownMenuItem(
-                                text = { Text("Paste") },
+                                text = { Text(stringResource(R.string.action_paste)) },
                                 leadingIcon = { Icon(Icons.Default.ContentPaste, null) },
                                 onClick = {
                                     menuExpanded = false
                                     viewModel.paste { count ->
                                         scope.launch {
-                                            snackbarHostState.showSnackbar("Pasted $count item(s)")
+                                            snackbarHostState.showSnackbar(context.getString(R.string.msg_paste_success, count))
                                         }
                                     }
                                 }
                             )
                         }
                         DropdownMenuItem(
-                            text = { Text("Select all") },
+                            text = { Text(stringResource(R.string.action_select_all)) },
                             leadingIcon = { Icon(Icons.Default.CheckBox, null) },
                             onClick = { menuExpanded = false; viewModel.selectAll() }
                         )
@@ -192,24 +196,24 @@ fun FileManagerScreen(
             if (state.selectionMode) {
                 BottomAppBar {
                     IconButton(onClick = { viewModel.copySelection() }) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
+                        Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.action_copy))
                     }
                     IconButton(onClick = { viewModel.cutSelection() }) {
-                        Icon(Icons.Default.ContentCut, contentDescription = "Cut")
+                        Icon(Icons.Default.ContentCut, contentDescription = stringResource(R.string.action_cut))
                     }
                     IconButton(onClick = { onShareFiles(viewModel.selectedFiles()) }) {
-                        Icon(Icons.Default.Share, contentDescription = "Share")
+                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
                     }
                     IconButton(onClick = {
                         dialogFile = null
                         nameInput = ""
                         dialog = DialogKind.DELETE
                     }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete))
                     }
                     Spacer(Modifier.weight(1f))
                     TextButton(onClick = { viewModel.clearSelection() }) {
-                        Text("Clear")
+                        Text(stringResource(R.string.filemanager_clear))
                     }
                 }
             }
@@ -225,7 +229,7 @@ fun FileManagerScreen(
                         ) {
                             Icon(
                                 if (fabMenuExpanded) Icons.Default.Close else Icons.Default.Add,
-                                contentDescription = "New"
+                                contentDescription = stringResource(R.string.filemanager_new)
                             )
                         }
                     }
@@ -237,7 +241,7 @@ fun FileManagerScreen(
                             dialog = DialogKind.NEW_FOLDER
                         },
                         icon = { Icon(Icons.Default.Folder, null) },
-                        text = { Text("New folder") }
+                        text = { Text(stringResource(R.string.action_new_folder)) }
                     )
                     FloatingActionButtonMenuItem(
                         onClick = {
@@ -246,7 +250,7 @@ fun FileManagerScreen(
                             dialog = DialogKind.NEW_FILE
                         },
                         icon = { Icon(Icons.Default.Description, null) },
-                        text = { Text("New file") }
+                        text = { Text(stringResource(R.string.action_new_file)) }
                     )
                     FloatingActionButtonMenuItem(
                         onClick = {
@@ -255,7 +259,7 @@ fun FileManagerScreen(
                             dialog = DialogKind.NEW_SYMLINK
                         },
                         icon = { Icon(Icons.Default.Link, null) },
-                        text = { Text("New symlink") }
+                        text = { Text(stringResource(R.string.action_new_symlink)) }
                     )
                 }
             }
@@ -277,22 +281,22 @@ fun FileManagerScreen(
                     onClick = { viewModel.goBack() },
                     enabled = state.canGoBack
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "History back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_go_back))
                 }
                 IconButton(
                     onClick = { viewModel.goForward() },
                     enabled = state.canGoForward
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "History forward")
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.action_go_forward))
                 }
                 IconButton(onClick = { viewModel.goUp() }) {
-                    Icon(Icons.Default.ArrowUpward, contentDescription = "Up")
+                    Icon(Icons.Default.ArrowUpward, contentDescription = stringResource(R.string.filemanager_up))
                 }
                 if (searchActive) {
                     OutlinedTextField(
                         value = state.searchQuery,
                         onValueChange = viewModel::setSearchQuery,
-                        label = { Text("Search") },
+                        label = { Text(stringResource(R.string.action_search)) },
                         singleLine = true,
                         modifier = Modifier
                             .weight(1f)
@@ -364,9 +368,9 @@ fun FileManagerScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = if (isBroken) "Broken link → $linkTarget"
-                                else if (isLink) "Link → $linkTarget"
-                                else if (file.isDirectory) "Folder"
+                                text = if (isBroken) stringResource(R.string.filemanager_broken_link, linkTarget!!)
+                                else if (isLink) stringResource(R.string.filemanager_link_target, linkTarget!!)
+                                else if (file.isDirectory) stringResource(R.string.filemanager_folder)
                                 else FileOperationsHelper.formatSize(file.length()),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (isBroken) MaterialTheme.colorScheme.error
@@ -380,7 +384,7 @@ fun FileManagerScreen(
                             nameInput = file.name
                             dialog = DialogKind.DETAILS
                         }) {
-                            Icon(Icons.Default.Info, contentDescription = "Details")
+                            Icon(Icons.Default.Info, contentDescription = stringResource(R.string.action_details))
                         }
                     }
                 }
@@ -390,7 +394,7 @@ fun FileManagerScreen(
 
     when (dialog) {
         DialogKind.NEW_FOLDER -> NameDialog(
-            title = "New folder",
+            title = stringResource(R.string.action_new_folder),
             initial = "",
             onDismiss = { dialog = DialogKind.NONE },
             onConfirm = { name ->
@@ -398,13 +402,13 @@ fun FileManagerScreen(
                 val target = File(state.currentPath)
                 onEnsureStorageAccess(target) {
                     if (!viewModel.createFolder(name)) {
-                        scope.launch { snackbarHostState.showSnackbar("Failed to create folder") }
+                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.filemanager_error_create_folder)) }
                     }
                 }
             }
         )
         DialogKind.NEW_FILE -> NameDialog(
-            title = "New file",
+            title = stringResource(R.string.action_new_file),
             initial = "",
             onDismiss = { dialog = DialogKind.NONE },
             onConfirm = { name ->
@@ -412,7 +416,7 @@ fun FileManagerScreen(
                 val target = File(state.currentPath)
                 onEnsureStorageAccess(target) {
                     if (!viewModel.createFile(name)) {
-                        scope.launch { snackbarHostState.showSnackbar("Failed to create file") }
+                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.filemanager_error_create_file)) }
                     }
                 }
             }
@@ -424,19 +428,19 @@ fun FileManagerScreen(
                 val dir = File(state.currentPath)
                 onEnsureStorageAccess(dir) {
                     if (!viewModel.createSymlink(name, target)) {
-                        scope.launch { snackbarHostState.showSnackbar("Failed to create symlink") }
+                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.filemanager_error_create_symlink)) }
                     }
                 }
             }
         )
         DialogKind.RENAME -> NameDialog(
-            title = "Rename",
+            title = stringResource(R.string.title_rename),
             initial = nameInput,
             onDismiss = { dialog = DialogKind.NONE },
             onConfirm = { name ->
                 val f = dialogFile
                 if (f != null && !viewModel.renameFile(f, name)) {
-                    scope.launch { snackbarHostState.showSnackbar("Rename failed") }
+                    scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.msg_error_rename)) }
                 }
                 dialog = DialogKind.NONE
             }
@@ -445,8 +449,8 @@ fun FileManagerScreen(
             val count = dialogFile?.let { 1 } ?: state.selectedPaths.size
             AlertDialog(
                 onDismissRequest = { dialog = DialogKind.NONE },
-                title = { Text("Delete?") },
-                text = { Text("Move $count item(s) to trash?") },
+                title = { Text(stringResource(R.string.filemanager_confirm_delete)) },
+                text = { Text(stringResource(R.string.filemanager_move_to_trash, count)) },
                 confirmButton = {
                     TextButton(onClick = {
                         val files = dialogFile?.let { listOf(it) } ?: viewModel.selectedFiles()
@@ -455,20 +459,21 @@ fun FileManagerScreen(
                             scope.launch {
                                 if (ok) {
                                     val result = snackbarHostState.showSnackbar(
-                                        "Moved to trash", actionLabel = "Undo"
+                                        context.getString(R.string.filemanager_moved_to_trash),
+                                        actionLabel = context.getString(R.string.action_undo)
                                     )
                                     if (result == SnackbarResult.ActionPerformed) {
                                         viewModel.undoDelete()
                                     }
                                 } else {
-                                    snackbarHostState.showSnackbar("Delete failed")
+                                    snackbarHostState.showSnackbar(context.getString(R.string.filemanager_delete_failed))
                                 }
                             }
                         }
-                    }) { Text("Delete") }
+                    }) { Text(stringResource(R.string.action_delete)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { dialog = DialogKind.NONE }) { Text("Cancel") }
+                    TextButton(onClick = { dialog = DialogKind.NONE }) { Text(stringResource(R.string.action_cancel)) }
                 }
             )
         }
@@ -482,12 +487,12 @@ fun FileManagerScreen(
                     title = { Text(f.name) },
                     text = {
                         Text(
-                            (if (f.isDirectory) "Folder\n" else "") +
-                                (if (linkTarget != null) "Link → $linkTarget\n" else "") +
-                                (if (isBroken) "Status: broken (target not found)\n" else "") +
-                                "Path: ${f.absolutePath}\n" +
-                                "Size: ${FileOperationsHelper.formatSize(if (f.isDirectory) 0 else f.length())}\n" +
-                                "Type: ${FileOperationsHelper.getMimeType(f.name)}"
+                            (if (f.isDirectory) stringResource(R.string.filemanager_folder) + "\n" else "") +
+                                (if (linkTarget != null) stringResource(R.string.filemanager_link_target, linkTarget) + "\n" else "") +
+                                (if (isBroken) stringResource(R.string.filemanager_broken_status) + "\n" else "") +
+                                stringResource(R.string.filemanager_detail_path, f.absolutePath) + "\n" +
+                                stringResource(R.string.filemanager_detail_size, FileOperationsHelper.formatSize(if (f.isDirectory) 0 else f.length())) + "\n" +
+                                stringResource(R.string.filemanager_detail_type, FileOperationsHelper.getMimeType(f.name))
                         )
                     },
                     confirmButton = {
@@ -509,15 +514,15 @@ fun FileManagerScreen(
                                     onOpenFile(resolved)
                                 }
                             }
-                        }) { Text("Open") }
+                        }) { Text(stringResource(R.string.filemanager_open)) }
                     },
                     dismissButton = {
                         Row {
                             TextButton(onClick = {
                                 nameInput = f.name
                                 dialog = DialogKind.RENAME
-                            }) { Text("Rename") }
-                            TextButton(onClick = { dialog = DialogKind.NONE }) { Text("Close") }
+                            }) { Text(stringResource(R.string.action_rename)) }
+                            TextButton(onClick = { dialog = DialogKind.NONE }) { Text(stringResource(R.string.filemanager_close)) }
                         }
                     }
                 )
@@ -528,7 +533,7 @@ fun FileManagerScreen(
         DialogKind.SORT -> {
             AlertDialog(
                 onDismissRequest = { dialog = DialogKind.NONE },
-                title = { Text("Sort by") },
+                title = { Text(stringResource(R.string.filemanager_sort_by)) },
                 text = {
                     Column {
                         FileSortOption.entries.forEach { option ->
@@ -557,7 +562,7 @@ fun FileManagerScreen(
                             viewModel.toggleHidden()
                             dialog = DialogKind.NONE
                         }) {
-                            Text(if (state.showHidden) "Hide hidden files" else "Show hidden files")
+                            Text(if (state.showHidden) stringResource(R.string.action_hide_hidden) else stringResource(R.string.action_show_hidden))
                         }
                     }
                 },
@@ -567,7 +572,7 @@ fun FileManagerScreen(
         DialogKind.BOOKMARKS -> {
             AlertDialog(
                 onDismissRequest = { dialog = DialogKind.NONE },
-                title = { Text("Bookmarks") },
+                title = { Text(stringResource(R.string.action_bookmarks)) },
                 text = {
                     Column {
                         viewModel.bookmarkDirs().forEach { (label, dir) ->
@@ -625,10 +630,10 @@ private fun NameDialog(
             TextButton(
                 onClick = { onConfirm(text.trim()) },
                 enabled = text.trim().isNotEmpty()
-            ) { Text("OK") }
+            ) { Text(stringResource(R.string.filemanager_ok)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }
@@ -648,13 +653,13 @@ private fun SymlinkDialog(
     var target by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New symlink") },
+        title = { Text(stringResource(R.string.action_new_symlink)) },
         text = {
             Column {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Link name") },
+                    label = { Text(stringResource(R.string.filemanager_link_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -662,7 +667,7 @@ private fun SymlinkDialog(
                 OutlinedTextField(
                     value = target,
                     onValueChange = { target = it },
-                    label = { Text("Target path") },
+                    label = { Text(stringResource(R.string.filemanager_target_path)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -672,10 +677,10 @@ private fun SymlinkDialog(
             TextButton(
                 onClick = { onConfirm(name.trim(), target.trim()) },
                 enabled = name.trim().isNotEmpty() && target.trim().isNotEmpty()
-            ) { Text("OK") }
+            ) { Text(stringResource(R.string.filemanager_ok)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }

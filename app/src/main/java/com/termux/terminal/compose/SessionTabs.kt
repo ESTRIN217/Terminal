@@ -17,8 +17,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.termux.R
 import com.termux.terminal.TerminalSession
 
 /**
@@ -98,12 +100,12 @@ private fun SessionTab(
             ) {
                 Icon(
                     imageVector = Icons.Default.Terminal,
-                    contentDescription = "Session",
+                    contentDescription = stringResource(R.string.session),
                     modifier = Modifier.size(18.dp).padding(end = 4.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = session.name.ifEmpty { session.title.ifEmpty { "Terminal" } },
+                    text = session.name.ifEmpty { session.title.ifEmpty { stringResource(R.string.application_name) } },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelMedium
@@ -117,7 +119,7 @@ private fun SessionTab(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Close Session",
+                        contentDescription = stringResource(R.string.close_session),
                         modifier = Modifier.size(12.dp),
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )

@@ -24,10 +24,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import com.termux.app.TermuxComposeActivity
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.bridge.TerminalKeyHandler
 import com.termux.view.TerminalViewClient
+import com.termux.R
 
 /**
  * Main screen composable for the Termux app.
@@ -102,7 +104,7 @@ fun TermuxMainScreen(
                             IconButton(onClick = { viewModel.setDrawerOpen(true) }) {
                                 Icon(
                                     imageVector = Icons.Default.Menu,
-                                    contentDescription = "Open Navigation Drawer",
+                                    contentDescription = stringResource(R.string.open_navigation_drawer),
                                     tint = MaterialTheme.colorScheme.onSurface
                                 )
                             }
@@ -121,7 +123,7 @@ fun TermuxMainScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Add,
-                                    contentDescription = "New Session",
+                                    contentDescription = stringResource(R.string.action_new_session),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }

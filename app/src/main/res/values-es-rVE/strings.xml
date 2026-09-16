@@ -93,9 +93,11 @@
 
     <string name="action_style_terminal">Estilo</string>
     <string name="action_toggle_keep_screen_on">Mantener pantalla encendida</string>
+    <string name="action_toggle_keep_screen_on_desc">Para que nunca se apague la pantalla durante una sesión.</string>
     <string name="action_open_help">Ayuda</string>
     <string name="action_open_settings">Configuración</string>
-
+        <string name="action_open_file_manager">Archivos</string>
+        <string name="title_activity_file_manager">Gestor de archivos</string>
     <string name="action_report_issue">Reportar problema</string>
     <string name="msg_generating_report">Generando reporte</string>
     <string name="msg_add_termux_debug_info">¿Agregar información de depuración de &TERMUX_APP_NAME; al reporte?</string>
@@ -240,7 +242,7 @@
 
     <!-- About Preference -->
     <string name="about_preference_title">Acerca de</string>
-
+    <string name="about_preference_desc">Aplicación y enlaces importantes</string>
 
 
     <!-- File Manager Actions -->
@@ -257,7 +259,7 @@
     <string name="action_copy">Copiar</string>
     <string name="action_cut">Cortar</string>
     <string name="action_paste">Pegar</string>
-    <string name="action_share">Compartir</string>
+    <string name="action_share">Compartir información</string>
     <string name="action_details">Detalles</string>
     <string name="action_select_all">Seleccionar todo</string>
     <string name="action_deselect_all">Deseleccionar todo</string>
@@ -293,6 +295,33 @@
     <string name="msg_error_move">Error al mover %1$s</string>
     <string name="msg_error_paste">Error al pegar elementos</string>
 
+    <!-- File Manager UI -->
+    <string name="filemanager_more">Más</string>
+    <string name="filemanager_clear">Limpiar</string>
+    <string name="filemanager_new">Nuevo</string>
+    <string name="action_new_symlink">Nuevo enlace simbólico</string>
+    <string name="filemanager_up">Arriba</string>
+    <string name="filemanager_broken_link">Enlace roto → %1$s</string>
+    <string name="filemanager_link_target">Enlace → %1$s</string>
+    <string name="filemanager_folder">Carpeta</string>
+    <string name="filemanager_error_create_folder">Error al crear carpeta</string>
+    <string name="filemanager_error_create_file">Error al crear archivo</string>
+    <string name="filemanager_error_create_symlink">Error al crear enlace simbólico</string>
+    <string name="filemanager_confirm_delete">¿Eliminar?</string>
+    <string name="filemanager_move_to_trash">¿Mover %1$d elemento(s) a la papelera?</string>
+    <string name="filemanager_moved_to_trash">Movido a la papelera</string>
+    <string name="filemanager_delete_failed">Error al eliminar</string>
+    <string name="filemanager_broken_status">Estado: roto (destino no encontrado)</string>
+    <string name="filemanager_detail_path">Ruta: %1$s</string>
+    <string name="filemanager_detail_size">Tamaño: %1$s</string>
+    <string name="filemanager_detail_type">Tipo: %1$s</string>
+    <string name="filemanager_open">Abrir</string>
+    <string name="filemanager_close">Cerrar</string>
+    <string name="filemanager_sort_by">Ordenar por</string>
+    <string name="filemanager_link_name">Nombre del enlace</string>
+    <string name="filemanager_target_path">Ruta de destino</string>
+    <string name="filemanager_ok">Aceptar</string>
+
     <!-- Sort Options -->
     <string name="sort_name">Nombre</string>
     <string name="sort_date">Fecha</string>
@@ -318,5 +347,67 @@
 
     <!-- Selection mode -->
     <string name="selection_mode_title">%1$d seleccionados</string>
+    <string name="save_to_a_files">Guardar en un archivo</string>
+    
+    <string name="font_size">Tamaño de fuente</string>
+    <string name="font_size_desc">Tamaño del texto de la terminal</string>
+    <string name="toggle_keyboard">Alternar teclado</string>
+
+    <!-- About Screen -->
+    <string name="about_platform_android">Android</string>
+    <string name="about_generate_info_failed">No se pudo generar la información</string>
+    <string name="about_share_subject">%1$s - Información</string>
+    <string name="about_share_chooser_title">Compartir información</string>
+    <string name="about_copy_label">Información</string>
+    <string name="about_info_copied">Información copiada al portapapeles</string>
+    <string name="about_report_label">informe</string>
+    <string name="about_action_failed">La acción falló</string>
+    <string name="about_proot">Proot</string>
+    <string name="about_debian">Debian</string>
+    <string name="about_proot_uses_debian">Terminal usa proot para ejecutar Debian</string>
+    <string name="about_fork_subtitle">Esto es un fork de termux y no está asociado a el ni a su equipo</string>
+    <string name="about_section_developer">Desarrollador</string>
+    <string name="about_section_useful_links">Enlaces útiles</string>
+    <string name="open_source_licenses">Licencias de código abierto</string>
+    <string name="about_third_party_library">Biblioteca de terceros</string>
+    <string name="about_view_repository">Ver repositorio</string>
+    <string name="about_repository_name">ESTRIN217/Terminal</string>
+    <string name="about_report_issue">Reportar un problema</string>
+    <string name="about_issues_path">ESTRIN217/Terminal/issues</string>
+    <string name="about_license_gplv3">Licencia GPLv3</string>
+    <string name="about_open_source_software">Software de código abierto</string>
+    <string name="about_made_with">Hecho con ❤ en Venezuela</string>
+    <string name="about_version_prefix">v</string>
+    <string name="about_developer_name">ESTRIN217</string>
+    <string name="about_main_developer">Desarrollador principal</string>
+    <string name="about_view_on_github">Ver en GitHub</string>
+
+    <!-- Licenses Screen -->
+    <string name="licenses_title">Licencias</string>
+    <string name="license_gplv3">GPLv3</string>
+    <string name="license_terminal_project">Licencia del proyecto Terminal</string>
+    <string name="license_apache2">Apache 2.0</string>
+    <string name="license_termux_libraries">Librerías terminal-emulator y terminal-view</string>
+    <string name="license_mit">MIT</string>
+    <string name="license_termux_constants">TermuxConstants y TermuxPropertyConstants</string>
+    <string name="license_gplv2_classpath">GPLv2 con excepción Classpath</string>
+    <string name="license_openjdk">OpenJDK y librerías de clase</string>
+    <string name="licenses_footer">Terminal se distribuye bajo GPLv3 e incluye componentes de terceros con sus respectivas licencias.</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_plugins">Complementos</string>
+    <string name="settings_plugin_api_log_level">Nivel de registro de Terminal:API</string>
+    <string name="settings_plugin_float_log_level">Nivel de registro de Terminal:Float</string>
+    <string name="settings_plugin_tasker_log_level">Nivel de registro de Terminal:Tasker</string>
+    <string name="settings_plugin_widget_log_level">Nivel de registro de Terminal:Widget</string>
+    <string name="log_level_off">Apagado</string>
+    <string name="log_level_normal">Normal</string>
+    <string name="log_level_debug">Depurar</string>
+    <string name="log_level_verbose">Detallado</string>
+
+    <!-- File Manager Errors -->
+    <string name="filemanager_error_cannot_read">No se puede leer %1$s</string>
+    <string name="filemanager_error_cannot_read_access">No se puede leer %1$s. Verifique el permiso \"Acceso a todos los archivos\".</string>
+    <string name="filemanager_error_broken_symlink">Enlace simbólico roto: %1$s → %2$s no encontrado</string>
 
 </resources>
