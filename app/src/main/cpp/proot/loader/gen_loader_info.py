@@ -39,6 +39,11 @@ def main():
             "gen_loader_info: missing symbols (start=%s pokedata=%s)\n"
             % (start, pokedata)
         )
+        sys.stderr.write(
+            "  hint: 'pokedata_workaround' se emite solo con __aarch64__; "
+            "el loader debe compilarse con el target del NDK "
+            "(--target=aarch64-...), no con el clang generico del host.\n"
+        )
         return 1
     sys.stdout.write("#include <unistd.h>\n")
     sys.stdout.write(
