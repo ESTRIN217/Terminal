@@ -1,6 +1,8 @@
 package com.estrin217.filemanager.compose
 
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,7 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -29,6 +32,7 @@ import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
@@ -66,6 +70,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -95,7 +107,8 @@ fun FileManagerScreen(
     onShareFiles: (List<File>) -> Unit,
     onEnsureStorageAccess: (File, () -> Unit) -> Unit,
     modifier: Modifier = Modifier,
-    contentWindowInsets: WindowInsets = ScaffoldDefaults.contentWindowInsets
+    contentWindowInsets: WindowInsets = ScaffoldDefaults.contentWindowInsets,
+    onOpenInTerminal: ((File) -> Unit)? = null
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -114,8 +127,43 @@ fun FileManagerScreen(
     var fabMenuExpanded by remember { mutableStateOf(false) }
     var searchActive by remember { mutableStateOf(false) }
 
+    // Keyboard / extra keys navigation target for the visible file list.
+    val listState = rememberLazyListState()
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(state.focusedIndex) {
+        if (state.focusedIndex >= 0) listState.animateScrollToItem(state.focusedIndex)
+    }
+
+    fun executeKeyAction(action: FileManagerKeyAction): Boolean =
+        FileManagerActions.execute(action, viewModel, onEnsureStorageAccess, onOpenFile)
+
+    fun hardwareKeyAction(key: Key): FileManagerKeyAction = when (key) {
+        Key.DirectionUp -> FileManagerKeyAction.FOCUS_UP
+        Key.DirectionDown -> FileManagerKeyAction.FOCUS_DOWN
+        Key.MoveHome -> FileManagerKeyAction.FOCUS_HOME
+        Key.MoveEnd -> FileManagerKeyAction.FOCUS_END
+        Key.PageUp -> FileManagerKeyAction.PAGE_UP
+        Key.PageDown -> FileManagerKeyAction.PAGE_DOWN
+        Key.Enter, Key.NumPadEnter, Key.DirectionRight -> FileManagerKeyAction.OPEN
+        Key.Escape, Key.Backspace, Key.DirectionLeft -> FileManagerKeyAction.BACK
+        Key.Tab -> FileManagerKeyAction.TOGGLE_SELECTION
+        else -> FileManagerKeyAction.NONE
+    }
+
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .focusRequester(focusRequester)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                // Never steal keys while the search field is on screen.
+                if (searchActive) return@onPreviewKeyEvent false
+                val action = hardwareKeyAction(event.key)
+                if (action == FileManagerKeyAction.NONE) return@onPreviewKeyEvent false
+                executeKeyAction(action)
+            },
         contentWindowInsets = contentWindowInsets,
         topBar = {
             TopAppBar(
@@ -192,6 +240,16 @@ fun FileManagerScreen(
                             leadingIcon = { Icon(Icons.Default.CheckBox, null) },
                             onClick = { menuExpanded = false; viewModel.selectAll() }
                         )
+                        if (onOpenInTerminal != null) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_open_in_terminal)) },
+                                leadingIcon = { Icon(Icons.Default.Terminal, null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onOpenInTerminal(File(state.currentPath))
+                                }
+                            )
+                        }
                     }
                 }
             )
@@ -296,6 +354,11 @@ fun FileManagerScreen(
                 IconButton(onClick = { viewModel.goUp() }) {
                     Icon(Icons.Default.ArrowUpward, contentDescription = stringResource(R.string.filemanager_up))
                 }
+                if (onOpenInTerminal != null) {
+                    IconButton(onClick = { onOpenInTerminal(File(state.currentPath)) }) {
+                        Icon(Icons.Default.Terminal, contentDescription = stringResource(R.string.action_open_in_terminal))
+                    }
+                }
                 if (searchActive) {
                     OutlinedTextField(
                         value = state.searchQuery,
@@ -310,35 +373,32 @@ fun FileManagerScreen(
                     Spacer(Modifier.weight(1f))
                 }
             }
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(state.files, key = { it.absolutePath }) { file ->
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                itemsIndexed(state.files, key = { _, file -> file.absolutePath }) { index, file ->
                     val selected = state.selectedPaths.contains(file.absolutePath)
+                    val focused = state.focusedIndex == index
                     val linkTarget = state.symlinkTargets[file.absolutePath]
                     val isLink = linkTarget != null
                     val isBroken = state.brokenLinks.contains(file.absolutePath)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .background(
+                                if (focused) MaterialTheme.colorScheme.secondaryContainer
+                                else Color.Transparent
+                            )
                             .combinedClickable(
                                 onClick = {
+                                    viewModel.setFocusedIndex(index)
                                     if (state.selectionMode) viewModel.toggleSelection(file.absolutePath)
-                                    else if (isBroken) viewModel.notifyBrokenSymlink(file)
-                                    else {
-                                        val resolved = if (isLink) viewModel.resolveForOpen(file) else file
-                                        if (resolved.isDirectory) {
-                                            if (FileOperationsHelper.isSharedStoragePath(resolved)) {
-                                                onEnsureStorageAccess(resolved) {
-                                                    viewModel.navigateTo(resolved)
-                                                }
-                                            } else {
-                                                viewModel.navigateTo(resolved)
-                                            }
-                                        } else {
-                                            onOpenFile(resolved)
-                                        }
-                                    }
+                                    else FileManagerActions.openFileOrDir(
+                                        file, viewModel, onEnsureStorageAccess, onOpenFile
+                                    )
                                 },
-                                onLongClick = { viewModel.toggleSelection(file.absolutePath) }
+                                onLongClick = {
+                                    viewModel.setFocusedIndex(index)
+                                    viewModel.toggleSelection(file.absolutePath)
+                                }
                             )
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically

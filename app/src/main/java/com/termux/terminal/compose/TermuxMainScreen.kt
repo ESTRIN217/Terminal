@@ -60,6 +60,7 @@ fun TermuxMainScreen(
     onRemoveSession: (TermuxSessionUiModel) -> Unit,
     onToggleKeyboard: () -> Unit,
     onOpenFileManager: () -> Unit,
+    onOpenInTerminal: (String) -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -152,6 +153,7 @@ fun TermuxMainScreen(
                                     is TermuxSessionUiModel.FileManager -> FileManagerSessionHost(
                                         sessionId = sessionModel.id,
                                         onCloseSession = { onRemoveSession(sessionModel) },
+                                        onOpenInTerminal = onOpenInTerminal,
                                         modifier = Modifier
                                             .fillMaxSize()
                                     )
@@ -164,38 +166,47 @@ fun TermuxMainScreen(
         }
         // Extra keys bar: outside the drawer so it is never dimmed by the drawer
         // scrim, and inside the imePadding column so it rides above the keyboard.
-        // Hidden while a non-terminal session (e.g. the file manager) is active.
-        if (uiState.isExtraKeysVisible && uiState.activeSession != null) {
+        // Shown for terminal sessions and for the file manager tab, which uses it
+        // for list navigation (see FileManagerKeyHandlerHolder).
+        val activeModel = uiState.activeSessionModel
+        if (uiState.isExtraKeysVisible && activeModel != null) {
             ExtraKeysBar(
                 config = uiState.extraKeysConfig,
                 activeModifiers = uiState.extraKeysModifiers,
                 onToggleModifier = viewModel::toggleExtraKeysModifier,
                 callback = object : ExtraKeysCallback {
                     override fun onKeyClick(key: String, isMacro: Boolean) {
-                        val session = uiState.activeSession ?: return@onKeyClick
-                        if (isMacro) {
-                            val keys = key.split(" ")
-                            var ctrlActive = false
-                            var altActive = false
-                            var shiftActive = false
-                            for (k in keys) {
-                                when (k) {
-                                    "CTRL" -> ctrlActive = true
-                                    "ALT" -> altActive = true
-                                    "SHIFT" -> shiftActive = true
-                                    // Consumed: FN only modifies hardware key events
-                                    // (legacy parity), never bar-to-bar combos.
-                                    "FN" -> Unit
-                                    else -> {
-                                        sendKeyToSession(session, k, ctrlActive, altActive, shiftActive)
-                                        ctrlActive = false
-                                        altActive = false
-                                        shiftActive = false
+                        when (activeModel) {
+                            is TermuxSessionUiModel.Terminal -> {
+                                val session = activeModel.session
+                                if (isMacro) {
+                                    val keys = key.split(" ")
+                                    var ctrlActive = false
+                                    var altActive = false
+                                    var shiftActive = false
+                                    for (k in keys) {
+                                        when (k) {
+                                            "CTRL" -> ctrlActive = true
+                                            "ALT" -> altActive = true
+                                            "SHIFT" -> shiftActive = true
+                                            // Consumed: FN only modifies hardware key events
+                                            // (legacy parity), never bar-to-bar combos.
+                                            "FN" -> Unit
+                                            else -> {
+                                                sendKeyToSession(session, k, ctrlActive, altActive, shiftActive)
+                                                ctrlActive = false
+                                                altActive = false
+                                                shiftActive = false
+                                            }
+                                        }
                                     }
+                                } else {
+                                    sendKeyToSession(session, key)
                                 }
                             }
-                        } else {
-                            sendKeyToSession(session, key)
+                            is TermuxSessionUiModel.FileManager -> {
+                                FileManagerKeyHandlerHolder.active?.invoke(key, isMacro)
+                            }
                         }
                     }
                 },

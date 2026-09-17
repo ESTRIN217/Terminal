@@ -67,6 +67,7 @@ import com.termux.terminal.compose.TermuxSessionUiModel
 import com.termux.terminal.compose.TermuxViewModel
 import com.termux.terminal.compose.TerminalViewRegistry
 import androidx.activity.enableEdgeToEdge
+import java.io.File
 
 /**
  * A terminal emulator activity using Jetpack Compose.
@@ -192,6 +193,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                                 mViewModel.createFileManagerSession(getString(R.string.title_activity_file_manager))
                             }
                         },
+                        onOpenInTerminal = { openTerminalIn(it) },
                         onOpenSettings = {
                             ActivityUtils.startActivity(
                                 this@TermuxComposeActivity,
@@ -585,6 +587,35 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
 
         val terminalSession = termuxSession.getTerminalSession()
         val name = sessionName ?: "Session ${service.getTermuxSessionsSize()}"
+
+        mViewModel.addSession(terminalSession, name)
+    }
+
+    /**
+     * Open a new terminal session in a directory chosen from the file manager.
+     *
+     * @param workingDirectory Host path used as the new session working directory
+     */
+    private fun openTerminalIn(workingDirectory: String) {
+        val service = mTermuxService ?: return
+
+        if (mViewModel.uiState.value.sessions.size >= MAX_SESSIONS) {
+            Toast.makeText(this, R.string.title_max_terminals_reached, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val dir = File(workingDirectory)
+        if (!dir.isDirectory) {
+            Logger.logError(LOG_TAG, "Open in terminal: not a directory: $workingDirectory")
+            return
+        }
+
+        val termuxSession = service.createTermuxSession(
+            null, null, null, workingDirectory, false, null
+        ) ?: return
+
+        val terminalSession = termuxSession.getTerminalSession()
+        val name = "Session ${service.getTermuxSessionsSize()}"
 
         mViewModel.addSession(terminalSession, name)
     }

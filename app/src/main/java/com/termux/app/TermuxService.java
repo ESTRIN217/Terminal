@@ -626,11 +626,18 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
                 Logger.showToast(this, "Failed to prepare Debian shared memory directory", true);
                 return null;
             }
-            String[] prootCommand = ProotShellEnvironment.buildProotCommand(executionCommand.arguments);
+            String guestCwd = ProotShellEnvironment.hostPathToGuestPath(executionCommand.workingDirectory);
+            String[] prootCommand = ProotShellEnvironment.buildProotCommand(guestCwd, executionCommand.arguments);
             executionCommand.executable = prootCommand[0];
             executionCommand.arguments = Arrays.copyOfRange(prootCommand, 1, prootCommand.length);
             shellEnvironmentClient = new ProotShellEnvironment();
-            Logger.logDebug(LOG_TAG, "Starting Debian proot session for \"" + executionCommand.getCommandIdAndLabelLogString() + "\"");
+            // The native pty process chdirs into this host path before exec'ing
+            // proot. proot re-establishes the real guest working directory via
+            // "-w", so use a guaranteed-accessible host directory instead of the
+            // file manager path (a proot bind destination rejects the chdir with
+            // "Permission denied").
+            executionCommand.workingDirectory = ProotShellEnvironment.getNativeWorkingDirectoryPath();
+            Logger.logDebug(LOG_TAG, "Starting Debian proot session for \"" + executionCommand.getCommandIdAndLabelLogString() + "\" with guest working directory \"" + guestCwd + "\"");
         }
         TermuxSession newTermuxSession = TermuxSession.execute(this, executionCommand, getTermuxTerminalSessionClient(),
             this, shellEnvironmentClient, null, executionCommand.isPluginExecutionCommand);

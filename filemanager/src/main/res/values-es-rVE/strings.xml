@@ -32,6 +32,7 @@
     <string name="filemanager_clear">Limpiar</string>
     <string name="filemanager_new">Nuevo</string>
     <string name="action_new_symlink">Nuevo enlace simbólico</string>
+    <string name="action_open_in_terminal">Abrir en la terminal</string>
     <string name="filemanager_up">Arriba</string>
     <string name="filemanager_broken_link">Enlace roto → %1$s</string>
     <string name="filemanager_link_target">Enlace → %1$s</string>

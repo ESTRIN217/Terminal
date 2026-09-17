@@ -58,6 +58,52 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
     /** Guest {@code PATH} (pure Debian FHS, no host paths). */
     public static final String GUEST_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
+    /**
+     * Translate an Android {@code hostPath} to the equivalent Debian guest path.
+     *
+     * <p>Host paths under the rootfs ({@code files/debian/...}) map directly to
+     * guest paths; shared-storage paths map through the proot binds
+     * {@code /sdcard:/root/sdcard} and {@code /storage:/root/storage}. Any other
+     * path (e.g. {@code files/home}) has no guest equivalent and falls back to the
+     * guest home {@code /root} so it can still be used as a proot working directory.</p>
+     *
+     * @param hostPath The Android (host) path to translate.
+     * @return The corresponding guest path, or {@value #GUEST_HOME} when unmappable.
+     */
+    @NonNull
+    public static String hostPathToGuestPath(@NonNull String hostPath) {
+        if (hostPath.startsWith(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH)) {
+            String relative = hostPath.substring(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH.length());
+            while (relative.startsWith("/"))
+                relative = relative.substring(1);
+            return relative.isEmpty() ? "/" : "/" + relative;
+        }
+        if (hostPath.startsWith("/sdcard")) {
+            String relative = hostPath.substring("/sdcard".length());
+            return GUEST_HOME + "/sdcard" + relative;
+        }
+        if (hostPath.startsWith("/storage")) {
+            String relative = hostPath.substring("/storage".length());
+            return GUEST_HOME + "/storage" + relative;
+        }
+        return GUEST_HOME;
+    }
+
+    /**
+     * Host directory the native pty process chdirs into before exec'ing proot.
+     *
+     * <p>proot re-establishes the real guest working directory via {@code -w}, so
+     * the native {@code chdir} only needs to succeed silently. The guest home host
+     * directory always exists after installation and is owned by the app, avoiding
+     * the noisy {@code chdir(...): Permission denied} on proot bind destinations.</p>
+     *
+     * @return The guest home directory on the host filesystem.
+     */
+    @NonNull
+    public static String getNativeWorkingDirectoryPath() {
+        return TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH;
+    }
+
     public ProotShellEnvironment() {
         super();
     }
@@ -113,7 +159,24 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
      */
     @NonNull
     public static String[] buildProotCommand(@Nullable String[] extraArgs) {
-        return buildProotCommand(extraArgs, isLinkfixInstalledOnHost());
+        return buildProotCommand(GUEST_HOME, extraArgs, isLinkfixInstalledOnHost());
+    }
+
+    /**
+     * Build the proot guest command starting in a specific guest working directory.
+     *
+     * <p>Use instead of {@link #buildProotCommand(String[])} when a session must
+     * open in a directory selected from the file manager. The guest path (see
+     * {@link #hostPathToGuestPath(String)}) is passed via {@code -w} so the
+     * selected directory actually becomes the session working directory.</p>
+     *
+     * @param guestWorkingDirectory The guest path to use as {@code -w}, e.g. {@code /root/sdcard}.
+     * @param extraArgs Optional extra args appended after {@code --login}, may be {@code null}.
+     * @return Returns the full command array with the proot binary first.
+     */
+    @NonNull
+    public static String[] buildProotCommand(@NonNull String guestWorkingDirectory, @Nullable String[] extraArgs) {
+        return buildProotCommand(guestWorkingDirectory, extraArgs, isLinkfixInstalledOnHost());
     }
 
     /**
@@ -127,13 +190,28 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
      */
     @NonNull
     static String[] buildProotCommand(@Nullable String[] extraArgs, boolean withLinkfix) {
+        return buildProotCommand(GUEST_HOME, extraArgs, withLinkfix);
+    }
+
+    /**
+     * Build the proot guest command with explicit guest working directory and
+     * linkfix control.
+     *
+     * @param guestWorkingDirectory The guest path to use as {@code -w}.
+     * @param extraArgs Optional extra args appended after {@code --login}, may be {@code null}.
+     * @param withLinkfix Whether to wrap the guest program with
+     * {@code /usr/bin/env LD_PRELOAD=<shim>}.
+     * @return Returns the full command array with the proot binary first.
+     */
+    @NonNull
+    static String[] buildProotCommand(@NonNull String guestWorkingDirectory, @Nullable String[] extraArgs, boolean withLinkfix) {
         List<String> command = new ArrayList<>();
         command.add(TermuxConstants.PROOT_BIN_PATH);
         command.add("-r");
         command.add(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH);
         command.add("-0");
         command.add("-w");
-        command.add(GUEST_HOME);
+        command.add(guestWorkingDirectory);
         command.add("-b");
         command.add("/dev");
         command.add("-b");

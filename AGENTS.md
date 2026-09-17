@@ -47,7 +47,7 @@ app  →  termux-shared  →  terminal-view  →  terminal-emulator
 - `TerminalViewRegistry` holds the active `TerminalView` reference for Compose callbacks.
 - New Compose UI goes in `com.termux.terminal.compose`. New settings screens go in `com.termux.terminal.compose.settings`.
 - The `filemanager` module also uses Compose (Material3) for its `FileManagerScreen`; it does not host activities — the app wires the theme, permissions, and `FileProvider`.
-- **Session tabs are polymorphic:** `TermuxSessionUiModel` is a sealed type (`Terminal` = pty session, `FileManager` = UI-only session). The `FileManagerSessionHost` composable hosts `FileManagerScreen` as a tab with a per-session `FileManagerViewModel` keyed by session id. Closing a file-manager tab never touches `TermuxService`.
+- **Session tabs are polymorphic:** `TermuxSessionUiModel` is a sealed type (`Terminal` = pty session, `FileManager` = UI-only session). The `FileManagerSessionHost` composable hosts `FileManagerScreen` as a tab with a per-session `FileManagerViewModel` keyed by session id. Closing a file-manager tab never touches `TermuxService`. The file manager can open a terminal in the current directory via `onOpenInTerminal` (nav-row icon + More-menu item), wired in the app to `TermuxComposeActivity.openTerminalIn()`.
 
 ## Error Handling
 

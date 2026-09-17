@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
@@ -22,6 +23,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.estrin217.filemanager.FileOperationsHelper
+import com.estrin217.filemanager.compose.FileManagerActions
+import com.estrin217.filemanager.compose.FileManagerKeyAction
 import com.estrin217.filemanager.compose.FileManagerScreen
 import com.estrin217.filemanager.compose.FileManagerViewModel
 import com.termux.shared.android.PermissionUtils
@@ -42,6 +45,7 @@ import java.io.File
 fun FileManagerSessionHost(
     sessionId: String,
     onCloseSession: () -> Unit,
+    onOpenInTerminal: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -129,6 +133,19 @@ fun FileManagerSessionHost(
     // Refresh on becoming active, mirroring FileManagerComposeActivity.onResume().
     LaunchedEffect(sessionId) { viewModel.refresh() }
 
+    // Route extra keys bar presses into this session while its tab is composed.
+    DisposableEffect(sessionId) {
+        FileManagerKeyHandlerHolder.active = { key, _ ->
+            FileManagerActions.execute(
+                FileManagerKeyAction.map(key),
+                viewModel,
+                { dir, onGranted -> ensureStorageAccess(dir, onGranted) },
+                { openFile(it) }
+            )
+        }
+        onDispose { FileManagerKeyHandlerHolder.active = null }
+    }
+
     // Back: navigate the file manager history; close the tab when at its root.
     val onBackRequested: () -> Unit = {
         if (!viewModel.onBackPressed()) onCloseSession()
@@ -149,6 +166,7 @@ fun FileManagerSessionHost(
             viewModel.clearSelection()
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        onOpenInTerminal = { dir -> onOpenInTerminal(dir.absolutePath) },
         modifier = modifier
     )
 }

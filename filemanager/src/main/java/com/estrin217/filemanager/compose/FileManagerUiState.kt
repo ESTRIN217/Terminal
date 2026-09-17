@@ -12,11 +12,15 @@ import java.io.File
  * Symlink support: [symlinkTargets] maps absolute path to the raw link
  * target for every symlink in the current listing; [brokenLinks] holds the
  * absolute paths of dangling links whose target does not exist.
+ *
+ * [focusedIndex] is the keyboard/extra-keys cursor into [files] (a negative
+ * value means the list is empty).
  */
 data class FileManagerUiState(
     val currentPath: String = "",
     val title: String = "Files",
     val files: List<File> = emptyList(),
+    val focusedIndex: Int = -1,
     val selectedPaths: Set<String> = emptySet(),
     val selectionMode: Boolean = false,
     val searchQuery: String = "",

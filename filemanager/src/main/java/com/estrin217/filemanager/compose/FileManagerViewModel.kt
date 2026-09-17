@@ -39,6 +39,9 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     var lastTrash: Pair<File, File>? = null
         private set
 
+    /** Number of rows jumped on page up/down. */
+    private val pageSize = 10
+
     private val prefsName = "file_manager"
 
     init {
@@ -176,6 +179,7 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
                     currentPath = dir.absolutePath,
                     title = titleFor(dir),
                     files = emptyList(),
+                    focusedIndex = -1,
                     canGoBack = backStack.isNotEmpty(),
                     canGoForward = forwardStack.isNotEmpty(),
                     hasClipboard = FileOperationsHelper.hasClipboard(),
@@ -201,10 +205,15 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
             }
         }
         _uiState.update {
+            // Normalize the focused cursor to the new listing: keep the previous
+            // position when it still fits, else fall back to the first entry.
+            val normalized = if (sorted.isEmpty()) -1
+            else s.focusedIndex.coerceIn(0, sorted.lastIndex)
             it.copy(
                 currentPath = dir.absolutePath,
                 title = titleFor(dir),
                 files = sorted,
+                focusedIndex = normalized,
                 canGoBack = backStack.isNotEmpty(),
                 canGoForward = forwardStack.isNotEmpty(),
                 hasClipboard = FileOperationsHelper.hasClipboard(),
@@ -239,6 +248,66 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         _uiState.update { it.copy(showHidden = !it.showHidden) }
         persistPrefs()
         refresh()
+    }
+
+    /**
+     * Move the focused list entry by [delta] rows (clamped to the visible list).
+     *
+     * @param delta How many rows to move (negative moves up).
+     */
+    fun moveFocus(delta: Int) {
+        val size = _uiState.value.files.size
+        if (size == 0) return
+        val current = _uiState.value.focusedIndex.coerceAtLeast(0)
+        setFocusedIndex((current + delta).coerceIn(0, size - 1))
+    }
+
+    /**
+     * Focus the first visible entry.
+     */
+    fun focusHome() {
+        setFocusedIndex(0)
+    }
+
+    /**
+     * Focus the last visible entry.
+     */
+    fun focusEnd() {
+        setFocusedIndex(_uiState.value.files.size - 1)
+    }
+
+    /**
+     * Page up/down: jump [pageSize] rows at a time.
+     *
+     * @param sign {@code -1} for page up, {@code +1} for page down.
+     */
+    fun pageJump(sign: Int) {
+        moveFocus(pageSize * sign)
+    }
+
+    /**
+     * Set the focused list row, clamped to the visible list.
+     *
+     * @param index The desired row index.
+     */
+    fun setFocusedIndex(index: Int) {
+        val size = _uiState.value.files.size
+        if (size == 0) return
+        _uiState.update { it.copy(focusedIndex = index.coerceIn(0, size - 1)) }
+    }
+
+    /**
+     * The currently focused entry, or {@code null} when the list is empty.
+     */
+    val focusedFile: File?
+        get() = _uiState.value.files.getOrNull(_uiState.value.focusedIndex)
+
+    /**
+     * Toggle the selection state of the focused entry (used by Tab / extra keys).
+     */
+    fun toggleFocusedSelection() {
+        val file = focusedFile ?: return
+        toggleSelection(file.absolutePath)
     }
 
     fun toggleSelection(path: String) {

@@ -32,6 +32,7 @@
     <string name="filemanager_clear">Clear</string>
     <string name="filemanager_new">New</string>
     <string name="action_new_symlink">New symlink</string>
+    <string name="action_open_in_terminal">Open in terminal</string>
     <string name="filemanager_up">Up</string>
     <string name="filemanager_broken_link">Broken link → %1$s</string>
     <string name="filemanager_link_target">Link → %1$s</string>

@@ -18,6 +18,7 @@
     <string name="action_details">Detalhes</string>
     <string name="action_select_all">Selecionar tudo</string>
     <string name="action_undo">Desfazer</string>
+    <string name="action_open_in_terminal">Abrir no terminal</string>
     <string name="action_go_back">Voltar</string>
     <string name="action_go_forward">Avançar</string>
     <string name="action_cancel">Cancelar</string>

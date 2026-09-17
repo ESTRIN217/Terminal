@@ -61,6 +61,76 @@ public class ProotShellEnvironmentTest {
     }
 
     @Test
+    public void testBuildProotCommand_guestWorkingDirectory() {
+        String[] command = ProotShellEnvironment.buildProotCommand("/root/sdcard", null);
+        // "-w" is replaced but the rest of the layout is unchanged.
+        Assert.assertEquals("-w", command[4]);
+        Assert.assertEquals("/root/sdcard", command[5]);
+        Assert.assertEquals(22, command.length);
+        Assert.assertEquals("--login", command[21]);
+    }
+
+    @Test
+    public void testBuildProotCommand_guestWorkingDirectory_withExtraArgs() {
+        String[] command = ProotShellEnvironment.buildProotCommand("/var/lib",
+            new String[]{"-c", "echo hi"});
+        Assert.assertEquals("-w", command[4]);
+        Assert.assertEquals("/var/lib", command[5]);
+        Assert.assertEquals("--login", command[21]);
+        Assert.assertEquals("-c", command[22]);
+        Assert.assertEquals("echo hi", command[23]);
+    }
+
+    @Test
+    public void testHostPathToGuestPath_rootfsPaths() {
+        // The rootfs root maps to guest "/".
+        Assert.assertEquals("/",
+            ProotShellEnvironment.hostPathToGuestPath(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH));
+        // The guest home host dir maps to guest /root.
+        Assert.assertEquals("/root",
+            ProotShellEnvironment.hostPathToGuestPath(TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH));
+        // A proot bind destination inside the guest home.
+        Assert.assertEquals("/root/sdcard",
+            ProotShellEnvironment.hostPathToGuestPath(TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH + "/sdcard"));
+        Assert.assertEquals("/usr/bin",
+            ProotShellEnvironment.hostPathToGuestPath(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/usr/bin"));
+        Assert.assertEquals("/root/sdcard/Download",
+            ProotShellEnvironment.hostPathToGuestPath(TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH + "/sdcard/Download"));
+    }
+
+    @Test
+    public void testHostPathToGuestPath_sharedStorage() {
+        Assert.assertEquals("/root/sdcard",
+            ProotShellEnvironment.hostPathToGuestPath("/sdcard"));
+        Assert.assertEquals("/root/sdcard/foo",
+            ProotShellEnvironment.hostPathToGuestPath("/sdcard/foo"));
+        Assert.assertEquals("/root/storage",
+            ProotShellEnvironment.hostPathToGuestPath("/storage"));
+        Assert.assertEquals("/root/storage/emulated/0/X",
+            ProotShellEnvironment.hostPathToGuestPath("/storage/emulated/0/X"));
+    }
+
+    @Test
+    public void testHostPathToGuestPath_unmappableFallsBackToHome() {
+        // Host paths outside the rootfs and the storage binds (e.g. the Termux
+        // home) cannot be a guest cwd: fall back to the guest home.
+        Assert.assertEquals("/root",
+            ProotShellEnvironment.hostPathToGuestPath(TermuxConstants.TERMUX_HOME_DIR_PATH));
+        Assert.assertEquals("/root",
+            ProotShellEnvironment.hostPathToGuestPath("/"));
+        Assert.assertEquals("/root",
+            ProotShellEnvironment.hostPathToGuestPath("/data/local/tmp"));
+    }
+
+    @Test
+    public void testGetNativeWorkingDirectoryPath_isGuestHomeHostDir() {
+        // The native chdir target is the guest home on the host, so it always
+        // exists after installation and never hits proot bind destinations.
+        Assert.assertEquals(TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH,
+            ProotShellEnvironment.getNativeWorkingDirectoryPath());
+    }
+
+    @Test
     public void testBuildProotCommand_withLinkfix_extraArgsAfterLogin() {
         String[] command = ProotShellEnvironment.buildProotCommand(new String[]{"-c", "echo hi"}, true);
         Assert.assertEquals(26, command.length);
