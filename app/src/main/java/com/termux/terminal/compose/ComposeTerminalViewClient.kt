@@ -7,6 +7,7 @@ import com.termux.shared.logger.Logger
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties
 import com.termux.shared.view.KeyboardUtils
 import com.termux.terminal.TerminalSession
+import com.termux.terminal.bridge.FingerprintKeyFilter
 import com.termux.view.TerminalViewClient
 
 /**
@@ -67,6 +68,10 @@ class ComposeTerminalViewClient(
     }
 
     override fun onKeyDown(keyCode: Int, e: KeyEvent?, session: TerminalSession?): Boolean {
+        if (e != null && isFingerprintSensorEvent(keyCode, e)) {
+            Logger.logDebug(LOG_TAG, "Ignoring fingerprint sensor key event: " + e)
+            return true
+        }
         val s = session ?: return handleVirtualKeys(keyCode, e, true)
         if (keyCode == KeyEvent.KEYCODE_ENTER && !s.isRunning()) {
             // Enter on a finished session removes it, instead of writing to the
@@ -160,6 +165,18 @@ class ComposeTerminalViewClient(
 
     override fun logStackTrace(tag: String?, e: Exception?) {
         Logger.logStackTrace(tag ?: LOG_TAG, e ?: return)
+    }
+
+    /**
+     * Whether the key event originates from the fingerprint sensor gesture area.
+     *
+     * @param keyCode The event key code.
+     * @param event The key event.
+     * @return {@code true} if the event should be swallowed.
+     */
+    private fun isFingerprintSensorEvent(keyCode: Int, event: KeyEvent): Boolean {
+        val keyboardType = event.device?.keyboardType ?: InputDevice.KEYBOARD_TYPE_NON_ALPHABETIC
+        return FingerprintKeyFilter.shouldIgnore(keyCode, event.source, keyboardType, event.scanCode)
     }
 
     /** Handle dedicated volume buttons as virtual keys if applicable. */

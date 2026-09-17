@@ -115,6 +115,10 @@ public class KeyHandlerTest extends TestCase {
 		assertNull(KeyHandler.getCode(KeyEvent.KEYCODE_SPACE, 0, false, false));
 		assertKeysEquals("\u0000", KeyHandler.getCode(KeyEvent.KEYCODE_SPACE, KeyHandler.KEYMOD_CTRL, false, false));
 
+		// An unknown key code never maps to an escape sequence (a fingerprint
+		// sensor activation must not produce any output through this path).
+		assertNull(KeyHandler.getCode(KeyEvent.KEYCODE_UNKNOWN, 0, false, false));
+
 		// Back tab.
 		assertKeysEquals("\033[Z", KeyHandler.getCode(KeyEvent.KEYCODE_TAB, KeyHandler.KEYMOD_SHIFT, false, false));
 
