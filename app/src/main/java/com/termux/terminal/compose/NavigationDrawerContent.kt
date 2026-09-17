@@ -1,5 +1,6 @@
 package com.termux.terminal.compose
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -68,8 +69,13 @@ fun TermuxNavigationDrawer(
         onOpenChange(drawerState.currentValue == DrawerValue.Open)
     }
 
+    BackHandler(enabled = drawerState.isOpen) {
+        scope.launch { drawerState.close() }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
+        gesturesEnabled = false,
         modifier = modifier,
         drawerContent = {
             ModalDrawerSheet(
