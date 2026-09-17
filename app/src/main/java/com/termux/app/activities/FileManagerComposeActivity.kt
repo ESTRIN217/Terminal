@@ -13,12 +13,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModelProvider
-import com.termux.app.filemanager.FileOperationsHelper
+import com.estrin217.filemanager.FileOperationsHelper
+import com.estrin217.filemanager.compose.FileManagerScreen
+import com.estrin217.filemanager.compose.FileManagerViewModel
 import com.termux.shared.android.PermissionUtils
 import com.termux.shared.logger.Logger
 import com.termux.terminal.compose.TermuxExpressiveTheme
-import com.termux.terminal.compose.filemanager.FileManagerScreen
-import com.termux.terminal.compose.filemanager.FileManagerViewModel
 import java.io.File
 
 /**

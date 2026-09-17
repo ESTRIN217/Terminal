@@ -15,7 +15,7 @@ import com.termux.terminal.TerminalSession
  * @param debianInstaller Debian rootfs installer overlay state
  */
 data class TermuxUiState(
-    val sessions: List<TerminalSessionUiModel> = emptyList(),
+    val sessions: List<TermuxSessionUiModel> = emptyList(),
     val activeSessionIndex: Int = 0,
     val isDrawerOpen: Boolean = false,
     val isExtraKeysVisible: Boolean = true,
@@ -26,10 +26,18 @@ data class TermuxUiState(
     val debianInstaller: DebianInstallerUiState = DebianInstallerUiState()
 ) {
     /**
-     * Get the currently active session, or null if no sessions exist.
+     * Get the currently active session model, or null if no sessions exist.
+     */
+    val activeSessionModel: TermuxSessionUiModel?
+        get() = sessions.getOrNull(activeSessionIndex)
+
+    /**
+     * Get the currently active terminal session, or null if no terminal session is active.
+     *
+     * Returns null when the active tab is not a terminal session (e.g. a file manager session).
      */
     val activeSession: TerminalSession?
-        get() = sessions.getOrNull(activeSessionIndex)?.session
+        get() = (sessions.getOrNull(activeSessionIndex) as? TermuxSessionUiModel.Terminal)?.session
 
     /**
      * Whether there are any sessions.
@@ -39,17 +47,46 @@ data class TermuxUiState(
 }
 
 /**
- * UI model for a terminal session.
+ * Session tab UI model: either a real terminal session or a file manager session.
  *
- * @param session The underlying terminal session
- * @param name Display name for the session
- * @param title Current terminal title
+ * @param id Stable id used to identify the tab and key per-session state
+ * @param name Display name for the tab
+ * @param title Secondary title (terminal escape-sequence title)
  */
-data class TerminalSessionUiModel(
-    val session: TerminalSession,
-    val name: String,
-    val title: String = ""
-)
+sealed class TermuxSessionUiModel {
+    abstract val id: String
+    abstract val name: String
+    abstract val title: String
+
+    /**
+     * A real pty terminal session.
+     *
+     * @param name Display name for the session
+     * @param session The underlying terminal session
+     * @param title Current terminal title
+     */
+    data class Terminal(
+        override val name: String,
+        val session: TerminalSession,
+        override val title: String = ""
+    ) : TermuxSessionUiModel() {
+        override val id: String
+            get() = session.mHandle
+    }
+
+    /**
+     * A file manager session, purely UI backed.
+     *
+     * @param id Stable id for the tab
+     * @param name Display name for the session
+     */
+    data class FileManager(
+        override val id: String,
+        override val name: String
+    ) : TermuxSessionUiModel() {
+        override val title: String = ""
+    }
+}
 
 /**
  * UI state for the Debian rootfs installer overlay (Fase 3).

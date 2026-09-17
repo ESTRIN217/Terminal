@@ -31,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
 import com.termux.R
-import com.termux.app.activities.FileManagerComposeActivity
 import com.termux.app.activities.HelpActivity
 import com.termux.app.activities.SettingsComposeActivity
 import com.termux.app.models.UserAction
@@ -64,6 +63,7 @@ import com.termux.terminal.compose.ExtraKeysConfig
 import com.termux.terminal.compose.TerminalPalette
 import com.termux.terminal.compose.TermuxExpressiveTheme
 import com.termux.terminal.compose.TermuxMainScreen
+import com.termux.terminal.compose.TermuxSessionUiModel
 import com.termux.terminal.compose.TermuxViewModel
 import com.termux.terminal.compose.TerminalViewRegistry
 import androidx.activity.enableEdgeToEdge
@@ -186,10 +186,11 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                         onRemoveSession = { session -> removeSession(session) },
                         onToggleKeyboard = { toggleKeyboard() },
                         onOpenFileManager = {
-                            ActivityUtils.startActivity(
-                                this@TermuxComposeActivity,
-                                Intent(this@TermuxComposeActivity, FileManagerComposeActivity::class.java)
-                            )
+                            if (mViewModel.uiState.value.sessions.size >= MAX_SESSIONS) {
+                                Toast.makeText(this, R.string.title_max_terminals_reached, Toast.LENGTH_SHORT).show()
+                            } else {
+                                mViewModel.createFileManagerSession(getString(R.string.title_activity_file_manager))
+                            }
                         },
                         onOpenSettings = {
                             ActivityUtils.startActivity(
@@ -367,9 +368,9 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                 return true
             }
             KeyEvent.KEYCODE_W -> {
-                val session = mViewModel.uiState.value.activeSession
-                if (session != null) {
-                    removeSession(session)
+                val model = mViewModel.uiState.value.activeSessionModel
+                if (model != null) {
+                    removeSession(model)
                 }
                 return true
             }
@@ -447,8 +448,15 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                 val termuxSession = svc.getTermuxSession(i)
                 if (termuxSession != null) {
                     val terminalSession = termuxSession.getTerminalSession()
-                    val sessionName = termuxSession.getExecutionCommand()?.shellName ?: "Session ${i + 1}"
-                    mViewModel.addSession(terminalSession, sessionName)
+                    // Idempotent: skip sessions already present in the UI (rotation recovery
+                    // keeps the ViewModel alive, so re-seeding without a guard would duplicate).
+                    val alreadyPresent = mViewModel.uiState.value.sessions.any {
+                        it is TermuxSessionUiModel.Terminal && it.session == terminalSession
+                    }
+                    if (!alreadyPresent) {
+                        val sessionName = termuxSession.getExecutionCommand()?.shellName ?: "Session ${i + 1}"
+                        mViewModel.addSession(terminalSession, sessionName)
+                    }
                 }
             }
 
@@ -459,7 +467,9 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                     val savedSession = svc.getTerminalSessionForHandle(savedHandle)
                     if (savedSession != null) {
                         val state = mViewModel.uiState.value
-                        val index = state.sessions.indexOfFirst { it.session == savedSession }
+                        val index = state.sessions.indexOfFirst {
+                            it is TermuxSessionUiModel.Terminal && it.session == savedSession
+                        }
                         if (index >= 0) {
                             mViewModel.switchSession(index)
                         }
@@ -561,7 +571,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
     private fun addNewSession(isFailSafe: Boolean, sessionName: String?) {
         val service = mTermuxService ?: return
 
-        if (service.getTermuxSessionsSize() >= MAX_SESSIONS) {
+        if (mViewModel.uiState.value.sessions.size >= MAX_SESSIONS) {
             Toast.makeText(this, R.string.title_max_terminals_reached, Toast.LENGTH_SHORT).show()
             return
         }
@@ -579,24 +589,44 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         mViewModel.addSession(terminalSession, name)
     }
 
+    /**
+     * Remove a terminal session from the UI and the service.
+     *
+     * Delegates from the typed overload [removeSession] via
+     * [com.termux.terminal.compose.ComposeTerminalSessionClient] / ViewClient callbacks.
+     */
     private fun removeSession(session: TerminalSession) {
-        val service = mTermuxService ?: return
+        val model = mViewModel.uiState.value.sessions.find {
+            it is TermuxSessionUiModel.Terminal && it.session == session
+        } ?: return
+        removeSession(model)
+    }
 
-        val termuxSession = service.getTermuxSessionForTerminalSession(session)
-        if (termuxSession != null) {
-            if (session.isRunning()) {
-                // Kill the still-running process; this synchronously removes it from
-                // the service via onTermuxSessionExited().
-                termuxSession.killIfExecuting(this, true)
-            } else {
-                // Process already exited; just remove the session from the service.
-                service.removeTermuxSession(session)
+    /**
+     * Remove any session (terminal or file manager) from the UI.
+     *
+     * Terminal sessions are killed/removed from [TermuxService] first; file manager sessions
+     * are removed from the UI only.
+     */
+    private fun removeSession(model: TermuxSessionUiModel) {
+        if (model is TermuxSessionUiModel.Terminal) {
+            val session = model.session
+            val service = mTermuxService
+            if (service != null) {
+                val termuxSession = service.getTermuxSessionForTerminalSession(session)
+                if (termuxSession != null) {
+                    if (session.isRunning()) {
+                        termuxSession.killIfExecuting(this, true)
+                    } else {
+                        service.removeTermuxSession(session)
+                    }
+                }
             }
         }
 
-        mViewModel.removeSession(session)
+        mViewModel.removeSession(model)
 
-        if (service.getTermuxSessionsSize() == 0) {
+        if (mViewModel.uiState.value.sessions.isEmpty()) {
             finish()
         }
     }

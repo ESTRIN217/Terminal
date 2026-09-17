@@ -1,13 +1,13 @@
-package com.termux.terminal.compose.filemanager
+package com.estrin217.filemanager.compose
 
 import android.app.Application
 import android.content.Context
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.termux.R
-import com.termux.app.filemanager.FileOperationsHelper
-import com.termux.app.filemanager.FileSortOption
+import com.estrin217.filemanager.FileOperationsHelper
+import com.estrin217.filemanager.FileSortOption
+import com.estrin217.filemanager.R
 import com.termux.shared.termux.TermuxConstants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow

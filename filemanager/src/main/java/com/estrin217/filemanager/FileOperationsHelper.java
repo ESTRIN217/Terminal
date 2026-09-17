@@ -1,4 +1,4 @@
-package com.termux.app.filemanager;
+package com.estrin217.filemanager;
 
 import android.content.Context;
 import android.content.Intent;
@@ -6,8 +6,6 @@ import android.net.Uri;
 import android.widget.Toast;
 
 import androidx.core.content.FileProvider;
-
-import com.termux.R;
 
 import java.io.File;
 import java.io.FileInputStream;

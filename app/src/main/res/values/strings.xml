@@ -124,7 +124,6 @@
     <!-- File Manager Dialogs -->
     <string name="title_new_folder">Create folder</string>
     <string name="title_new_file">Create file</string>
-    <string name="title_rename">Rename</string>
     <string name="title_confirm_delete">Confirm delete</string>
     <string name="msg_confirm_delete">Are you sure you want to delete %1$s?</string>
     <string name="msg_confirm_delete_multiple">Are you sure you want to delete %1$d items?</string>
@@ -141,40 +140,11 @@
     <string name="msg_files_copied">Copied %1$d item(s)</string>
     <string name="msg_files_moved">Moved %1$d item(s)</string>
     <string name="msg_undo_delete">Deleted %1$s</string>
-    <string name="msg_paste_success">Pasted %1$d item(s)</string>
     <string name="msg_error_create">Failed to create %1$s</string>
-    <string name="msg_error_rename">Failed to rename</string>
     <string name="msg_error_delete">Failed to delete %1$s</string>
     <string name="msg_error_copy">Failed to copy %1$s</string>
     <string name="msg_error_move">Failed to move %1$s</string>
     <string name="msg_error_paste">Failed to paste items</string>
-
-    <!-- File Manager UI -->
-    <string name="filemanager_more">More</string>
-    <string name="filemanager_clear">Clear</string>
-    <string name="filemanager_new">New</string>
-    <string name="action_new_symlink">New symlink</string>
-    <string name="filemanager_up">Up</string>
-    <string name="filemanager_broken_link">Broken link → %1$s</string>
-    <string name="filemanager_link_target">Link → %1$s</string>
-    <string name="filemanager_folder">Folder</string>
-    <string name="filemanager_error_create_folder">Failed to create folder</string>
-    <string name="filemanager_error_create_file">Failed to create file</string>
-    <string name="filemanager_error_create_symlink">Failed to create symlink</string>
-    <string name="filemanager_confirm_delete">Delete?</string>
-    <string name="filemanager_move_to_trash">Move %1$d item(s) to trash?</string>
-    <string name="filemanager_moved_to_trash">Moved to trash</string>
-    <string name="filemanager_delete_failed">Delete failed</string>
-    <string name="filemanager_broken_status">Status: broken (target not found)</string>
-    <string name="filemanager_detail_path">Path: %1$s</string>
-    <string name="filemanager_detail_size">Size: %1$s</string>
-    <string name="filemanager_detail_type">Type: %1$s</string>
-    <string name="filemanager_open">Open</string>
-    <string name="filemanager_close">Close</string>
-    <string name="filemanager_sort_by">Sort by</string>
-    <string name="filemanager_link_name">Link name</string>
-    <string name="filemanager_target_path">Target path</string>
-    <string name="filemanager_ok">OK</string>
 
     <!-- Sort Options -->
     <string name="sort_name">Name</string>
@@ -190,17 +160,8 @@
 
     <!-- File Details -->
     <string name="title_details">File details</string>
-    <string name="detail_name">Name</string>
-    <string name="detail_path">Path</string>
-    <string name="detail_size">Size</string>
-    <string name="detail_modified">Modified</string>
-    <string name="detail_permissions">Permissions</string>
-    <string name="detail_mime">MIME type</string>
-    <string name="detail_contents">Contents</string>
-    <string name="detail_items">items</string>
 
     <!-- Selection mode -->
-    <string name="selection_mode_title">%1$d selected</string>
 
     <string name="action_report_issue">Report Issue</string>
     <string name="msg_generating_report">Generating Report</string>
@@ -410,10 +371,5 @@
     <string name="log_level_normal">Normal</string>
     <string name="log_level_debug">Debug</string>
     <string name="log_level_verbose">Verbose</string>
-
-    <!-- File Manager Errors -->
-    <string name="filemanager_error_cannot_read">Cannot read %1$s</string>
-    <string name="filemanager_error_cannot_read_access">Cannot read %1$s. Check \"All files access\" permission.</string>
-    <string name="filemanager_error_broken_symlink">Broken symlink: %1$s → %2$s not found</string>
 
 </resources>

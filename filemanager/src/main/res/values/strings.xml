@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- File Manager Actions -->
+    <string name="action_search">Search</string>
+    <string name="action_sort">Sort</string>
+    <string name="action_show_hidden">Show hidden files</string>
+    <string name="action_hide_hidden">Hide hidden files</string>
+    <string name="action_bookmarks">Bookmarks</string>
+    <string name="action_new_folder">New folder</string>
+    <string name="action_new_file">New file</string>
+    <string name="action_rename">Rename</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_copy">Copy</string>
+    <string name="action_cut">Cut</string>
+    <string name="action_paste">Paste</string>
+    <string name="action_share">Share information</string>
+    <string name="action_details">Details</string>
+    <string name="action_select_all">Select all</string>
+    <string name="action_undo">Undo</string>
+    <string name="action_go_back">Back</string>
+    <string name="action_go_forward">Forward</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="title_rename">Rename</string>
+
+    <!-- File Manager Messages -->
+    <string name="msg_paste_success">Pasted %1$d item(s)</string>
+    <string name="msg_error_rename">Failed to rename</string>
+
+    <!-- File Manager UI -->
+    <string name="filemanager_more">More</string>
+    <string name="filemanager_clear">Clear</string>
+    <string name="filemanager_new">New</string>
+    <string name="action_new_symlink">New symlink</string>
+    <string name="filemanager_up">Up</string>
+    <string name="filemanager_broken_link">Broken link → %1$s</string>
+    <string name="filemanager_link_target">Link → %1$s</string>
+    <string name="filemanager_folder">Folder</string>
+    <string name="filemanager_error_create_folder">Failed to create folder</string>
+    <string name="filemanager_error_create_file">Failed to create file</string>
+    <string name="filemanager_error_create_symlink">Failed to create symlink</string>
+    <string name="filemanager_confirm_delete">Delete?</string>
+    <string name="filemanager_move_to_trash">Move %1$d item(s) to trash?</string>
+    <string name="filemanager_moved_to_trash">Moved to trash</string>
+    <string name="filemanager_delete_failed">Delete failed</string>
+    <string name="filemanager_broken_status">Status: broken (target not found)</string>
+    <string name="filemanager_detail_path">Path: %1$s</string>
+    <string name="filemanager_detail_size">Size: %1$s</string>
+    <string name="filemanager_detail_type">Type: %1$s</string>
+    <string name="filemanager_open">Open</string>
+    <string name="filemanager_close">Close</string>
+    <string name="filemanager_sort_by">Sort by</string>
+    <string name="filemanager_link_name">Link name</string>
+    <string name="filemanager_target_path">Target path</string>
+    <string name="filemanager_ok">OK</string>
+
+    <!-- File Details -->
+    <string name="detail_name">Name</string>
+    <string name="detail_path">Path</string>
+    <string name="detail_size">Size</string>
+    <string name="detail_modified">Modified</string>
+    <string name="detail_permissions">Permissions</string>
+    <string name="detail_mime">MIME type</string>
+    <string name="detail_contents">Contents</string>
+    <string name="detail_items">items</string>
+
+    <!-- Selection mode -->
+    <string name="selection_mode_title">%1$d selected</string>
+
+    <!-- File Manager Errors -->
+    <string name="filemanager_error_cannot_read">Cannot read %1$s</string>
+    <string name="filemanager_error_cannot_read_access">Cannot read %1$s. Check \"All files access\" permission.</string>
+    <string name="filemanager_error_broken_symlink">Broken symlink: %1$s → %2$s not found</string>
+
+</resources>

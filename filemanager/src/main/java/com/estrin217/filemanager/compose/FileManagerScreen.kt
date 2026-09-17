@@ -1,4 +1,4 @@
-package com.termux.terminal.compose.filemanager
+package com.estrin217.filemanager.compose
 
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -47,6 +48,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -68,9 +70,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.termux.R
-import com.termux.app.filemanager.FileOperationsHelper
-import com.termux.app.filemanager.FileSortOption
+import com.estrin217.filemanager.FileOperationsHelper
+import com.estrin217.filemanager.FileSortOption
+import com.estrin217.filemanager.R
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -92,7 +94,8 @@ fun FileManagerScreen(
     onOpenFile: (File) -> Unit,
     onShareFiles: (List<File>) -> Unit,
     onEnsureStorageAccess: (File, () -> Unit) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contentWindowInsets: WindowInsets = ScaffoldDefaults.contentWindowInsets
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -113,6 +116,7 @@ fun FileManagerScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        contentWindowInsets = contentWindowInsets,
         topBar = {
             TopAppBar(
                 title = {

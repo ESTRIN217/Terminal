@@ -33,6 +33,7 @@ android {
 
         implementation(project(":terminal-view"))
         implementation(project(":termux-shared"))
+        implementation(project(":filemanager"))
     }
 
     defaultConfig {

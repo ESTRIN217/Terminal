@@ -8,11 +8,13 @@
 - Tests: `./gradlew test` (unit tests only; no instrumented tests in CI)
 - **No lint, detekt, ktlint, or formatter is configured.** The only CI quality gate is `./gradlew test`.
 - Gradle 9.7.0, AGP 9.3.1. Daemon enabled, parallel builds capped at 2 workers.
+- The file manager is its own module; its unit tests run via `./gradlew :filemanager:test`.
 
 ## Module Architecture
 
 ```
 app  →  termux-shared  →  terminal-view  →  terminal-emulator
+  └─→  filemanager  →  termux-shared
 ```
 
 | Module | Package | Purpose |
@@ -20,14 +22,16 @@ app  →  termux-shared  →  terminal-view  →  terminal-emulator
 | `terminal-emulator` | `com.termux.terminal` | VT100/xterm emulation engine, JNI pty, zero internal deps |
 | `terminal-view` | `com.termux.view` | Android `View` rendering for the terminal |
 | `termux-shared` | `com.termux.shared` | Shared logic: settings, file utils, error system, crash handling, constants |
+| `filemanager` | `com.estrin217.filemanager` | Reusable file manager library: `FileOperationsHelper`, `FileSortOption`, Compose `FileManagerScreen`/`FileManagerViewModel` — **Java + Kotlin (Compose)**, self-contained string resources |
 | `app` | `com.termux` | UI activities, services, app entry point — **Java + Kotlin (Compose)** |
 
 - `terminal-view` exposes `terminal-emulator` via `api()` (transitive). Don't change this to `implementation()` without understanding the impact on consumers.
+- `filemanager` depends on `termux-shared` (for `TermuxConstants`). The host wiring stays in `app`: `FileManagerSessionHost` hosts `FileManagerScreen` as a session tab, and the legacy `FileManagerComposeActivity` (opened by the classic `TermuxActivity` toolbar) wires storage permissions, `FileProvider`, and the Compose theme.
 - Modify `terminal-emulator` for emulation bugs. Modify `app` for UI/Activity bugs. Modify `termux-shared` for cross-cutting concerns.
 
 ## Language: Java + Kotlin
 
-- **Library modules (`terminal-emulator`, `terminal-view`, `termux-shared`) are pure Java.** Do not add Kotlin files there.
+- **Library modules (`terminal-emulator`, `terminal-view`, `termux-shared`) are pure Java.** Do not add Kotlin files there. The only Kotlin library is `filemanager` (Java helpers + Kotlin Compose UI).
 - **`app` module uses Kotlin** for the Jetpack Compose UI layer (`com.termux.terminal.compose` package). Existing activities/services remain Java.
 - **Hungarian notation** (`m` prefix: `mTermuxService`, `mIsVisible`) is used in **both Java and Kotlin** — keep this when adding new code.
 - **`LOG_TAG`:** every class defines `private static final String LOG_TAG = "ClassName";` at the top (Java) or `companion object` (Kotlin).
@@ -42,6 +46,8 @@ app  →  termux-shared  →  terminal-view  →  terminal-emulator
 - Entry point: `TermuxComposeActivity.kt` — the main Compose activity.
 - `TerminalViewRegistry` holds the active `TerminalView` reference for Compose callbacks.
 - New Compose UI goes in `com.termux.terminal.compose`. New settings screens go in `com.termux.terminal.compose.settings`.
+- The `filemanager` module also uses Compose (Material3) for its `FileManagerScreen`; it does not host activities — the app wires the theme, permissions, and `FileProvider`.
+- **Session tabs are polymorphic:** `TermuxSessionUiModel` is a sealed type (`Terminal` = pty session, `FileManager` = UI-only session). The `FileManagerSessionHost` composable hosts `FileManagerScreen` as a tab with a per-session `FileManagerViewModel` keyed by session id. Closing a file-manager tab never touches `TermuxService`.
 
 ## Error Handling
 

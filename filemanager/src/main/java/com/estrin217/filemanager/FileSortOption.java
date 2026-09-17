@@ -1,4 +1,4 @@
-package com.termux.app.filemanager;
+package com.estrin217.filemanager;
 
 import java.io.File;
 import java.util.Comparator;

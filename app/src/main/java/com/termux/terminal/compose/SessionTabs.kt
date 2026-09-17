@@ -21,7 +21,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.termux.R
-import com.termux.terminal.TerminalSession
 
 /**
  * A scrollable tab row for terminal sessions.
@@ -35,10 +34,10 @@ import com.termux.terminal.TerminalSession
  */
 @Composable
 fun SessionTabs(
-    sessions: List<TerminalSessionUiModel>,
+    sessions: List<TermuxSessionUiModel>,
     activeSessionIndex: Int,
     onSessionSelected: (Int) -> Unit,
-    onCloseSessionClick: (TerminalSession) -> Unit,
+    onCloseSessionClick: (TermuxSessionUiModel) -> Unit,
     modifier: Modifier = Modifier
 ) {
     ScrollableTabRow(
@@ -67,7 +66,7 @@ fun SessionTabs(
                 session = session,
                 isSelected = index == activeSessionIndex,
                 onSelect = { onSessionSelected(index) },
-                onClose = { onCloseSessionClick(session.session) }
+                onClose = { onCloseSessionClick(session) }
             )
         }
     }
@@ -84,7 +83,7 @@ fun SessionTabs(
  */
 @Composable
 private fun SessionTab(
-    session: TerminalSessionUiModel,
+    session: TermuxSessionUiModel,
     isSelected: Boolean,
     onSelect: () -> Unit,
     onClose: () -> Unit,
@@ -99,7 +98,11 @@ private fun SessionTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.Terminal,
+                    imageVector = if (session is TermuxSessionUiModel.FileManager) {
+                        Icons.Default.Folder
+                    } else {
+                        Icons.Default.Terminal
+                    },
                     contentDescription = stringResource(R.string.session),
                     modifier = Modifier.size(18.dp).padding(end = 4.dp),
                     tint = MaterialTheme.colorScheme.primary

@@ -57,7 +57,7 @@ fun TermuxMainScreen(
     onSetKeepScreenOn: (Boolean) -> Unit,
     onOpenHelp: () -> Unit,
     onCreateSession: () -> Unit,
-    onRemoveSession: (TerminalSession) -> Unit,
+    onRemoveSession: (TermuxSessionUiModel) -> Unit,
     onToggleKeyboard: () -> Unit,
     onOpenFileManager: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -140,14 +140,22 @@ fun TermuxMainScreen(
                     if (uiState.hasSessions) {
                         uiState.sessions.forEachIndexed { index, sessionModel ->
                             if (index == uiState.activeSessionIndex) {
-                                TerminalViewHost(
-                                    session = sessionModel.session,
-                                    fontSize = uiState.fontSize,
-                                    viewClient = viewClient,
-                                    palette = palette,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                )
+                                when (sessionModel) {
+                                    is TermuxSessionUiModel.Terminal -> TerminalViewHost(
+                                        session = sessionModel.session,
+                                        fontSize = uiState.fontSize,
+                                        viewClient = viewClient,
+                                        palette = palette,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                    )
+                                    is TermuxSessionUiModel.FileManager -> FileManagerSessionHost(
+                                        sessionId = sessionModel.id,
+                                        onCloseSession = { onRemoveSession(sessionModel) },
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                    )
+                                }
                             }
                         }
                     }
@@ -156,7 +164,8 @@ fun TermuxMainScreen(
         }
         // Extra keys bar: outside the drawer so it is never dimmed by the drawer
         // scrim, and inside the imePadding column so it rides above the keyboard.
-        if (uiState.isExtraKeysVisible) {
+        // Hidden while a non-terminal session (e.g. the file manager) is active.
+        if (uiState.isExtraKeysVisible && uiState.activeSession != null) {
             ExtraKeysBar(
                 config = uiState.extraKeysConfig,
                 activeModifiers = uiState.extraKeysModifiers,

@@ -15,4 +15,4 @@ dependencyResolutionManagement {
     }
 }
 
-include(":app", ":termux-shared", ":terminal-emulator", ":terminal-view")
+include(":app", ":termux-shared", ":terminal-emulator", ":terminal-view", ":filemanager")

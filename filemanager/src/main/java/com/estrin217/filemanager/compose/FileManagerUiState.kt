@@ -1,6 +1,6 @@
-package com.termux.terminal.compose.filemanager
+package com.estrin217.filemanager.compose
 
-import com.termux.app.filemanager.FileSortOption
+import com.estrin217.filemanager.FileSortOption
 import java.io.File
 
 /**

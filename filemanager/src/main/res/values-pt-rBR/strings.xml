@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- File Manager Actions -->
+    <string name="action_search">Pesquisar</string>
+    <string name="action_sort">Ordenar</string>
+    <string name="action_show_hidden">Mostrar arquivos ocultos</string>
+    <string name="action_hide_hidden">Ocultar arquivos ocultos</string>
+    <string name="action_bookmarks">Favoritos</string>
+    <string name="action_new_folder">Nova pasta</string>
+    <string name="action_new_file">Novo arquivo</string>
+    <string name="action_rename">Renomear</string>
+    <string name="action_delete">Excluir</string>
+    <string name="action_copy">Copiar</string>
+    <string name="action_cut">Cortar</string>
+    <string name="action_paste">Colar</string>
+    <string name="action_share">Compartilhar</string>
+    <string name="action_details">Detalhes</string>
+    <string name="action_select_all">Selecionar tudo</string>
+    <string name="action_undo">Desfazer</string>
+    <string name="action_go_back">Voltar</string>
+    <string name="action_go_forward">Avançar</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="title_rename">Renomear</string>
+
+    <!-- File Manager Messages -->
+    <string name="msg_paste_success">%1$d item(ns) colado(s)</string>
+    <string name="msg_error_rename">Erro ao renomear</string>
+
+    <!-- File Details -->
+    <string name="detail_name">Nome</string>
+    <string name="detail_path">Caminho</string>
+    <string name="detail_size">Tamanho</string>
+    <string name="detail_modified">Modificado</string>
+    <string name="detail_permissions">Permissões</string>
+    <string name="detail_mime">Tipo MIME</string>
+    <string name="detail_contents">Conteúdo</string>
+    <string name="detail_items">itens</string>
+
+    <!-- Selection mode -->
+    <string name="selection_mode_title">%1$d selecionados</string>
+
+</resources>

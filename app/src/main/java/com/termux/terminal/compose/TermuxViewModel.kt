@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 /**
  * ViewModel for the Termux main screen.
@@ -29,7 +30,7 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
     fun addSession(session: TerminalSession, name: String) {
         viewModelScope.launch {
             _uiState.update { state ->
-                val newModel = TerminalSessionUiModel(session = session, name = name)
+                val newModel = TermuxSessionUiModel.Terminal(name = name, session = session)
                 val newSessions = state.sessions + newModel
                 state.copy(
                     sessions = newSessions,
@@ -40,14 +41,41 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * Remove a terminal session from the UI state.
+     * Add a new file manager session to the UI state.
      *
-     * @param session The terminal session to remove
+     * Each file manager tab gets its own stable id so its per-session state
+     * (a [com.estrin217.filemanager.compose.FileManagerViewModel]) can be keyed.
+     *
+     * @param baseName Base display name for the session; numbered when multiple
+     * file manager tabs exist (e.g. "File Manager 2").
+     * @return The stable id of the new session
      */
-    fun removeSession(session: TerminalSession) {
+    fun createFileManagerSession(baseName: String): String {
+        val id = UUID.randomUUID().toString()
         viewModelScope.launch {
             _uiState.update { state ->
-                val index = state.sessions.indexOfFirst { it.session == session }
+                val fmCount = state.sessions.count { it is TermuxSessionUiModel.FileManager }
+                val name = if (fmCount == 0) baseName else "$baseName ${fmCount + 1}"
+                val newModel = TermuxSessionUiModel.FileManager(id = id, name = name)
+                val newSessions = state.sessions + newModel
+                state.copy(
+                    sessions = newSessions,
+                    activeSessionIndex = newSessions.lastIndex
+                )
+            }
+        }
+        return id
+    }
+
+    /**
+     * Remove a session from the UI state.
+     *
+     * @param sessionModel The session model to remove
+     */
+    fun removeSession(sessionModel: TermuxSessionUiModel) {
+        viewModelScope.launch {
+            _uiState.update { state ->
+                val index = state.sessions.indexOfFirst { it.id == sessionModel.id }
                 if (index < 0) return@update state
 
                 val newSessions = state.sessions.toMutableList().apply { removeAt(index) }
@@ -218,7 +246,7 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             _uiState.update { state ->
                 val newSessions = state.sessions.map { model ->
-                    if (model.session == session) {
+                    if (model is TermuxSessionUiModel.Terminal && model.session == session) {
                         model.copy(title = title)
                     } else {
                         model
@@ -239,7 +267,7 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             _uiState.update { state ->
                 val newSessions = state.sessions.map { model ->
-                    if (model.session == session) {
+                    if (model is TermuxSessionUiModel.Terminal && model.session == session) {
                         model.copy(name = name)
                     } else {
                         model

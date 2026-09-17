@@ -270,7 +270,6 @@
     <!-- File Manager Dialogs -->
     <string name="title_new_folder">Crear carpeta</string>
     <string name="title_new_file">Crear archivo</string>
-    <string name="title_rename">Renombrar</string>
     <string name="title_confirm_delete">Confirmar eliminación</string>
     <string name="msg_confirm_delete">¿Estás seguro de que quieres eliminar %1$s?</string>
     <string name="msg_confirm_delete_multiple">¿Estás seguro de que quieres eliminar %1$d elementos?</string>
@@ -287,40 +286,11 @@
     <string name="msg_files_copied">%1$d elemento(s) copiado(s)</string>
     <string name="msg_files_moved">%1$d elemento(s) movido(s)</string>
     <string name="msg_undo_delete">%1$s eliminado</string>
-    <string name="msg_paste_success">%1$d elemento(s) pegado(s)</string>
     <string name="msg_error_create">Error al crear %1$s</string>
-    <string name="msg_error_rename">Error al renombrar</string>
     <string name="msg_error_delete">Error al eliminar %1$s</string>
     <string name="msg_error_copy">Error al copiar %1$s</string>
     <string name="msg_error_move">Error al mover %1$s</string>
     <string name="msg_error_paste">Error al pegar elementos</string>
-
-    <!-- File Manager UI -->
-    <string name="filemanager_more">Más</string>
-    <string name="filemanager_clear">Limpiar</string>
-    <string name="filemanager_new">Nuevo</string>
-    <string name="action_new_symlink">Nuevo enlace simbólico</string>
-    <string name="filemanager_up">Arriba</string>
-    <string name="filemanager_broken_link">Enlace roto → %1$s</string>
-    <string name="filemanager_link_target">Enlace → %1$s</string>
-    <string name="filemanager_folder">Carpeta</string>
-    <string name="filemanager_error_create_folder">Error al crear carpeta</string>
-    <string name="filemanager_error_create_file">Error al crear archivo</string>
-    <string name="filemanager_error_create_symlink">Error al crear enlace simbólico</string>
-    <string name="filemanager_confirm_delete">¿Eliminar?</string>
-    <string name="filemanager_move_to_trash">¿Mover %1$d elemento(s) a la papelera?</string>
-    <string name="filemanager_moved_to_trash">Movido a la papelera</string>
-    <string name="filemanager_delete_failed">Error al eliminar</string>
-    <string name="filemanager_broken_status">Estado: roto (destino no encontrado)</string>
-    <string name="filemanager_detail_path">Ruta: %1$s</string>
-    <string name="filemanager_detail_size">Tamaño: %1$s</string>
-    <string name="filemanager_detail_type">Tipo: %1$s</string>
-    <string name="filemanager_open">Abrir</string>
-    <string name="filemanager_close">Cerrar</string>
-    <string name="filemanager_sort_by">Ordenar por</string>
-    <string name="filemanager_link_name">Nombre del enlace</string>
-    <string name="filemanager_target_path">Ruta de destino</string>
-    <string name="filemanager_ok">Aceptar</string>
 
     <!-- Sort Options -->
     <string name="sort_name">Nombre</string>
@@ -336,17 +306,8 @@
 
     <!-- File Details -->
     <string name="title_details">Detalles del archivo</string>
-    <string name="detail_name">Nombre</string>
-    <string name="detail_path">Ruta</string>
-    <string name="detail_size">Tamaño</string>
-    <string name="detail_modified">Modificado</string>
-    <string name="detail_permissions">Permisos</string>
-    <string name="detail_mime">Tipo MIME</string>
-    <string name="detail_contents">Contenido</string>
-    <string name="detail_items">elementos</string>
 
     <!-- Selection mode -->
-    <string name="selection_mode_title">%1$d seleccionados</string>
     <string name="save_to_a_files">Guardar en un archivo</string>
     
     <string name="font_size">Tamaño de fuente</string>
@@ -404,10 +365,5 @@
     <string name="log_level_normal">Normal</string>
     <string name="log_level_debug">Depurar</string>
     <string name="log_level_verbose">Detallado</string>
-
-    <!-- File Manager Errors -->
-    <string name="filemanager_error_cannot_read">No se puede leer %1$s</string>
-    <string name="filemanager_error_cannot_read_access">No se puede leer %1$s. Verifique el permiso \"Acceso a todos los archivos\".</string>
-    <string name="filemanager_error_broken_symlink">Enlace simbólico roto: %1$s → %2$s no encontrado</string>
 
 </resources>
