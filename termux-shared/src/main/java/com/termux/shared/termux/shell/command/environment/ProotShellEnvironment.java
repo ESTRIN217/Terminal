@@ -92,7 +92,7 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
 
     /**
      * Build the default proot guest command: {@code proot -r <rootfs> -0 -w /root
-     * -b /dev -b /dev/shm -b /dev/pts -b /proc -b /sys -b /sdcard:/root/sdcard
+     * -b /dev -b <app-shm>:/dev/shm -b /dev/pts -b /proc -b /sys -b /sdcard:/root/sdcard
      * -b /storage:/root/storage /bin/bash --login [extraArgs...]}.
      *
      * <p>When the linkfix shim is installed, the guest program is wrapped as
@@ -106,9 +106,7 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
      * reachable from the file manager home without cluttering the rootfs top level.
      * A missing source is inert
      * (proot only warns) and the kernel still enforces the Android storage permission,
-     * so no permission is bypassed. {@code /dev/shm} and {@code /dev/pts} are bound
-     * explicitly because some Android devices ship a minimal {@code /dev} without
-     * them; where the host lacks the source the bind is a harmless warning.</p>
+     * so no permission is bypassed.</p>
      *
      * @param extraArgs Optional extra args appended after {@code --login}, may be {@code null}.
      * @return Returns the full command array with the proot binary first.
@@ -139,7 +137,7 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
         command.add("-b");
         command.add("/dev");
         command.add("-b");
-        command.add("/dev/shm");
+        command.add(TermuxConstants.DEBIAN_SHM_DIR_PATH + ":/dev/shm");
         command.add("-b");
         command.add("/dev/pts");
         command.add("-b");

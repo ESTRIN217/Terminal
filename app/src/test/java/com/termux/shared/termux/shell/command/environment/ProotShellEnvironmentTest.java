@@ -17,12 +17,26 @@ public class ProotShellEnvironmentTest {
             TermuxConstants.PROOT_BIN_PATH,
             "-r", TermuxConstants.DEBIAN_ROOTFS_DIR_PATH,
             "-0", "-w", "/root",
-            "-b", "/dev", "-b", "/dev/shm", "-b", "/dev/pts",
+            "-b", "/dev", "-b", TermuxConstants.DEBIAN_SHM_DIR_PATH + ":/dev/shm", "-b", "/dev/pts",
             "-b", "/proc", "-b", "/sys",
             "-b", "/sdcard:/root/sdcard", "-b", "/storage:/root/storage",
             "/bin/bash", "--login"
         };
         Assert.assertArrayEquals(expected, command);
+    }
+
+    @Test
+    public void testBuildProotCommand_sharedMemoryBindWithAndWithoutLinkfix() {
+        for (boolean withLinkfix : new boolean[]{false, true}) {
+            String[] command = ProotShellEnvironment.buildProotCommand(null, withLinkfix);
+            Assert.assertEquals("-b", command[8]);
+            Assert.assertEquals(TermuxConstants.DEBIAN_SHM_DIR_PATH + ":/dev/shm", command[9]);
+            Assert.assertTrue(TermuxConstants.DEBIAN_SHM_DIR_PATH.startsWith(
+                TermuxConstants.TERMUX_FILES_DIR_PATH + "/"));
+            for (String argument : command) {
+                Assert.assertNotEquals("/dev/shm", argument);
+            }
+        }
     }
 
     @Test

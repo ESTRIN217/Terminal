@@ -27,6 +27,7 @@ import com.termux.shared.data.IntentUtils;
 import com.termux.shared.net.uri.UriUtils;
 import com.termux.shared.errors.Errno;
 import com.termux.shared.errors.Error;
+import com.termux.shared.file.FileUtils;
 import com.termux.shared.shell.ShellUtils;
 import com.termux.shared.shell.command.runner.app.AppShell;
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
@@ -619,6 +620,12 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
                 Logger.logErrorExtended(LOG_TAG, "Debian rootfs repair failed (continuing anyway):\n" + repairError);
             // Default interactive shell runs inside the Debian guest via proot
             // (Fase 4). Failsafe and plugin commands keep the Termux environment.
+            Error shmError = FileUtils.createDirectoryFile(TermuxConstants.DEBIAN_SHM_DIR_PATH);
+            if (shmError != null) {
+                Logger.logErrorExtended(LOG_TAG, "Failed to prepare Debian shared memory directory:\n" + shmError);
+                Logger.showToast(this, "Failed to prepare Debian shared memory directory", true);
+                return null;
+            }
             String[] prootCommand = ProotShellEnvironment.buildProotCommand(executionCommand.arguments);
             executionCommand.executable = prootCommand[0];
             executionCommand.arguments = Arrays.copyOfRange(prootCommand, 1, prootCommand.length);

@@ -569,6 +569,8 @@ public final class TermuxConstants {
     /** Debian rootfs directory */
     public static final File DEBIAN_ROOTFS_DIR = new File(DEBIAN_ROOTFS_DIR_PATH);
 
+    public static final String DEBIAN_SHM_DIR_PATH = TERMUX_FILES_DIR_PATH + "/debian-shm";
+
     /** Debian rootfs staging directory path */
     public static final String DEBIAN_STAGING_ROOTFS_DIR_PATH = TERMUX_FILES_DIR_PATH + "/debian-staging";
     /** Debian rootfs staging directory */
