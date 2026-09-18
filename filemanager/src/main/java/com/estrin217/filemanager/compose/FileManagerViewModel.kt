@@ -423,6 +423,24 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         FileOperationsHelper.resolveFileForOpen(file)
 
     /**
+     * Computes the size of a folder off the main thread and caches it in
+     * [FileManagerUiState.folderSizes] keyed by absolute path. Files (and
+     * already-cached folders) are a no-op.
+     *
+     * @param file The folder to measure.
+     */
+    fun loadFolderSize(file: File) {
+        if (!file.isDirectory) return
+        if (_uiState.value.folderSizes.containsKey(file.absolutePath)) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val size = FileOperationsHelper.getDirectorySize(file)
+            _uiState.update {
+                it.copy(folderSizes = it.folderSizes + (file.absolutePath to size))
+            }
+        }
+    }
+
+    /**
      * Posts a "broken symlink" status message for [file].
      *
      * @param file The dangling symlink the user tried to open.

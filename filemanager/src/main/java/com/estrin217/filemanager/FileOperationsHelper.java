@@ -407,6 +407,31 @@ public class FileOperationsHelper {
         return String.format(Locale.getDefault(), "%.1f %s", bytes / Math.pow(1024, exp), pre);
     }
 
+    /**
+     * Computes the apparent size of a directory in bytes by recursively summing
+     * the {@link File#length()} of every regular file below it.
+     *
+     * <p>Symbolic links are skipped so link loops cannot recurse forever and
+     * the same inode is not counted twice. Directories that cannot be listed
+     * (e.g. missing permissions) are counted as empty.
+     *
+     * @param dir The directory to measure.
+     * @return The total size in bytes, or {@code 0} if {@code dir} is not a
+     *         directory or cannot be read.
+     */
+    public static long getDirectorySize(File dir) {
+        if (dir == null || !dir.isDirectory()) return 0;
+        long total = 0;
+        File[] children = dir.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                if (isSymlink(child)) continue;
+                total += child.isDirectory() ? getDirectorySize(child) : child.length();
+            }
+        }
+        return total;
+    }
+
     public static String getMimeType(String fileName) {
         String ext = fileName.contains(".") ?
             fileName.substring(fileName.lastIndexOf('.')).toLowerCase() : "";

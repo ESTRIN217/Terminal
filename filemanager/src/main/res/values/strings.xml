@@ -47,6 +47,7 @@
     <string name="filemanager_broken_status">Status: broken (target not found)</string>
     <string name="filemanager_detail_path">Path: %1$s</string>
     <string name="filemanager_detail_size">Size: %1$s</string>
+    <string name="filemanager_calculating">Calculating…</string>
     <string name="filemanager_detail_type">Type: %1$s</string>
     <string name="filemanager_open">Open</string>
     <string name="filemanager_close">Close</string>

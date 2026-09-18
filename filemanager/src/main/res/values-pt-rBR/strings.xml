@@ -23,6 +23,7 @@
     <string name="action_go_forward">Avançar</string>
     <string name="action_cancel">Cancelar</string>
     <string name="title_rename">Renomear</string>
+    <string name="filemanager_calculating">Calculando…</string>
 
     <!-- File Manager Messages -->
     <string name="msg_paste_success">%1$d item(ns) colado(s)</string>

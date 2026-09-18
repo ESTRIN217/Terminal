@@ -47,6 +47,7 @@
     <string name="filemanager_broken_status">Estado: roto (destino no encontrado)</string>
     <string name="filemanager_detail_path">Ruta: %1$s</string>
     <string name="filemanager_detail_size">Tamaño: %1$s</string>
+    <string name="filemanager_calculating">Calculando…</string>
     <string name="filemanager_detail_type">Tipo: %1$s</string>
     <string name="filemanager_open">Abrir</string>
     <string name="filemanager_close">Cerrar</string>

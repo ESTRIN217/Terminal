@@ -34,5 +34,10 @@ data class FileManagerUiState(
     val busy: Boolean = false,
     val statusMessage: String? = null,
     val symlinkTargets: Map<String, String?> = emptyMap(),
-    val brokenLinks: Set<String> = emptySet()
+    val brokenLinks: Set<String> = emptySet(),
+    /**
+     * Cache of computed directory sizes (absolute path -> size in bytes),
+     * filled on demand when the details dialog is shown for a folder.
+     */
+    val folderSizes: Map<String, Long> = emptyMap()
 )

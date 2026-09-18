@@ -557,6 +557,14 @@ fun FileManagerScreen(
             if (f != null) {
                 val linkTarget = state.symlinkTargets[f.absolutePath]
                 val isBroken = state.brokenLinks.contains(f.absolutePath)
+                LaunchedEffect(f) { viewModel.loadFolderSize(f) }
+                val sizeText = if (f.isDirectory) {
+                    state.folderSizes[f.absolutePath]
+                        ?.let { FileOperationsHelper.formatSize(it) }
+                        ?: stringResource(R.string.filemanager_calculating)
+                } else {
+                    FileOperationsHelper.formatSize(f.length())
+                }
                 AlertDialog(
                     onDismissRequest = { dialog = DialogKind.NONE },
                     title = { Text(f.name) },
@@ -566,7 +574,7 @@ fun FileManagerScreen(
                                 (if (linkTarget != null) stringResource(R.string.filemanager_link_target, linkTarget) + "\n" else "") +
                                 (if (isBroken) stringResource(R.string.filemanager_broken_status) + "\n" else "") +
                                 stringResource(R.string.filemanager_detail_path, f.absolutePath) + "\n" +
-                                stringResource(R.string.filemanager_detail_size, FileOperationsHelper.formatSize(if (f.isDirectory) 0 else f.length())) + "\n" +
+                                stringResource(R.string.filemanager_detail_size, sizeText) + "\n" +
                                 stringResource(R.string.filemanager_detail_type, FileOperationsHelper.getMimeType(f.name))
                         )
                     },
