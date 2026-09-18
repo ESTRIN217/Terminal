@@ -199,3 +199,26 @@ El archivo `loader/loader-info.c` requiere los símbolos `_start` y `pokedata_wo
 - **Modo loader de PRoot:** **Bundled** (sin `PROOT_UNBUNDLE_LOADER`). Loader embebido en el binario mediante `objcopy`. Verificado en Fase 2A — binario 100% rename-safe. Runtime requiere `PROOT_TMP_DIR=<filesDir>`.
 - **Formato del Rootfs:** Tarball pre-aplanado comprimido (`.tar.xz`) Debian trixie arm64 alojado en GitHub Releases con validación de hash SHA-256.
 - **Experiencia de Usuario (UX):** Pantalla/diálogo en Jetpack Compose (`TermuxComposeActivity`) con barra de progreso real (MB/total, porcentaje), estado de descompresión y botón de reintento.
+
+---
+
+## 7. Limitaciones conocidas (SELinux OEM)
+
+En dispositivos con políticas SELinux de fabricante restrictivas (p. ej. Infinix X6525,
+Android 13, `Enforcing`), el dominio `untrusted_app_27` (targetSdk 28) no tiene permiso
+`read`/`readdir` sobre `device:dir` (`/dev`), `devpts` (`/dev/pts`) ni `sysfs` (`/sys`).
+proot ejecuta las syscalls en el dominio de la app, así que con `-b /dev` un `ls /dev`
+dentro del invitado falla con `Permission denied`. No es un fallo del fork ni de la raíz
+Debian: la política del dispositivo permite `search`/`getattr`/`open` sobre nodos concretos
+(`/dev/null`, `/dev/zero`, `/dev/urandom`, ...) pero deniega enumerar el directorio.
+
+| Comando (invitado) | Resultado | Acceso funcional |
+|---|---|---|
+| `ls /dev` | `Permission denied` | `/dev/null`, `/dev/tty`, `/dev/ptmx`, `/proc/self/fd` funcionan |
+| `ls /dev/pts` | `Permission denied` | abrir `/dev/pts/N` sí funciona (`search` permitido) |
+| `ls /sys` | `Permission denied` | subrutas concretas siguen accesibles |
+
+Sin root no hay workaround. proot no sintetiza entradas `getdents` para bindings
+(`app/src/main/cpp/proot/path/glue.c`), por lo que bindear nodos sueltos tampoco los
+listaría. La sesión y los programas que solo abren dispositivos concretos funcionan con
+normalidad.

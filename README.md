@@ -71,6 +71,14 @@ automático. Publica el texto completo al abrir un issue; los issues con
 - `Debug` — mensajes de depuración.
 - `Verbose` — mensajes detallados.
 
+### Limitaciones conocidas (SELinux OEM)
+
+En algunos dispositivos, la política SELinux del fabricante impide a la app enumerar
+`/dev`, `/dev/pts` y `/sys`, por lo que `ls /dev` puede fallar con `Permission denied`
+dentro de la sesión Debian. No es un bug: el acceso a dispositivos concretos
+(`/dev/null`, `/dev/tty`, ...) sigue funcionando. Detalles en
+[`docs/proot-debian-arm64-plan.md`](docs/proot-debian-arm64-plan.md) (sección 7).
+
 ## Mantenimiento y contribuciones
 
 - Java 17 requerido. NDK `30.0.14904198`, CMake `3.31.6`.
