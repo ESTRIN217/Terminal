@@ -26,7 +26,7 @@ app  →  termux-shared  →  terminal-view  →  terminal-emulator
 | `app` | `com.termux` | UI activities, services, app entry point — **Java + Kotlin (Compose)** |
 
 - `terminal-view` exposes `terminal-emulator` via `api()` (transitive). Don't change this to `implementation()` without understanding the impact on consumers.
-- `filemanager` depends on `termux-shared` (for `TermuxConstants`). The host wiring stays in `app`: `FileManagerSessionHost` hosts `FileManagerScreen` as a session tab, and the legacy `FileManagerComposeActivity` (opened by the classic `TermuxActivity` toolbar) wires storage permissions, `FileProvider`, and the Compose theme.
+- `filemanager` depends on `termux-shared` (for `TermuxConstants`). The host wiring stays in `app`: `FileManagerSessionHost` hosts `FileManagerScreen` as a session tab, and the legacy `FileManagerComposeActivity` (opened from the Compose session tab) wires storage permissions, `FileProvider`, and the Compose theme.
 - Modify `terminal-emulator` for emulation bugs. Modify `app` for UI/Activity bugs. Modify `termux-shared` for cross-cutting concerns.
 
 ## Language: Java + Kotlin
@@ -67,7 +67,7 @@ app  →  termux-shared  →  terminal-view  →  terminal-emulator
 ## Architecture Patterns
 
 - **Client Interface Pattern:** Interfaces define contracts (`TerminalSessionClient`, `TerminalViewClient`). Base classes provide no-op defaults (`TermuxTerminalSessionClientBase`). Concrete implementations in `app` extend bases. Follow this pattern for new callbacks.
-- **Service lifecycle:** `TermuxService` outlives `TermuxActivity`. Activity re-binds on rotation/restart. Don't store activity references in the service — use the client interface.
+- **Service lifecycle:** `TermuxService` outlives `TermuxComposeActivity`. Activity re-binds on rotation/restart. Don't store activity references in the service — use the client interface.
 - **Static utility classes** for stateless helpers (`TermuxUtils`, `TermuxThemeUtils`, `DataUtils`).
 
 ## Gotchas

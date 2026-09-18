@@ -27,8 +27,7 @@ class ComposeTerminalSessionClient(
     }
 
     override fun onSessionFinished(finishedSession: TerminalSession) {
-        // Mirrors TermuxTerminalSessionActivityClient.onSessionFinished(): a clean
-        // exit (0) or Ctrl+C (130) removes the session right away.
+        // A clean exit (0) or Ctrl+C (130) removes the session right away.
         val exitCode = finishedSession.exitStatus
         if (exitCode == 0 || exitCode == 130) {
             mOnRemoveSession(finishedSession)

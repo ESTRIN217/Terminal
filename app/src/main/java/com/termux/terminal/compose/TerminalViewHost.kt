@@ -45,9 +45,9 @@ fun TerminalViewHost(
     AndroidView(
         factory = { context ->
             TerminalView(context, null).apply {
-                // Match the android:focusableInTouchMode="true" set on the view in
-                // activity_termux.xml; without it the view can never take focus in touch
-                // mode, so neither key events nor the soft keyboard reach it.
+                // Match the android:focusableInTouchMode="true" historically set on the
+                // legacy activity_termux.xml root view; without it the view can never take
+                // focus in touch mode, so neither key events nor the soft keyboard reach it.
                 isFocusableInTouchMode = true
                 // Register with the activity so that the "More" menu of the text selection
                 // toolbar ("MORE" action in TextSelectionCursorController) shows a context

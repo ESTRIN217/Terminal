@@ -75,7 +75,7 @@ class ComposeTerminalViewClient(
         val s = session ?: return handleVirtualKeys(keyCode, e, true)
         if (keyCode == KeyEvent.KEYCODE_ENTER && !s.isRunning()) {
             // Enter on a finished session removes it, instead of writing to the
-            // dead process (mirrors TermuxTerminalViewClient.onKeyDown()).
+            // dead process.
             mOnRemoveSession(s)
             return true
         }
@@ -124,7 +124,7 @@ class ComposeTerminalViewClient(
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession?): Boolean {
         val s = session ?: return false
         if (ctrlDown && codePoint == 106 /* Ctrl+j or \n */ && !s.isRunning()) {
-            // Mirrors TermuxTerminalViewClient.onCodePoint(): remove the finished session.
+            // Remove a finished session on Ctrl+j.
             mOnRemoveSession(s)
             return true
         }

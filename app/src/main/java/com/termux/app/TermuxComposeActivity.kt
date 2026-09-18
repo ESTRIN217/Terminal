@@ -2,8 +2,11 @@ package com.termux.app
 
 import android.app.AlertDialog
 import android.content.ActivityNotFoundException
+import android.content.BroadcastReceiver
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.content.res.Configuration
 import android.net.Uri
@@ -33,10 +36,12 @@ import androidx.lifecycle.ViewModelProvider
 import com.termux.R
 import com.termux.app.activities.HelpActivity
 import com.termux.app.activities.SettingsComposeActivity
+import com.termux.app.api.file.FileReceiverActivity
 import com.termux.app.models.UserAction
 import com.termux.shared.activity.ActivityUtils
 import com.termux.shared.activities.ReportActivity
 import com.termux.shared.android.AndroidUtils
+import com.termux.shared.android.PermissionUtils
 import com.termux.shared.data.DataUtils
 import com.termux.shared.errors.Error
 import com.termux.shared.file.FileUtils
@@ -49,11 +54,13 @@ import com.termux.shared.shell.ShellUtils
 import com.termux.shared.termux.TermuxConstants
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY
 import com.termux.shared.termux.TermuxUtils
+import com.termux.shared.termux.crash.TermuxCrashUtils
 import com.termux.shared.termux.data.TermuxUrlUtils
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties
 import com.termux.shared.termux.settings.properties.TermuxPropertyConstants
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession
+import com.termux.shared.termux.theme.TermuxThemeUtils
 import com.termux.shared.view.KeyboardUtils
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.compose.ComposeTerminalSessionClient
@@ -98,6 +105,42 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         private const val CONTEXT_MENU_HELP_ID = 7
         private const val CONTEXT_MENU_SETTINGS_ID = 8
         private const val CONTEXT_MENU_REPORT_ID = 9
+
+        /**
+         * Build a launch intent for the Compose activity.
+         *
+         * @param context The [Context] to create the intent with
+         * @return An [Intent] targeting [TermuxComposeActivity]
+         */
+        @JvmStatic
+        fun newInstance(context: Context): Intent =
+            Intent(context, TermuxComposeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        /**
+         * Start the Compose activity, bringing it to the foreground.
+         *
+         * @param context The [Context] to start the activity from
+         */
+        @JvmStatic
+        fun startTermuxActivity(context: Context) {
+            ActivityUtils.startActivity(context, newInstance(context))
+        }
+
+        /**
+         * Broadcast a style reload request to the Compose activity.
+         *
+         * Works as a proxy for the activity and is called when a new session executes
+         * (see {@link TermuxService#createTermuxSession(ExecutionCommand)}).
+         *
+         * @param context The [Context] to send the broadcast from
+         * @param recreateActivity Whether the activity should be recreated after reloading
+         */
+        @JvmStatic
+        fun updateTermuxActivityStyling(context: Context, recreateActivity: Boolean) {
+            val stylingIntent = Intent(TERMUX_ACTIVITY.ACTION_RELOAD_STYLE)
+                .putExtra(TERMUX_ACTIVITY.EXTRA_RECREATE_ACTIVITY, recreateActivity)
+            context.sendBroadcast(stylingIntent)
+        }
     }
 
     private var mTermuxService: TermuxService? = null
@@ -123,6 +166,9 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
 
     /** Failsafe flag pending a Debian install (used by installer retry). */
     private var mPendingFailSafe = false
+
+    /** Receiver for style-reload, crash and storage-permission broadcasts while visible. */
+    private var mTermuxActivityBroadcastReceiver: BroadcastReceiver? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -211,6 +257,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         super.onStart()
         Logger.logDebug(LOG_TAG, "onStart")
         mIsVisible = true
+        registerTermuxActivityBroadcastReceiver()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -264,6 +311,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         super.onStop()
         Logger.logDebug(LOG_TAG, "onStop")
         mIsVisible = false
+        unregisterTermuxActivityBroadcastReceiver()
 
         // Save current session handle for restoration after rotation
         val session = mViewModel.uiState.value.activeSession
@@ -717,8 +765,122 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         }
     }
 
-    /** Build the "More" context menu of the text selection toolbar, mirroring the classic
-     * {@link TermuxActivity#onCreateContextMenu}. */
+    /**
+     * Register the broadcast receiver for app-wide broadcasts that previously
+     * targeted the classic activity: style reloads, app crash notifications and
+     * storage permission requests.
+     */
+    private fun registerTermuxActivityBroadcastReceiver() {
+        if (mTermuxActivityBroadcastReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent?) {
+                if (intent == null || !mIsVisible) return
+                when (intent.action) {
+                    TERMUX_ACTIVITY.ACTION_NOTIFY_APP_CRASH -> {
+                        Logger.logDebug(LOG_TAG, "Received intent to notify app crash")
+                        TermuxCrashUtils.notifyAppCrashFromCrashLogFile(context, LOG_TAG)
+                    }
+                    TERMUX_ACTIVITY.ACTION_RELOAD_STYLE -> {
+                        Logger.logDebug(LOG_TAG, "Received intent to reload styling")
+                        reloadActivityStyling(intent.getBooleanExtra(TERMUX_ACTIVITY.EXTRA_RECREATE_ACTIVITY, true))
+                    }
+                    TERMUX_ACTIVITY.ACTION_REQUEST_PERMISSIONS -> {
+                        Logger.logDebug(LOG_TAG, "Received intent to request storage permissions")
+                        requestStoragePermission(false)
+                    }
+                }
+            }
+        }
+        mTermuxActivityBroadcastReceiver = receiver
+        registerReceiver(receiver, IntentFilter().apply {
+            addAction(TERMUX_ACTIVITY.ACTION_RELOAD_STYLE)
+            addAction(TERMUX_ACTIVITY.ACTION_NOTIFY_APP_CRASH)
+            addAction(TERMUX_ACTIVITY.ACTION_REQUEST_PERMISSIONS)
+        })
+    }
+
+    private fun unregisterTermuxActivityBroadcastReceiver() {
+        mTermuxActivityBroadcastReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (e: Exception) {
+                Logger.logDebug(LOG_TAG, "Error unregistering broadcast receiver: ${e.message}")
+            }
+        }
+        mTermuxActivityBroadcastReceiver = null
+    }
+
+    /**
+     * Reload the terminal styling from termux.properties and re-apply it to the
+     * Compose UI. Mirrors the classic activity's reload handling.
+     *
+     * @param recreateActivity Whether the activity should be recreated after reloading
+     */
+    private fun reloadActivityStyling(recreateActivity: Boolean) {
+        if (::mProperties.isInitialized) {
+            mProperties.loadTermuxPropertiesFromDisk()
+
+            // Update NightMode.APP_NIGHT_MODE
+            TermuxThemeUtils.setAppNightMode(mProperties.getNightMode())
+
+            // Re-apply extra keys, toolbar and font size preferences to the ViewModel
+            loadExtraKeysConfig()
+            mViewModel.setExtraKeysVisible(mPreferences.shouldShowTerminalToolbar())
+            mViewModel.setFontSize(mPreferences.getFontSize().toFloat())
+        }
+
+        FileReceiverActivity.updateFileReceiverActivityComponentsState(this)
+
+        // To change the activity and drawer theme, activity needs to be recreated.
+        if (recreateActivity) {
+            Logger.logDebug(LOG_TAG, "Recreating activity")
+            recreate()
+        }
+    }
+
+    /**
+     * Request legacy or manage-external-storage permission and set up the storage
+     * symlinks once granted. Mirrors the classic activity's request handling.
+     *
+     * @param isPermissionCallback Whether this call is a callback from a previous request
+     */
+    private fun requestStoragePermission(isPermissionCallback: Boolean) {
+        Thread {
+            val requestCode = if (isPermissionCallback) -1 else PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION
+
+            if (PermissionUtils.checkAndRequestLegacyOrManageExternalStoragePermission(
+                    this@TermuxComposeActivity, requestCode, !isPermissionCallback)) {
+                if (isPermissionCallback)
+                    Logger.logInfoAndShowToast(this@TermuxComposeActivity, LOG_TAG,
+                        getString(com.termux.shared.R.string.msg_storage_permission_granted_on_request))
+
+                TermuxInstaller.setupStorageSymlinks(this@TermuxComposeActivity)
+            } else {
+                if (isPermissionCallback)
+                    Logger.logInfoAndShowToast(this@TermuxComposeActivity, LOG_TAG,
+                        getString(com.termux.shared.R.string.msg_storage_permission_not_granted_on_request))
+            }
+        }.start()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        Logger.logVerbose(LOG_TAG, "onActivityResult: requestCode: $requestCode")
+        if (requestCode == PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION) {
+            requestStoragePermission(true)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        Logger.logVerbose(LOG_TAG, "onRequestPermissionsResult: requestCode: $requestCode")
+        if (requestCode == PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION) {
+            requestStoragePermission(true)
+        }
+    }
+
+    /** Build the "More" context menu of the text selection toolbar. */
     override fun onCreateContextMenu(menu: ContextMenu, v: View, menuInfo: ContextMenu.ContextMenuInfo?) {
         val currentSession = getCurrentSession()
         if (currentSession == null) return

@@ -24,9 +24,9 @@ public class TermuxShellManager {
 
     /**
      * The foreground TermuxSessions which this service manages.
-     * Note that this list is observed by an activity, like TermuxActivity.mTermuxSessionListViewController,
-     * so any changes must be made on the UI thread and followed by a call to
-     * {@link ArrayAdapter#notifyDataSetChanged()}.
+     * Note that the Compose activity re-seeds this list when it binds to
+     * {@link com.termux.app.TermuxService}, so any changes must be made on the UI thread
+     * and followed by a call to {@link ArrayAdapter#notifyDataSetChanged()}.
      */
     public final List<TermuxSession> mTermuxSessions = new ArrayList<>();
 
