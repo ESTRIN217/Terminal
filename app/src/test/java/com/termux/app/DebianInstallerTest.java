@@ -76,4 +76,15 @@ public class DebianInstallerTest {
             TermuxConstants.LINKFIX_GUEST_SO_PATH);
         Assert.assertFalse(DebianInstaller.isLinkfixInstalled());
     }
+
+    @Test
+    public void testWelcomeConstants_pathAndScript_consistent() {
+        Assert.assertEquals("etc/profile.d/00-termux-welcome.sh",
+            TermuxConstants.DEBIAN_WELCOME_PROFILE_RELATIVE_PATH);
+        Assert.assertTrue(TermuxConstants.DEBIAN_WELCOME_SHELL_SCRIPT.startsWith("echo \"-> "));
+        Assert.assertTrue(TermuxConstants.DEBIAN_WELCOME_SHELL_SCRIPT.contains("\u00a1Bienvenido a Debian Linux en la terminal!"));
+        Assert.assertTrue(TermuxConstants.DEBIAN_WELCOME_SHELL_SCRIPT.contains("apt search <consulta>"));
+        Assert.assertTrue(TermuxConstants.DEBIAN_WELCOME_SHELL_SCRIPT.contains("apt update && apt upgrade"));
+        Assert.assertFalse(DebianInstaller.isWelcomeMessageInstalled());
+    }
 }

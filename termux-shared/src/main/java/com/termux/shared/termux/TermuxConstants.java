@@ -599,6 +599,12 @@ public final class TermuxConstants {
     /** Guest path of the link(2)-emulation shim inside the Debian rootfs. */
     public static final String LINKFIX_GUEST_SO_PATH = "/usr/libexec/termux-linkfix.so";
 
+    /** Guest-relative path of the login welcome-message profile script inside the Debian rootfs. */
+    public static final String DEBIAN_WELCOME_PROFILE_RELATIVE_PATH = "etc/profile.d/00-termux-welcome.sh";
+    /** Login welcome-message shell script written into the Debian rootfs, echoed by bash on every {@code --login} shell. */
+    public static final String DEBIAN_WELCOME_SHELL_SCRIPT =
+        "echo \"-> \u00a1Bienvenido a Debian Linux en la terminal!\n\nTrabajo con paquetes:\n\n - Buscar:     apt search <consulta>\n - Instalar:   apt install <paquete>\n - Desinstalar: apt remove <paquete>\n - Actualizar:  apt update && apt upgrade\"";
+
     /** Debian rootfs tarball download URL (official Debian OCI layer, debuerreotype, trixie arm64). */
     public static final String DEBIAN_ROOTFS_TARBALL_URL = "https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/f73bd086e8d0e5e1c8b838ccc442bf24eb3ea205/stable/oci/blobs/rootfs.tar.gz";
     /** SHA-256 of the Debian rootfs tarball (OCI layer digest, self-verifying). */
