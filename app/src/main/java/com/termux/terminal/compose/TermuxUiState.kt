@@ -22,7 +22,7 @@ data class TermuxUiState(
     val extraKeysModifiers: Set<String> = emptySet(),
     val isSoftKeyboardVisible: Boolean = false,
     val fontSize: Float = 14f,
-    val extraKeysConfig: ExtraKeysConfig = ExtraKeysConfig(rows = emptyList()),
+    val extraKeysConfig: ExtraKeysConfig = ExtraKeysConfig(pages = emptyList()),
     val debianInstaller: DebianInstallerUiState = DebianInstallerUiState()
 ) {
     /**

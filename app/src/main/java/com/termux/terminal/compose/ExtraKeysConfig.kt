@@ -6,19 +6,26 @@ import org.json.JSONObject
 /**
  * Parsed extra keys configuration from termux.properties.
  *
- * @param rows The rows of extra key buttons
+ * @param pages The pages of extra key rows; each page is a list of rows of buttons
  */
 data class ExtraKeysConfig(
-    val rows: List<List<ExtraKeyConfig>>
+    val pages: List<List<List<ExtraKeyConfig>>>
 ) {
+
+    /** The first page of extra key rows, as a convenience accessor. */
+    val rows: List<List<ExtraKeyConfig>>
+        get() = pages.firstOrNull() ?: emptyList()
+
     companion object {
         /** Empty extra keys configuration (fallback when parsing fails). */
-        val EMPTY = ExtraKeysConfig(rows = emptyList())
+        val EMPTY = ExtraKeysConfig(pages = emptyList())
 
-        /** Default extra keys configuration. */
+        /** Default extra keys configuration: main keys + a special keys page. */
         val DEFAULT = parse(
-            "[[\"ESC\",\"/\",{\"key\":\"-\",\"popup\":\"|\"},\"HOME\",\"UP\",\"END\",\"PGUP\"]," +
-            "[\"TAB\",\"CTRL\",\"ALT\",\"LEFT\",\"DOWN\",\"RIGHT\",\"PGDN\"]]"
+            "[[[\"ESC\",\"/\",{\"key\":\"-\",\"popup\":\"|\"},\"HOME\",\"UP\",\"END\",\"PGUP\"]," +
+            "[\"TAB\",\"CTRL\",\"ALT\",\"LEFT\",\"DOWN\",\"RIGHT\",\"PGDN\"]]," +
+            "[[\"F1\",\"F2\",\"F3\",\"F4\",\"F5\",\"F6\",\"F7\",\"F8\"]," +
+            "[\"F9\",\"F10\",\"F11\",\"F12\",\"INS\",\"DEL\",\"HOME\",\"END\"]]]"
         )
 
         /** Keys that support long-press repeat. */
@@ -66,35 +73,53 @@ data class ExtraKeysConfig(
         /**
          * Parse an extra keys JSON string into a config.
          *
+         * Supports both the legacy flat layout (a single page of rows, e.g.
+         * `[["ESC","/"],["TAB",...]]`) and a paginated layout (an array of pages,
+         * each an array of rows, e.g. `[[["ESC",...],["TAB",...]],[["F1",...]]]`).
+         *
          * @param jsonString The JSON string from termux.properties
          * @return The parsed config, or a partial config / [EMPTY] on parse error
          */
         fun parse(jsonString: String): ExtraKeysConfig {
-            val rows = mutableListOf<List<ExtraKeyConfig>>()
+            val pages = mutableListOf<List<List<ExtraKeyConfig>>>()
             return try {
                 val outerArray = JSONArray(jsonString)
-
-                for (i in 0 until outerArray.length()) {
-                    val rowArray = outerArray.getJSONArray(i)
-                    val row = mutableListOf<ExtraKeyConfig>()
-
-                    for (j in 0 until rowArray.length()) {
-                        val element = rowArray.get(j)
-                        val config = parseKeyElement(element)
-                        if (config != null) {
-                            row.add(config)
-                        }
+                val isPaginated = outerArray.length() > 0 &&
+                    outerArray.get(0) is JSONArray &&
+                    outerArray.getJSONArray(0).length() > 0 &&
+                    outerArray.getJSONArray(0).get(0) is JSONArray
+                if (isPaginated) {
+                    for (i in 0 until outerArray.length()) {
+                        val page = parseRows(outerArray.getJSONArray(i))
+                        if (page.isNotEmpty()) pages.add(page)
                     }
+                } else {
+                    val page = parseRows(outerArray)
+                    if (page.isNotEmpty()) pages.add(page)
+                }
+                ExtraKeysConfig(pages)
+            } catch (e: Exception) {
+                if (pages.isNotEmpty()) ExtraKeysConfig(pages) else ExtraKeysConfig(pages = emptyList())
+            }
+        }
 
-                    if (row.isNotEmpty()) {
-                        rows.add(row)
+        private fun parseRows(rowsArray: JSONArray): List<List<ExtraKeyConfig>> {
+            val rows = mutableListOf<List<ExtraKeyConfig>>()
+            for (i in 0 until rowsArray.length()) {
+                val rowArray = rowsArray.getJSONArray(i)
+                val row = mutableListOf<ExtraKeyConfig>()
+                for (j in 0 until rowArray.length()) {
+                    val element = rowArray.get(j)
+                    val config = parseKeyElement(element)
+                    if (config != null) {
+                        row.add(config)
                     }
                 }
-
-                ExtraKeysConfig(rows)
-            } catch (e: Exception) {
-                if (rows.isNotEmpty()) ExtraKeysConfig(rows) else ExtraKeysConfig(rows = emptyList())
+                if (row.isNotEmpty()) {
+                    rows.add(row)
+                }
             }
+            return rows
         }
 
         private fun parseKeyElement(element: Any?): ExtraKeyConfig? {

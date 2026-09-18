@@ -2,6 +2,7 @@ package com.termux.terminal.compose
 
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -12,6 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -52,7 +57,10 @@ fun interface ExtraKeysCallback {
 /**
  * Extra keys bar composable for terminal control keys.
  *
- * Renders a dynamic layout based on the [ExtraKeysConfig] parsed from termux.properties.
+ * Renders the extra keys as a [HorizontalPager]: the configured rows are the first
+ * page, and additional pages (e.g. special keys like F1-F12, INS, DEL) are reachable
+ * by swiping sideways, with a dot indicator when more than one page exists.
+ *
  * Supports long-press repeat for navigation and editing keys, and modifier lock on long-press.
  *
  * @param config The extra keys configuration
@@ -66,6 +74,70 @@ fun ExtraKeysBar(
     config: ExtraKeysConfig = ExtraKeysConfig.DEFAULT,
     activeModifiers: Set<String> = emptySet(),
     onToggleModifier: (String) -> Unit = {},
+    callback: ExtraKeysCallback,
+    modifier: Modifier = Modifier
+) {
+    if (config.pages.isEmpty()) return
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 2.dp)
+    ) {
+        val pagerState = rememberPagerState(pageCount = { config.pages.size })
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth()
+        ) { page ->
+            ExtraKeysPage(
+                rows = config.pages[page],
+                activeModifiers = activeModifiers,
+                onToggleModifier = onToggleModifier,
+                callback = callback
+            )
+        }
+        if (config.pages.size > 1) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                repeat(config.pages.size) { index ->
+                    val isCurrent = pagerState.currentPage == index
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 3.dp)
+                            .size(6.dp)
+                            .background(
+                                color = if (isCurrent) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.outlineVariant
+                                },
+                                shape = CircleShape
+                            )
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Renders a single configuration page (a set of key rows) as the classic stacked layout.
+ *
+ * @param rows The key rows of the page
+ * @param activeModifiers Sticky modifier keys currently active (e.g. "CTRL")
+ * @param onToggleModifier Callback to toggle a sticky modifier key
+ * @param callback Callback for key clicks
+ * @param modifier Modifier to apply
+ */
+@Composable
+private fun ExtraKeysPage(
+    rows: List<List<ExtraKeyConfig>>,
+    activeModifiers: Set<String>,
+    onToggleModifier: (String) -> Unit,
     callback: ExtraKeysCallback,
     modifier: Modifier = Modifier
 ) {
@@ -85,11 +157,9 @@ fun ExtraKeysBar(
     }
 
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 2.dp)
+        modifier = modifier.fillMaxWidth()
     ) {
-        config.rows.forEachIndexed { rowIndex, row ->
+        rows.forEachIndexed { rowIndex, row ->
             Row(
                 modifier = Modifier.fillMaxWidth().then(
                     if (rowIndex > 0) Modifier.padding(top = 2.dp) else Modifier
