@@ -10,6 +10,7 @@ import com.estrin217.filemanager.FileSortOption
 import com.estrin217.filemanager.R
 import com.termux.shared.termux.TermuxConstants
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,8 +24,9 @@ import java.util.ArrayDeque
  * ViewModel for the Compose file manager.
  *
  * Reuses [FileOperationsHelper] and [FileSortOption] for all IO so
- * behaviour matches the old `FileManagerActivity`. Paste runs on
- * Dispatchers.IO via [viewModelScope] instead of raw threads.
+ * behaviour matches the old `FileManagerActivity`. All filesystem work
+ * (listing, create/rename/delete/copy/paste, undo) runs on Dispatchers.IO
+ * via [viewModelScope]; callbacks fire on the main thread.
  */
 class FileManagerViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -34,6 +36,9 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     private val backStack = ArrayDeque<String>()
     private val forwardStack = ArrayDeque<String>()
     private var currentDir: File? = null
+
+    /** Cancels the previous listing when a new one is requested. */
+    private var refreshJob: Job? = null
 
     /** Last trashed file + original path, for Snackbar undo. */
     var lastTrash: Pair<File, File>? = null
@@ -169,57 +174,75 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         refresh()
     }
 
+    /**
+     * Relists the current directory off the main thread and publishes the
+     * result to the [uiState] flow.
+     *
+     * <p>The listing (enumerate, filter, sort, symlink scan) runs on
+     * {@code Dispatchers.IO}; a stale result from an outdated navigation is
+     * discarded when [currentDir] no longer matches the listed directory.
+     * [FileManagerUiState.busy] stays set until the listing is applied.</p>
+     */
     fun refresh() {
         val dir = currentDir ?: return
+        _uiState.update { it.copy(busy = true) }
         val s = _uiState.value
-        val listed = FileOperationsHelper.listFiles(dir)
-        if (listed == null) {
-            _uiState.update {
-                it.copy(
-                    currentPath = dir.absolutePath,
-                    title = titleFor(dir),
-                    files = emptyList(),
-                    focusedIndex = -1,
-                    canGoBack = backStack.isNotEmpty(),
-                    canGoForward = forwardStack.isNotEmpty(),
-                    hasClipboard = FileOperationsHelper.hasClipboard(),
-                    statusMessage = if (FileOperationsHelper.isSharedStoragePath(dir))
-                        getApplication<Application>().getString(R.string.filemanager_error_cannot_read_access, dir.absolutePath)
-                    else
-                        getApplication<Application>().getString(R.string.filemanager_error_cannot_read, dir.absolutePath)
-                )
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch(Dispatchers.IO) {
+            val listed = FileOperationsHelper.listFiles(dir)
+            withContext(Dispatchers.Main) {
+                if (currentDir != dir) return@withContext
+                if (listed == null) {
+                    _uiState.update {
+                        it.copy(
+                            busy = false,
+                            currentPath = dir.absolutePath,
+                            title = titleFor(dir),
+                            files = emptyList(),
+                            focusedIndex = -1,
+                            canGoBack = backStack.isNotEmpty(),
+                            canGoForward = forwardStack.isNotEmpty(),
+                            hasClipboard = FileOperationsHelper.hasClipboard(),
+                            statusMessage = if (FileOperationsHelper.isSharedStoragePath(dir))
+                                getApplication<Application>().getString(R.string.filemanager_error_cannot_read_access, dir.absolutePath)
+                            else
+                                getApplication<Application>().getString(R.string.filemanager_error_cannot_read, dir.absolutePath)
+                        )
+                    }
+                    return@withContext
+                }
+                val visible = listed.filter { s.showHidden || !it.name.startsWith(".") }
+                val filtered = if (s.searchQuery.isEmpty()) visible
+                else visible.filter { it.name.contains(s.searchQuery, ignoreCase = true) }
+                val sorted = filtered.sortedWith(s.sortOption.getComparator(s.sortAscending))
+                val symlinkTargets = HashMap<String, String?>()
+                val brokenLinks = HashSet<String>()
+                for (f in listed) {
+                    val raw = FileOperationsHelper.readSymlinkTargetRaw(f)
+                    if (raw != null) {
+                        symlinkTargets[f.absolutePath] = raw
+                        if (FileOperationsHelper.isBrokenSymlink(f)) brokenLinks.add(f.absolutePath)
+                    }
+                }
+                _uiState.update {
+                    // Normalize the focused cursor to the new listing: keep the current
+                    // position when it still fits, else fall back to the first entry.
+                    val normalized = if (sorted.isEmpty()) -1
+                    else it.focusedIndex.coerceIn(0, sorted.lastIndex)
+                    it.copy(
+                        busy = false,
+                        currentPath = dir.absolutePath,
+                        title = titleFor(dir),
+                        files = sorted,
+                        focusedIndex = normalized,
+                        canGoBack = backStack.isNotEmpty(),
+                        canGoForward = forwardStack.isNotEmpty(),
+                        hasClipboard = FileOperationsHelper.hasClipboard(),
+                        symlinkTargets = symlinkTargets,
+                        brokenLinks = brokenLinks
+                    )
+                }
             }
-            return
-        }
-        val visible = listed.filter { s.showHidden || !it.name.startsWith(".") }
-        val filtered = if (s.searchQuery.isEmpty()) visible
-        else visible.filter { it.name.contains(s.searchQuery, ignoreCase = true) }
-        val sorted = filtered.sortedWith(s.sortOption.getComparator(s.sortAscending))
-        val symlinkTargets = HashMap<String, String?>()
-        val brokenLinks = HashSet<String>()
-        for (f in listed) {
-            val raw = FileOperationsHelper.readSymlinkTargetRaw(f)
-            if (raw != null) {
-                symlinkTargets[f.absolutePath] = raw
-                if (FileOperationsHelper.isBrokenSymlink(f)) brokenLinks.add(f.absolutePath)
-            }
-        }
-        _uiState.update {
-            // Normalize the focused cursor to the new listing: keep the previous
-            // position when it still fits, else fall back to the first entry.
-            val normalized = if (sorted.isEmpty()) -1
-            else s.focusedIndex.coerceIn(0, sorted.lastIndex)
-            it.copy(
-                currentPath = dir.absolutePath,
-                title = titleFor(dir),
-                files = sorted,
-                focusedIndex = normalized,
-                canGoBack = backStack.isNotEmpty(),
-                canGoForward = forwardStack.isNotEmpty(),
-                hasClipboard = FileOperationsHelper.hasClipboard(),
-                symlinkTargets = symlinkTargets,
-                brokenLinks = brokenLinks
-            )
         }
     }
 
@@ -334,32 +357,59 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     fun selectedFiles(): List<File> =
         _uiState.value.selectedPaths.map(::File)
 
-    fun createFolder(name: String): Boolean {
-        val dir = currentDir ?: return false
-        val ok = FileOperationsHelper.createDirectory(dir, name.trim())
-        if (ok) refresh()
-        return ok
-    }
-
-    fun createFile(name: String): Boolean {
-        val dir = currentDir ?: return false
-        val ok = FileOperationsHelper.createFile(dir, name.trim())
-        if (ok) refresh()
-        return ok
+    /**
+     * Creates a folder in the current directory off the main thread.
+     *
+     * @param name Name of the new folder.
+     * @param onDone Invoked on the main thread with {@code true} on success.
+     */
+    fun createFolder(name: String, onDone: (Boolean) -> Unit) {
+        val dir = currentDir ?: run { onDone(false); return }
+        _uiState.update { it.copy(busy = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val ok = FileOperationsHelper.createDirectory(dir, name.trim())
+            withContext(Dispatchers.Main) {
+                refresh()
+                onDone(ok)
+            }
+        }
     }
 
     /**
-     * Creates a symlink in the current directory.
+     * Creates an empty file in the current directory off the main thread.
+     *
+     * @param name Name of the new file.
+     * @param onDone Invoked on the main thread with {@code true} on success.
+     */
+    fun createFile(name: String, onDone: (Boolean) -> Unit) {
+        val dir = currentDir ?: run { onDone(false); return }
+        _uiState.update { it.copy(busy = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val ok = FileOperationsHelper.createFile(dir, name.trim())
+            withContext(Dispatchers.Main) {
+                refresh()
+                onDone(ok)
+            }
+        }
+    }
+
+    /**
+     * Creates a symlink in the current directory off the main thread.
      *
      * @param name Name of the new link.
      * @param target Link target (absolute or relative to the current dir).
-     * @return true on success.
+     * @param onDone Invoked on the main thread with {@code true} on success.
      */
-    fun createSymlink(name: String, target: String): Boolean {
-        val dir = currentDir ?: return false
-        val ok = FileOperationsHelper.createSymlink(dir, name.trim(), target.trim())
-        if (ok) refresh()
-        return ok
+    fun createSymlink(name: String, target: String, onDone: (Boolean) -> Unit) {
+        val dir = currentDir ?: run { onDone(false); return }
+        _uiState.update { it.copy(busy = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val ok = FileOperationsHelper.createSymlink(dir, name.trim(), target.trim())
+            withContext(Dispatchers.Main) {
+                refresh()
+                onDone(ok)
+            }
+        }
     }
 
     /**
@@ -384,10 +434,22 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    fun renameFile(file: File, newName: String): Boolean {
-        val ok = FileOperationsHelper.renameFile(file, newName.trim())
-        if (ok) refresh()
-        return ok
+    /**
+     * Renames [file] off the main thread.
+     *
+     * @param file The file to rename.
+     * @param newName The new name (trimmed before use).
+     * @param onDone Invoked on the main thread with {@code true} on success.
+     */
+    fun renameFile(file: File, newName: String, onDone: (Boolean) -> Unit) {
+        _uiState.update { it.copy(busy = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val ok = FileOperationsHelper.renameFile(file, newName.trim())
+            withContext(Dispatchers.Main) {
+                refresh()
+                onDone(ok)
+            }
+        }
     }
 
     fun copySelection() {
@@ -407,17 +469,20 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun deleteFiles(files: List<File>, onDone: (ok: Boolean) -> Unit) {
+        _uiState.update { it.copy(busy = true) }
         viewModelScope.launch(Dispatchers.IO) {
             var ok = true
+            var trashed: Pair<File, File>? = null
             for (f in files) {
                 val trash = moveToTrash(f)
                 if (trash == null) {
                     ok = false
                 } else {
-                    lastTrash = trash to f
+                    trashed = trash to f
                 }
             }
             withContext(Dispatchers.Main) {
+                if (trashed != null) lastTrash = trashed
                 clearSelection()
                 refresh()
                 onDone(ok)
@@ -425,12 +490,17 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    fun undoDelete(): Boolean {
-        val (trash, original) = lastTrash ?: return false
-        val ok = FileOperationsHelper.moveFile(trash, original)
-        if (ok) lastTrash = null
-        refresh()
-        return ok
+    fun undoDelete(onDone: (Boolean) -> Unit) {
+        val entry = lastTrash ?: run { onDone(false); return }
+        _uiState.update { it.copy(busy = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val ok = FileOperationsHelper.moveFile(entry.first, entry.second)
+            withContext(Dispatchers.Main) {
+                if (ok) lastTrash = null
+                refresh()
+                onDone(ok)
+            }
+        }
     }
 
     private fun moveToTrash(file: File): File? {
@@ -451,6 +521,7 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         val sources = FileOperationsHelper.getClipboardFiles().toList()
         val isCut = FileOperationsHelper.getClipboardOperation() ==
             FileOperationsHelper.ClipboardOperation.CUT
+        _uiState.update { it.copy(busy = true) }
         viewModelScope.launch(Dispatchers.IO) {
             var count = 0
             for (src in sources) {

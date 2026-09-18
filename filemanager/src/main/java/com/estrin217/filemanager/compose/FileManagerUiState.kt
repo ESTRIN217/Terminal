@@ -30,6 +30,8 @@ data class FileManagerUiState(
     val canGoBack: Boolean = false,
     val canGoForward: Boolean = false,
     val hasClipboard: Boolean = false,
+    /** Whether a listing or file operation is in flight (blocking interactions). */
+    val busy: Boolean = false,
     val statusMessage: String? = null,
     val symlinkTargets: Map<String, String?> = emptyMap(),
     val brokenLinks: Set<String> = emptySet()

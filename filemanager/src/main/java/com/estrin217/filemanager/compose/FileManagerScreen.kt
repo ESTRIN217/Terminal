@@ -49,6 +49,7 @@ import androidx.compose.material3.FloatingActionButtonMenu
 import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -225,6 +226,7 @@ fun FileManagerScreen(
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.action_paste)) },
                                 leadingIcon = { Icon(Icons.Default.ContentPaste, null) },
+                                enabled = !state.busy,
                                 onClick = {
                                     menuExpanded = false
                                     viewModel.paste { count ->
@@ -257,20 +259,20 @@ fun FileManagerScreen(
         bottomBar = {
             if (state.selectionMode) {
                 BottomAppBar {
-                    IconButton(onClick = { viewModel.copySelection() }) {
+                    IconButton(onClick = { viewModel.copySelection() }, enabled = !state.busy) {
                         Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.action_copy))
                     }
-                    IconButton(onClick = { viewModel.cutSelection() }) {
+                    IconButton(onClick = { viewModel.cutSelection() }, enabled = !state.busy) {
                         Icon(Icons.Default.ContentCut, contentDescription = stringResource(R.string.action_cut))
                     }
-                    IconButton(onClick = { onShareFiles(viewModel.selectedFiles()) }) {
+                    IconButton(onClick = { onShareFiles(viewModel.selectedFiles()) }, enabled = !state.busy) {
                         Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
                     }
                     IconButton(onClick = {
                         dialogFile = null
                         nameInput = ""
                         dialog = DialogKind.DELETE
-                    }) {
+                    }, enabled = !state.busy) {
                         Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete))
                     }
                     Spacer(Modifier.weight(1f))
@@ -373,6 +375,9 @@ fun FileManagerScreen(
                     Spacer(Modifier.weight(1f))
                 }
             }
+            if (state.busy) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 itemsIndexed(state.files, key = { _, file -> file.absolutePath }) { index, file ->
                     val selected = state.selectedPaths.contains(file.absolutePath)
@@ -465,8 +470,8 @@ fun FileManagerScreen(
                 dialog = DialogKind.NONE
                 val target = File(state.currentPath)
                 onEnsureStorageAccess(target) {
-                    if (!viewModel.createFolder(name)) {
-                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.filemanager_error_create_folder)) }
+                    viewModel.createFolder(name) { ok ->
+                        if (!ok) scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.filemanager_error_create_folder)) }
                     }
                 }
             }
@@ -479,8 +484,8 @@ fun FileManagerScreen(
                 dialog = DialogKind.NONE
                 val target = File(state.currentPath)
                 onEnsureStorageAccess(target) {
-                    if (!viewModel.createFile(name)) {
-                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.filemanager_error_create_file)) }
+                    viewModel.createFile(name) { ok ->
+                        if (!ok) scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.filemanager_error_create_file)) }
                     }
                 }
             }
@@ -491,8 +496,8 @@ fun FileManagerScreen(
                 dialog = DialogKind.NONE
                 val dir = File(state.currentPath)
                 onEnsureStorageAccess(dir) {
-                    if (!viewModel.createSymlink(name, target)) {
-                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.filemanager_error_create_symlink)) }
+                    viewModel.createSymlink(name, target) { ok ->
+                        if (!ok) scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.filemanager_error_create_symlink)) }
                     }
                 }
             }
@@ -503,10 +508,12 @@ fun FileManagerScreen(
             onDismiss = { dialog = DialogKind.NONE },
             onConfirm = { name ->
                 val f = dialogFile
-                if (f != null && !viewModel.renameFile(f, name)) {
-                    scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.msg_error_rename)) }
-                }
                 dialog = DialogKind.NONE
+                if (f != null) {
+                    viewModel.renameFile(f, name) { ok ->
+                        if (!ok) scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.msg_error_rename)) }
+                    }
+                }
             }
         )
         DialogKind.DELETE -> {
@@ -527,7 +534,11 @@ fun FileManagerScreen(
                                         actionLabel = context.getString(R.string.action_undo)
                                     )
                                     if (result == SnackbarResult.ActionPerformed) {
-                                        viewModel.undoDelete()
+                                        viewModel.undoDelete { ok ->
+                                            if (!ok) scope.launch {
+                                                snackbarHostState.showSnackbar(context.getString(R.string.filemanager_delete_failed))
+                                            }
+                                        }
                                     }
                                 } else {
                                     snackbarHostState.showSnackbar(context.getString(R.string.filemanager_delete_failed))
