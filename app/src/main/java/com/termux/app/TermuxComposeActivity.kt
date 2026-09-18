@@ -302,6 +302,9 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         if (Intent.ACTION_RUN == action) {
             val isFailSafe = intent.getBooleanExtra(TERMUX_ACTIVITY.EXTRA_FAILSAFE_SESSION, false)
             if (mTermuxService != null) {
+                // Consume the shortcut request so a later activity recreation
+                // (rotation) does not re-process the same intent.
+                intent.action = null
                 addNewSession(isFailSafe, null)
             }
         }
@@ -484,10 +487,15 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                 TermuxInstaller.setupBootstrapIfNeeded(this) {
                     if (mTermuxService == null) return@setupBootstrapIfNeeded
                     // Handle initial intent (e.g., shortcuts with ACTION_RUN)
-                    val intent = intent
-                    val isFailSafe = intent?.getBooleanExtra(
+                    val launchIntent = intent
+                    val isFailSafe = launchIntent?.getBooleanExtra(
                         TERMUX_ACTIVITY.EXTRA_FAILSAFE_SESSION, false
                     ) ?: false
+                    // Consume the shortcut request so a later activity recreation
+                    // (rotation) does not re-process the same intent.
+                    if (launchIntent != null && Intent.ACTION_RUN == launchIntent.action) {
+                        launchIntent.action = null
+                    }
                     ensureProotAndDebian(isFailSafe)
                 }
             }
@@ -526,6 +534,12 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                     }
                 }
             }
+
+            // Honor a shortcut intent delivered on a cold start when sessions already
+            // exist (the bootstrap path above only runs when the service has no sessions).
+            // handleIntent no-ops for non ACTION_RUN intents and consumes the action so
+            // recreation does not re-process it.
+            handleIntent(intent)
         }
 
         // Notify other apps that Termux opened
@@ -627,7 +641,13 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         }
 
         val currentSession = getCurrentSession()
-        val workingDirectory = currentSession?.getCwd() ?: mProperties.getDefaultWorkingDirectory()
+        // A failsafe session runs a host (/system/bin/sh) shell but intentionally
+        // starts in the Debian guest home on the host filesystem (files/debian/root).
+        val workingDirectory = if (isFailSafe) {
+            TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH
+        } else {
+            currentSession?.getCwd() ?: mProperties.getDefaultWorkingDirectory()
+        }
 
         val termuxSession = service.createTermuxSession(
             null, null, null, workingDirectory, isFailSafe, sessionName

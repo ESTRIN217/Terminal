@@ -34,7 +34,7 @@
             android:targetPackage="com.estrin217.terminal"
             android:targetClass="com.termux.app.TermuxComposeActivity"
             android:name="android.shortcut.conversation">
-            <extra android:name="com.termux.app.failsafe_session" android:value="true"/>
+            <extra android:name="com.estrin217.terminal.app.failsafe_session" android:value="true"/>
         </intent>
     </shortcut>
 
