@@ -2,7 +2,7 @@
 
 > Objetivo: arrancar la 2.0 sin romper la capacidad de **dogfooding** (compilar la app dentro de la propia app). Mitigación acordada: **backup instalable funcional** (APK v1.119.0 guardado + segundo dispositivo como rescatador).
 
-Fecha: septiembre 2026 · Base: commit `f8ce27e2` (v1.119.0, rama `master`)
+Fecha: septiembre 2026 · Base: commit `f8ce27e2` (v1.119.0) · Rama de trabajo: `release/2.0` (último: `43648445`)
 
 ---
 
@@ -33,11 +33,11 @@ Fecha: septiembre 2026 · Base: commit `f8ce27e2` (v1.119.0, rama `master`)
 - Framework de **feature-flags** para features de alto riesgo (si no existe: validar en `TermuxViews`/`Settings`).
 - Decidir la estrategia de ramas: `master` con bugs-solo + rama `release/2.0` acumulando features (recomendado) **o** features mergeadas directo a `master` con el checklist.
 
-### Fase 1 — Quick wins de bajo riesgo (aisladas, `Added:`)
+### Fase 1 — Quick wins de bajo riesgo (aisladas, `Added:`) ✅
 
-1. **Mostrar licencia de proot y Debian** — añadir entradas en `LicensesScreen.kt` (licencias en `app/src/main/assets/arm64-v8a/proot` y `app/src/main/assets/debian`). Trivial.
-2. **Copiar ruta de archivos/carpetas** en el gestor de archivos — nueva acción en `FileOperationsHelper` + icono en `FileManagerScreen`. Bajo riesgo.
-3. **Colores verdaderos 24-bit** — el emulador ya soporta `#RRGGBB` (`terminal-emulator/.../TerminalColors.java:41`); la feature real es exponerlo/aplicarlo en la paleta Compose (`TerminalPalette.kt`) y ajustes. Bajo.
+1. **Mostrar licencia de proot y Debian** — ✅ hecho (`d78ff9ba`): entradas GPLv2/PRoot y Debian en `LicensesScreen.kt`, strings EN/ES. Proot es GPL-2.0+ y Debian enlaza a `debian.org/legal/licenses/` (las carpetas `assets/` solo contienen binarios, no textos de licencia).
+2. **Copiar ruta de archivos/carpetas** — ✅ hecho (`1155a17e`): botón "Copiar ruta" en el diálogo de detalles y en la barra de selección múltiple (modo multi-selección), strings EN/ES/PT.
+3. **Colores verdaderos 24-bit** — ✅ hecho (`43648445`): toggle "Esquema de colores personalizado" en Ajustes. `TerminalColorSchemeLoader` lee `~/.termux/colors.properties` (claves `foreground/background/cursor/color0..15` con `#RRGGBB`) reutilizando `TerminalColorScheme` del emulador; `TerminalPalette` acomoda un `scheme` completo de 259 colores y `applyPalette` lo copia al emulador. Recarga automática al volver de Ajustes. El emulador ya soportaba SGR `38;2;r;g;b`/`48;2;...`.
 
 ### Fase 2 — UI Compose (medio riesgo)
 
@@ -61,8 +61,8 @@ Fecha: septiembre 2026 · Base: commit `f8ce27e2` (v1.119.0, rama `master`)
 
 | Fase | Estado |
 |---|---|
-| Fase 0 — Cimientos | Pendiente |
-| Fase 1 — Quick wins | Pendiente |
+| Fase 0 — Cimientos | Completada |
+| Fase 1 — Quick wins | Completada |
 | Fase 2 — UI Compose | Pendiente |
 | Fase 3 — Rendering | Pendiente |
 | Fase 4 — Release 2.0 | Pendiente |
