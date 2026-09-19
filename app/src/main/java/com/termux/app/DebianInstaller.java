@@ -17,6 +17,7 @@ import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -631,8 +632,9 @@ final class DebianInstaller {
      * <p>Installs extracted before mode preservation shipped with
      * {@code 0700} on {@code tmp}, {@code var/tmp} and {@code var/lib/dpkg},
      * which makes {@code dpkg} fail with {@code Permission denied} on
-     * {@code status-old} and backup links even as (fake) root. Also installs
-     * the link(2)-emulation shim if missing.</p>
+     * {@code status-old} and backup links even as (fake) root. Also refreshes
+     * the link(2)-emulation shim install if it differs from the bundled asset
+     * (older shims predate nlink emulation for shadow-utils locking).</p>
      *
      * @param context The {@link Context} to read the bundled linkfix asset.
      * @return Returns the {@link Error} if no usable rootfs is installed,
@@ -642,7 +644,8 @@ final class DebianInstaller {
         if (!isInstalled())
             return new Error("No usable Debian rootfs installed at \"" + TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "\".");
         File root = new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH);
-        if (!isLinkfixInstalled()) {
+        if (linkfixNeedsRefresh(context,
+            new File(root, TermuxConstants.LINKFIX_GUEST_SO_PATH.substring(1)))) {
             Error error = installLinkfixToRootfs(context, root);
             if (error != null) return error;
         }
@@ -651,6 +654,56 @@ final class DebianInstaller {
             if (error != null) return error;
         }
         return enforceCriticalPermissions(root);
+    }
+
+    /**
+     * Whether the on-device linkfix shim differs from the one bundled in the APK.
+     *
+     * <p>The shim is only regenerated on install, so devices that kept an older
+     * build (e.g. one predating nlink emulation for shadow-utils locking) would
+     * never receive fixes. Byte comparison makes the idempotent repair refresh
+     * a stale shim exactly once per updated APK.</p>
+     *
+     * @param context The {@link Context} to read the bundled linkfix asset.
+     * @param installed The installed shim {@link File} inside the rootfs.
+     * @return Returns {@code true} when missing or different from the bundled asset.
+     */
+    private static boolean linkfixNeedsRefresh(Context context, File installed) {
+        if (!installed.isFile()) return true;
+        try (InputStream asset = context.getAssets().open(TermuxConstants.LINKFIX_SO_ASSET_PATH);
+             InputStream disk = new BufferedInputStream(new FileInputStream(installed))) {
+            byte[] a = new byte[8192];
+            byte[] b = new byte[8192];
+            while (true) {
+                int na = readFully(asset, a);
+                int nb = readFully(disk, b);
+                if (na != nb) return true;
+                if (na == 0) return false;
+                for (int i = 0; i < na; i++) {
+                    if (a[i] != b[i]) return true;
+                }
+            }
+        } catch (Exception e) {
+            Logger.logError(LOG_TAG, "Failed to compare linkfix asset with installed shim: " + e.getMessage());
+            return true;
+        }
+    }
+
+    /**
+     * Read until the buffer is full or end-of-stream.
+     *
+     * @param in The {@link InputStream} to read from.
+     * @param buf The destination buffer.
+     * @return Returns the number of bytes read, or {@code 0} at end-of-stream.
+     */
+    private static int readFully(InputStream in, byte[] buf) throws IOException {
+        int total = 0;
+        while (total < buf.length) {
+            int read = in.read(buf, total, buf.length - total);
+            if (read == -1) break;
+            total += read;
+        }
+        return total;
     }
 
     /**
