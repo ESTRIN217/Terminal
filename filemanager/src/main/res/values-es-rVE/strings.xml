@@ -12,6 +12,7 @@
     <string name="action_rename">Renombrar</string>
     <string name="action_delete">Eliminar</string>
     <string name="action_copy">Copiar</string>
+    <string name="action_copy_path">Copiar ruta</string>
     <string name="action_cut">Cortar</string>
     <string name="action_paste">Pegar</string>
     <string name="action_share">Compartir información</string>
@@ -26,6 +27,8 @@
     <!-- File Manager Messages -->
     <string name="msg_paste_success">%1$d elemento(s) pegado(s)</string>
     <string name="msg_error_rename">Error al renombrar</string>
+    <string name="msg_path_copied">Ruta copiada al portapapeles</string>
+    <string name="msg_paths_copied">%1$d rutas copiadas al portapapeles</string>
 
     <!-- File Manager UI -->
     <string name="filemanager_more">Más</string>

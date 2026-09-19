@@ -12,6 +12,7 @@
     <string name="action_rename">Renomear</string>
     <string name="action_delete">Excluir</string>
     <string name="action_copy">Copiar</string>
+    <string name="action_copy_path">Copiar caminho</string>
     <string name="action_cut">Cortar</string>
     <string name="action_paste">Colar</string>
     <string name="action_share">Compartilhar</string>
@@ -28,6 +29,8 @@
     <!-- File Manager Messages -->
     <string name="msg_paste_success">%1$d item(ns) colado(s)</string>
     <string name="msg_error_rename">Erro ao renomear</string>
+    <string name="msg_path_copied">Caminho copiado para a área de transferência</string>
+    <string name="msg_paths_copied">%1$d caminhos copiados para a área de transferência</string>
 
     <!-- File Details -->
     <string name="detail_name">Nome</string>

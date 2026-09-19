@@ -12,6 +12,7 @@
     <string name="action_rename">Rename</string>
     <string name="action_delete">Delete</string>
     <string name="action_copy">Copy</string>
+    <string name="action_copy_path">Copy path</string>
     <string name="action_cut">Cut</string>
     <string name="action_paste">Paste</string>
     <string name="action_share">Share information</string>
@@ -26,6 +27,8 @@
     <!-- File Manager Messages -->
     <string name="msg_paste_success">Pasted %1$d item(s)</string>
     <string name="msg_error_rename">Failed to rename</string>
+    <string name="msg_path_copied">Path copied to clipboard</string>
+    <string name="msg_paths_copied">%1$d paths copied to clipboard</string>
 
     <!-- File Manager UI -->
     <string name="filemanager_more">More</string>

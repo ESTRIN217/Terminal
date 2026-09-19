@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
@@ -83,6 +84,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import com.estrin217.filemanager.FileOperationsHelper
 import com.estrin217.filemanager.FileSortOption
 import com.estrin217.filemanager.R
@@ -138,6 +142,20 @@ fun FileManagerScreen(
 
     fun executeKeyAction(action: FileManagerKeyAction): Boolean =
         FileManagerActions.execute(action, viewModel, onEnsureStorageAccess, onOpenFile)
+
+    fun copyPathsToClipboard(paths: List<File>) {
+        if (paths.isEmpty()) return
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(
+            ClipData.newPlainText("paths", paths.joinToString("\n") { it.absolutePath })
+        )
+        scope.launch {
+            snackbarHostState.showSnackbar(
+                if (paths.size == 1) context.getString(R.string.msg_path_copied)
+                else context.getString(R.string.msg_paths_copied, paths.size)
+            )
+        }
+    }
 
     fun hardwareKeyAction(key: Key): FileManagerKeyAction = when (key) {
         Key.DirectionUp -> FileManagerKeyAction.FOCUS_UP
@@ -264,6 +282,9 @@ fun FileManagerScreen(
                     }
                     IconButton(onClick = { viewModel.cutSelection() }, enabled = !state.busy) {
                         Icon(Icons.Default.ContentCut, contentDescription = stringResource(R.string.action_cut))
+                    }
+                    IconButton(onClick = { copyPathsToClipboard(viewModel.selectedFiles()) }, enabled = !state.busy) {
+                        Icon(Icons.Default.FileCopy, contentDescription = stringResource(R.string.action_copy_path))
                     }
                     IconButton(onClick = { onShareFiles(viewModel.selectedFiles()) }, enabled = !state.busy) {
                         Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
@@ -601,6 +622,10 @@ fun FileManagerScreen(
                     },
                     dismissButton = {
                         Row {
+                            TextButton(onClick = {
+                                copyPathsToClipboard(listOf(f))
+                                dialog = DialogKind.NONE
+                            }) { Text(stringResource(R.string.action_copy_path)) }
                             TextButton(onClick = {
                                 nameInput = f.name
                                 dialog = DialogKind.RENAME
