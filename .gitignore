@@ -45,3 +45,6 @@ local.properties
 .swp
 ehthumbs.db
 Thumbs.db
+
+# Checkpoints de compilación probada (scripts/checkpoint.sh)
+/checkpoints/
