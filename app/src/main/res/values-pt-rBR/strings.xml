@@ -56,6 +56,11 @@
     <string name="title_max_terminals_reached">Máximo de terminais atingido</string>
     <string name="msg_max_terminals_reached">Feche os existentes antes de criar um novo.</string>
 
+    <!-- Visualização dividida em dois painéis -->
+    <string name="split_view">Visualização dividida</string>
+    <string name="close_split">Fechar divisão</string>
+    <string name="split_picker_title">Selecionar seção secundária</string>
+
     <string name="title_rename_session">Definir nome da sessão</string>
     <string name="action_rename_session_confirm">Definir</string>
     <string name="title_create_named_session">Nova sessão nomeada</string>

@@ -32,10 +32,9 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
             _uiState.update { state ->
                 val newModel = TermuxSessionUiModel.Terminal(name = name, session = session)
                 val newSessions = state.sessions + newModel
-                state.copy(
-                    sessions = newSessions,
-                    activeSessionIndex = newSessions.lastIndex
-                )
+                sanitizeSplit(activateSession(state.copy(
+                    sessions = newSessions
+                ), newSessions.lastIndex))
             }
         }
     }
@@ -58,10 +57,9 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
                 val name = if (fmCount == 0) baseName else "$baseName ${fmCount + 1}"
                 val newModel = TermuxSessionUiModel.FileManager(id = id, name = name)
                 val newSessions = state.sessions + newModel
-                state.copy(
-                    sessions = newSessions,
-                    activeSessionIndex = newSessions.lastIndex
-                )
+                sanitizeSplit(activateSession(state.copy(
+                    sessions = newSessions
+                ), newSessions.lastIndex))
             }
         }
         return id
@@ -85,10 +83,10 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
                     else -> state.activeSessionIndex
                 }
 
-                state.copy(
+                sanitizeSplit(state.copy(
                     sessions = newSessions,
                     activeSessionIndex = newActiveIndex
-                )
+                ))
             }
         }
     }
@@ -96,16 +94,16 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
     /**
      * Switch to a different session.
      *
+     * With a split active: when the target session is already visible in a pane it only
+     * becomes the focused one (pane positions never move); when it is not visible, it
+     * replaces the session in the currently focused pane slot.
+     *
      * @param index Index of the session to switch to
      */
     fun switchSession(index: Int) {
         viewModelScope.launch {
             _uiState.update { state ->
-                if (index in state.sessions.indices) {
-                    state.copy(activeSessionIndex = index)
-                } else {
-                    state
-                }
+                sanitizeSplit(activateSession(state, index))
             }
         }
     }
@@ -118,7 +116,7 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
             _uiState.update { state ->
                 if (state.sessions.isEmpty()) return@update state
                 val newIndex = (state.activeSessionIndex + 1) % state.sessions.size
-                state.copy(activeSessionIndex = newIndex)
+                sanitizeSplit(activateSession(state, newIndex))
             }
         }
     }
@@ -135,7 +133,56 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
                 } else {
                     state.activeSessionIndex - 1
                 }
-                state.copy(activeSessionIndex = newIndex)
+                sanitizeSplit(activateSession(state, newIndex))
+            }
+        }
+    }
+
+    /**
+     * Set the session shown in the other pane of the split view.
+     *
+     * When no split is active, the active session stays as the left pane and [id] becomes the
+     * right pane. With a split already open, the pane that does not hold the focused session
+     * is replaced, keeping both positions stable. Passing null clears the split.
+     *
+     * @param id Stable id of the session to show in the other pane, or null to clear
+     */
+    fun setSplitSession(id: String?) {
+        viewModelScope.launch {
+            _uiState.update { state ->
+                if (id == null) return@update state.copy(split = null)
+                val activeId = state.activeSessionModel?.id ?: return@update state
+                if (id == activeId) return@update state
+                sanitizeSplit(state.copy(split = SplitState(paneOneId = activeId, paneTwoId = id)))
+            }
+        }
+    }
+
+    /**
+     * Close the split view, keeping the active session full-screen.
+     */
+    fun clearSplit() {
+        viewModelScope.launch {
+            _uiState.update { state ->
+                state.copy(split = null)
+            }
+        }
+    }
+
+    /**
+     * Make the session with the given id the focused (active) session.
+     *
+     * When the session occupies a split pane it becomes the focused pane without moving: the
+     * pane stays in its position. When no split is active this is equivalent to switching to
+     * that session.
+     *
+     * @param id Stable id of the session to focus
+     */
+    fun focusSession(id: String) {
+        viewModelScope.launch {
+            _uiState.update { state ->
+                val index = state.sessions.indexOfFirst { it.id == id }
+                activateSession(state, index)
             }
         }
     }
@@ -344,5 +391,67 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
                 state.copy(debianInstaller = state.debianInstaller.copy(visible = false))
             }
         }
+    }
+}
+
+/**
+ * Activate (focus) the session at [index].
+ *
+ * No split active: simply becomes the focused session.
+ *
+ * Split active: when the target session already occupies a pane it only becomes focused and
+ * the pane positions never move. When it is not visible, it replaces the session in the pane
+ * that currently holds the focused session, so the newly activated session is always visible
+ * and focused.
+ *
+ * @param state The current UI state
+ * @param index Index of the session to activate
+ * @return The updated state
+ */
+internal fun activateSession(state: TermuxUiState, index: Int): TermuxUiState {
+    if (index !in state.sessions.indices) return state
+    val split = state.split
+    if (split == null) return state.copy(activeSessionIndex = index)
+    val targetId = state.sessions[index].id
+    if (split.contains(targetId)) return state.copy(activeSessionIndex = index)
+    val activeId = state.activeSessionModel?.id
+    return if (split.paneOneId == activeId) {
+        state.copy(
+            activeSessionIndex = index,
+            split = SplitState(paneOneId = targetId, paneTwoId = split.paneTwoId)
+        )
+    } else {
+        state.copy(
+            activeSessionIndex = index,
+            split = SplitState(paneOneId = split.paneOneId, paneTwoId = targetId)
+        )
+    }
+}
+
+/**
+ * Drop stale split panes and restore the invariant that the focused session is visible.
+ *
+ * Pane ids referencing removed sessions are dropped; when fewer than two panes remain valid
+ * the split is cleared. When the focused session is not one of the panes (for example after a
+ * session the split tracked was replaced), focus falls back to the left pane.
+ *
+ * @param state The current UI state
+ * @return The state with a valid split and a focused session that is visible when split
+ */
+internal fun sanitizeSplit(state: TermuxUiState): TermuxUiState {
+    val split = state.split ?: return state
+    val validPaneIds = listOf(split.paneOneId, split.paneTwoId)
+        .distinct()
+        .filter { id -> state.sessions.any { it.id == id } }
+    if (validPaneIds.size < 2) return state.copy(split = null)
+    val validSplit = SplitState(paneOneId = validPaneIds[0], paneTwoId = validPaneIds[1])
+    val focusedId = state.activeSessionModel?.id
+    return if (focusedId != null && validSplit.contains(focusedId)) {
+        state.copy(split = validSplit)
+    } else {
+        state.copy(
+            split = validSplit,
+            activeSessionIndex = state.sessions.indexOfFirst { it.id == validSplit.paneOneId }
+        )
     }
 }

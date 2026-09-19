@@ -18,8 +18,9 @@ class ComposeTerminalSessionClient(
 ) : TermuxTerminalSessionClientBase() {
 
     override fun onTextChanged(changedSession: TerminalSession) {
-        if (changedSession == mViewModel.uiState.value.activeSession)
-            TerminalViewRegistry.activeView?.onScreenUpdated()
+        // Repaint the composed view rendering this session, whether it is the focused
+        // pane or a secondary pane of a split view.
+        TerminalViewRegistry.getViewForSession(changedSession)?.onScreenUpdated()
     }
 
     override fun onTitleChanged(updatedSession: TerminalSession) {
@@ -46,7 +47,6 @@ class ComposeTerminalSessionClient(
     }
 
     override fun onColorsChanged(changedSession: TerminalSession) {
-        if (changedSession == mViewModel.uiState.value.activeSession)
-            TerminalViewRegistry.activeView?.onScreenUpdated()
+        TerminalViewRegistry.getViewForSession(changedSession)?.onScreenUpdated()
     }
 }

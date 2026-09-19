@@ -6,7 +6,10 @@ import com.termux.terminal.TerminalSession
  * UI state for the Termux main screen.
  *
  * @param sessions List of active terminal sessions
- * @param activeSessionIndex Index of the currently active session
+ * @param activeSessionIndex Index of the currently active (focused) session: the pane that
+ * receives input and is highlighted in the tab bar
+ * @param split The two stable panes of a split view, or null when no split is active. Unlike
+ * the active index, pane positions never move: focusing a pane keeps its session in place
  * @param isDrawerOpen Whether the navigation drawer is open
  * @param isExtraKeysVisible Whether the extra keys bar is visible
  * @param extraKeysModifiers Sticky modifier keys active on the extra keys bar
@@ -17,6 +20,7 @@ import com.termux.terminal.TerminalSession
 data class TermuxUiState(
     val sessions: List<TermuxSessionUiModel> = emptyList(),
     val activeSessionIndex: Int = 0,
+    val split: SplitState? = null,
     val isDrawerOpen: Boolean = false,
     val isExtraKeysVisible: Boolean = true,
     val extraKeysModifiers: Set<String> = emptySet(),
@@ -32,6 +36,26 @@ data class TermuxUiState(
         get() = sessions.getOrNull(activeSessionIndex)
 
     /**
+     * Get the model of the session occupying the left split pane, or null when no split is
+     * active or the pane session was removed.
+     */
+    val splitPaneOneModel: TermuxSessionUiModel?
+        get() = split?.paneOneId?.let { id -> sessions.firstOrNull { it.id == id } }
+
+    /**
+     * Get the model of the session occupying the right split pane, or null when no split is
+     * active or the pane session was removed.
+     */
+    val splitPaneTwoModel: TermuxSessionUiModel?
+        get() = split?.paneTwoId?.let { id -> sessions.firstOrNull { it.id == id } }
+
+    /**
+     * Whether a split (two panes) is active.
+     */
+    val isSplitActive: Boolean
+        get() = split != null
+
+    /**
      * Get the currently active terminal session, or null if no terminal session is active.
      *
      * Returns null when the active tab is not a terminal session (e.g. a file manager session).
@@ -44,6 +68,30 @@ data class TermuxUiState(
      */
     val hasSessions: Boolean
         get() = sessions.isNotEmpty()
+}
+
+/**
+ * The two panes of a split view.
+ *
+ * The slots are positional and stable: [paneOneId] always occupies the left half and
+ * [paneTwoId] the right half. Changing which session is focused (see
+ * [TermuxUiState.activeSessionIndex]) never moves a session between slots; only switching to
+ * a session that is not visible replaces the slot that currently holds the focused session.
+ *
+ * @param paneOneId Stable id of the session in the left pane
+ * @param paneTwoId Stable id of the session in the right pane
+ */
+data class SplitState(
+    val paneOneId: String,
+    val paneTwoId: String
+) {
+    /**
+     * Whether the given session id occupies either pane.
+     *
+     * @param id The session id to look up
+     * @return true when the session is one of the two panes
+     */
+    fun contains(id: String): Boolean = id == paneOneId || id == paneTwoId
 }
 
 /**

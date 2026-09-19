@@ -134,9 +134,12 @@ class ComposeTerminalViewClient(
     }
 
     override fun onEmulatorSet() {
-        TerminalViewRegistry.activeView?.setTerminalCursorBlinkerState(true, true)
-        // The view palette could not be applied when the emulator did not exist yet.
-        TerminalViewRegistry.reapplyPendingPalette()
+        // The emulator of any composed view (focused or secondary pane) may be created after
+        // layout; re-apply the pending palette and enable the cursor blinker on each of them.
+        TerminalViewRegistry.forComposedViews { view ->
+            view.setTerminalCursorBlinkerState(true, true)
+            TerminalViewRegistry.reapplyPendingPalette(view)
+        }
     }
 
     override fun logError(tag: String?, message: String?) {

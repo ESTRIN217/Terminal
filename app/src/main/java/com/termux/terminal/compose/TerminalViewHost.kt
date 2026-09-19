@@ -1,5 +1,6 @@
 package com.termux.terminal.compose
 
+import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -23,11 +24,18 @@ import com.termux.view.TerminalViewClient
  * Note that the renderer does not paint cells carrying the default background color, so the
  * palette background is also set as the view background color.
  *
+ * When [isActivePane] is false (secondary pane of a split view) the view is registered in
+ * [TerminalViewRegistry] but does not take focus, so keyboard input, extra keys and the
+ * context menu keep targeting the focused pane. Gaining Android focus while the pane is not
+ * active triggers [onActivatePane] so the pane can be promoted to the focused one.
+ *
  * @param session The terminal session to attach to the view
  * @param fontSize Font size in density-independent pixels
  * @param viewClient The [TerminalViewClient] implementation for view callbacks
  * @param palette Colors applied to the emulator and the view; reapplied when it changes, or when
  * the session emulator becomes available later (see [TerminalViewRegistry.reapplyPendingPalette])
+ * @param isActivePane Whether this view belongs to the focused (active) pane of a split view
+ * @param onActivatePane Callback when the view gains focus while it is not the active pane
  * @param modifier Modifier to apply to the composable
  */
 @Composable
@@ -36,11 +44,24 @@ fun TerminalViewHost(
     fontSize: Float,
     viewClient: TerminalViewClient,
     palette: TerminalPalette,
+    isActivePane: Boolean = true,
+    onActivatePane: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
+    var appliedSession by remember { mutableStateOf<TerminalSession?>(null) }
     var appliedFontSize by remember { mutableStateOf(0f) }
     var appliedPalette by remember { mutableStateOf<TerminalPalette?>(null) }
+
+    val focusListener = remember(session, isActivePane, onActivatePane) {
+        View.OnFocusChangeListener { view, hasFocus ->
+            // A secondary pane that gains Android focus (user tapped it) requests to become
+            // the active pane through the focus change callback. Only the gain event counts:
+            // firing on focus loss too would re-activate the pane right after a role swap
+            // promoted a different pane, making both panes (and the tab indicator) bounce.
+            if (hasFocus && !isActivePane) view.post { onActivatePane?.invoke() }
+        }
+    }
 
     AndroidView(
         factory = { context ->
@@ -57,24 +78,37 @@ fun TerminalViewHost(
                 setTextSize(fontSize.toInt())
                 appliedFontSize = fontSize
                 attachSession(session)
+                appliedSession = session
                 // The emulator is usually not created until the view gets its size from
                 // layout, in which case applyPalette() fails and must be retried later.
                 if (TerminalViewRegistry.applyPalette(this, session, palette)) {
                     appliedPalette = palette
-                    TerminalViewRegistry.setPendingPalette(null)
+                    TerminalViewRegistry.setPendingPalette(this, null)
                 } else {
                     appliedPalette = null
-                    TerminalViewRegistry.setPendingPalette(palette)
+                    TerminalViewRegistry.setPendingPalette(this, palette)
                 }
                 // Posted so that focus is taken after the view is attached and laid out,
                 // otherwise showSoftInput() calls silently fail.
-                post { requestFocus() }
-                TerminalViewRegistry.activeView = this
+                post { if (isActivePane) requestFocus() }
+                setOnFocusChangeListener(focusListener)
+                TerminalViewRegistry.registerView(session, this, isActivePane)
                 terminalView = this
             }
         },
         modifier = modifier,
         update = { view ->
+            // A pane slot renders whatever session is assigned to it at any moment (tab
+            // switches, split role swaps), so re-attach when it changed; the factory runs
+            // only once per AndroidView instance.
+            if (appliedSession !== session) {
+                view.attachSession(session)
+                appliedSession = session
+                // The emulator was recreated by the attach, so force a palette re-apply
+                // against the new session and drop any stale pending palette.
+                appliedPalette = null
+                TerminalViewRegistry.setPendingPalette(view, null)
+            }
             if (appliedFontSize != fontSize) {
                 view.setTextSize(fontSize.toInt())
                 appliedFontSize = fontSize
@@ -82,23 +116,25 @@ fun TerminalViewHost(
             if (appliedPalette != palette) {
                 if (TerminalViewRegistry.applyPalette(view, session, palette)) {
                     appliedPalette = palette
-                    TerminalViewRegistry.setPendingPalette(null)
+                    TerminalViewRegistry.setPendingPalette(view, null)
                 } else {
                     appliedPalette = null
-                    TerminalViewRegistry.setPendingPalette(palette)
+                    TerminalViewRegistry.setPendingPalette(view, palette)
                 }
             }
-            if (!view.hasFocus() && view.isAttachedToWindow) {
+            view.setOnFocusChangeListener(focusListener)
+            if (isActivePane && !view.hasFocus() && view.isAttachedToWindow) {
                 view.requestFocus()
             }
-            TerminalViewRegistry.activeView = view
+            TerminalViewRegistry.registerView(session, view, isActivePane)
         }
     )
 
     DisposableEffect(session) {
         onDispose {
-            if (TerminalViewRegistry.activeView === terminalView)
-                TerminalViewRegistry.activeView = null
+            terminalView?.let { view ->
+                TerminalViewRegistry.unregisterView(session, view)
+            }
         }
     }
 }

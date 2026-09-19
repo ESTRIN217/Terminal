@@ -11,12 +11,14 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.focusable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
@@ -38,6 +40,9 @@ import java.io.File
  * which survives rotation because the ViewModel is stored in the activity's ViewModelStore.
  *
  * @param sessionId Stable id for the file manager session
+ * @param isActivePane Whether this pane is the focused (active) pane of a split view; only the
+ * focused pane registers the extra-keys handler and the back handler
+ * @param onActivatePane Callback when the pane requests focus while it is not the active pane
  * @param onCloseSession Callback when the tab should be closed (back at root / X button)
  * @param modifier Modifier to apply
  */
@@ -46,6 +51,8 @@ fun FileManagerSessionHost(
     sessionId: String,
     onCloseSession: () -> Unit,
     onOpenInTerminal: (String) -> Unit,
+    isActivePane: Boolean = true,
+    onActivatePane: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -133,24 +140,29 @@ fun FileManagerSessionHost(
     // Refresh on becoming active, mirroring FileManagerComposeActivity.onResume().
     LaunchedEffect(sessionId) { viewModel.refresh() }
 
-    // Route extra keys bar presses into this session while its tab is composed.
-    DisposableEffect(sessionId) {
-        FileManagerKeyHandlerHolder.active = { key, _ ->
-            FileManagerActions.execute(
-                FileManagerKeyAction.map(key),
-                viewModel,
-                { dir, onGranted -> ensureStorageAccess(dir, onGranted) },
-                { openFile(it) }
-            )
+    // Route extra keys bar presses into this session while its tab is composed and focused.
+    // Only the focused pane owns the handler: with two file manager panes composed at once,
+    // the last registered handler must not steal input from the inactive pane.
+    DisposableEffect(sessionId, isActivePane) {
+        if (isActivePane) {
+            FileManagerKeyHandlerHolder.active = { key, _ ->
+                FileManagerActions.execute(
+                    FileManagerKeyAction.map(key),
+                    viewModel,
+                    { dir, onGranted -> ensureStorageAccess(dir, onGranted) },
+                    { openFile(it) }
+                )
+            }
         }
         onDispose { FileManagerKeyHandlerHolder.active = null }
     }
 
-    // Back: navigate the file manager history; close the tab when at its root.
+    // Back: navigate the file manager history; close the tab when at its root. Only the
+    // focused pane handles back so two composed panes do not fight for it.
     val onBackRequested: () -> Unit = {
         if (!viewModel.onBackPressed()) onCloseSession()
     }
-    BackHandler(enabled = true, onBack = onBackRequested)
+    BackHandler(enabled = isActivePane, onBack = onBackRequested)
 
     FileManagerScreen(
         viewModel = viewModel,
@@ -167,7 +179,16 @@ fun FileManagerSessionHost(
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         onOpenInTerminal = { dir -> onOpenInTerminal(dir.absolutePath) },
-        modifier = modifier
+        // A secondary file manager pane promotes itself on focus, mirroring the terminal
+        // panes: focusable() catches taps on empty areas, and onFocusChanged also fires when
+        // a descendant (a list item row) takes focus. Only wired while the pane is secondary.
+        modifier = if (isActivePane) {
+            modifier
+        } else {
+            modifier
+                .focusable()
+                .onFocusChanged { focusState -> if (focusState.isFocused) onActivatePane() }
+        }
     )
 }
 

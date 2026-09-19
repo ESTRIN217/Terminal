@@ -2,7 +2,7 @@
 
 > Objetivo: arrancar la 2.0 sin romper la capacidad de **dogfooding** (compilar la app dentro de la propia app). Mitigación acordada: **backup instalable funcional** (APK v1.119.0 guardado + segundo dispositivo como rescatador).
 
-Fecha: septiembre 2026 · Base: commit `f8ce27e2` (v1.119.0) · Rama de trabajo: `release/2.0` (último: `43648445`)
+Fecha: septiembre 2026 · Base: commit `f8ce27e2` (v1.119.0) · Rama de trabajo: `release/2.0` (último: `53117001`)
 
 ---
 
@@ -41,7 +41,7 @@ Fecha: septiembre 2026 · Base: commit `f8ce27e2` (v1.119.0) · Rama de trabajo:
 
 ### Fase 2 — UI Compose (medio riesgo)
 
-4. **Multipaneleo nativo `ListDetailPaneScaffold`** (Material3 adaptive): reorganizar navegación de tabs/drawer/ajustes → central (settings). Refactor de navegación; no toca el terminal.
+4. **Multipaneleo nativo (tiling)** — ✅ hecho (working tree, pendiente de commit): dos paneles simultáneos de cualquier sesión (terminal o file manager) en pantallas ≥ `600dp`. Se descartó `ListDetailPaneScaffold`/`material3-adaptive` (el BOM no mapeaba `androidx.compose.material3:material3-adaptive:`) en favor de un `Row` + `Box`/`onSizeChanged` — el `onSizeChanged` evita el crash `performMeasureAndLayout called during measure layout` que provocaba `BoxWithConstraints` al eliminar un `TerminalView` dentro de su medida. Modelo: `SplitState(paneOneId, paneTwoId)` fija los paneles por posición y `activeSessionIndex` solo marca **foco** — tocar un panel lo enfoca sin moverlo, una sesión tercera vía tabs reemplaza la sesión del panel enfocado, y cerrar/rotar sanea el split. El botón de split se oculta sin espacio salvo cuando hay un split activo (para poder cerrarlo). Extra keys y back se enrutan al panel enfocado (`isActivePane`), y `TerminalViewRegistry` enruta los updates por sesión compuesta (vista enfocada + vista secundaria). Se corrigieron además el doble-swap por pérdida de foco y la re-adjunción de sesión al cambiar de tab. Tests unitarios de la lógica en `TermuxViewModelSplitTest`.
 5. **Fuentes y ligaduras tipográficas** — selector de fuente monospace + ligaduras; toca el rendering de `TerminalView` pero con fallback a la fuente por defecto.
 
 ### Fase 3 — Rendering del terminal (alto riesgo, el corazón del 2.0)
@@ -63,6 +63,6 @@ Fecha: septiembre 2026 · Base: commit `f8ce27e2` (v1.119.0) · Rama de trabajo:
 |---|---|
 | Fase 0 — Cimientos | Completada |
 | Fase 1 — Quick wins | Completada |
-| Fase 2 — UI Compose | Pendiente |
+| Fase 2 — UI Compose | Parcial (multipaneleo hecho; fuentes/ligaduras pendiente) |
 | Fase 3 — Rendering | Pendiente |
 | Fase 4 — Release 2.0 | Pendiente |
