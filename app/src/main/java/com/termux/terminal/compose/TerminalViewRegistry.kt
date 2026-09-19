@@ -71,6 +71,9 @@ object TerminalViewRegistry {
     fun applyPalette(view: TerminalView, session: TerminalSession, palette: TerminalPalette): Boolean {
         val emulator = session.emulator ?: return false
         val colors = emulator.mColors.mCurrentColors
+        if (palette.scheme != null) {
+            System.arraycopy(palette.scheme, 0, colors, 0, minOf(palette.scheme.size, colors.size))
+        }
         colors[TextStyle.COLOR_INDEX_FOREGROUND] = palette.foreground
         colors[TextStyle.COLOR_INDEX_BACKGROUND] = palette.background
         colors[TextStyle.COLOR_INDEX_CURSOR] = palette.cursor

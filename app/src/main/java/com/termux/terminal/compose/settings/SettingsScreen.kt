@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Monitor
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.TextFields
@@ -115,6 +116,13 @@ fun SettingsScreen(
                     valueRange = state.minFontSize.toFloat()..state.maxFontSize.toFloat(),
                     valueLabel = state.fontSize.toString(),
                     onValueChangeFinished = { viewModel.setFontSize(it.toInt()) }
+                )
+                SettingsSwitchTile(
+                    title = stringResource(R.string.use_custom_color_scheme),
+                    subtitle = stringResource(R.string.use_custom_color_scheme_desc),
+                    icon = Icons.Default.Palette,
+                    checked = state.useCustomColorScheme,
+                    onCheckedChange = viewModel::setUseCustomColorScheme
                 )
             }
 

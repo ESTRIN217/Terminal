@@ -312,6 +312,8 @@
     
     <string name="font_size">Tamaño de fuente</string>
     <string name="font_size_desc">Tamaño del texto de la terminal</string>
+    <string name="use_custom_color_scheme">Esquema de colores personalizado</string>
+    <string name="use_custom_color_scheme_desc">Aplica la paleta de ~/.termux/colors.properties (soporta colores 24-bit)</string>
     <string name="toggle_keyboard">Alternar teclado</string>
 
     <!-- About Screen -->

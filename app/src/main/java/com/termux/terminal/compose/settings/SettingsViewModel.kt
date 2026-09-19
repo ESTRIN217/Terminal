@@ -46,6 +46,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 fontSize = p.getFontSize(),
                 minFontSize = sizes[1],
                 maxFontSize = sizes[2],
+                useCustomColorScheme = p.shouldUseCustomColorScheme(),
                 logLevel = p.getLogLevel(),
                 terminalViewKeyLogging = p.isTerminalViewKeyLoggingEnabled(),
                 pluginErrorNotifications = p.arePluginErrorNotificationsEnabled(false),
@@ -94,6 +95,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setFontSize(value: Int) {
         prefs?.setFontSize(value)
         _uiState.update { it.copy(fontSize = value) }
+    }
+
+    fun setUseCustomColorScheme(value: Boolean) {
+        prefs?.setUseCustomColorScheme(value)
+        _uiState.update { it.copy(useCustomColorScheme = value) }
     }
 
     fun setLogLevel(value: Int) {

@@ -233,6 +233,20 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     }
 
 
+    /**
+     * Whether a custom terminal color scheme from the {@code colors.properties} file is enabled.
+     *
+     * @return {@code true} if the custom color scheme should be applied.
+     */
+    public boolean shouldUseCustomColorScheme() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_USE_CUSTOM_COLOR_SCHEME, TERMUX_APP.DEFAULT_VALUE_USE_CUSTOM_COLOR_SCHEME);
+    }
+
+    public void setUseCustomColorScheme(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_USE_CUSTOM_COLOR_SCHEME, value, false);
+    }
+
+
 
     public boolean arePluginErrorNotificationsEnabled(boolean readFromFile) {
         if (readFromFile)

@@ -67,6 +67,7 @@ import com.termux.terminal.compose.ComposeTerminalSessionClient
 import com.termux.terminal.compose.ComposeTerminalViewClient
 import com.termux.terminal.compose.DebianInstallerScreen
 import com.termux.terminal.compose.ExtraKeysConfig
+import com.termux.terminal.compose.TerminalColorSchemeLoader
 import com.termux.terminal.compose.TerminalPalette
 import com.termux.terminal.compose.TermuxExpressiveTheme
 import com.termux.terminal.compose.TermuxMainScreen
@@ -151,6 +152,12 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
     /** Compose state mirror of the keep-screen-on preference so the menu checkmark updates. */
     private var mIsKeepScreenOnEnabled by mutableStateOf(false)
 
+    /**
+     * Incremented on every resume. Reading it from composition makes the terminal palette
+     * recompute when returning from the Settings screen (custom color scheme toggle).
+     */
+    private var mPaletteRevision by mutableStateOf(0)
+
     private lateinit var mProperties: TermuxAppSharedProperties
     private lateinit var mPreferences: TermuxAppSharedPreferences
 
@@ -201,7 +208,10 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
 
         setContent {
             TermuxExpressiveTheme {
-                val palette = TerminalPalette.fromTheme()
+                mPaletteRevision
+                val customColorScheme =
+                    if (mPreferences.shouldUseCustomColorScheme()) TerminalColorSchemeLoader.load() else null
+                val palette = TerminalPalette.fromTheme(customColorScheme)
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -272,6 +282,8 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         // Sync SharedPreferences → TermuxViewModel (bridge from Settings screen)
         mViewModel.setExtraKeysVisible(mPreferences.shouldShowTerminalToolbar())
         mViewModel.setFontSize(mPreferences.getFontSize().toFloat())
+        // Recompute the terminal palette (custom color scheme may have changed in Settings).
+        mPaletteRevision++
     }
 
     override fun onPause() {

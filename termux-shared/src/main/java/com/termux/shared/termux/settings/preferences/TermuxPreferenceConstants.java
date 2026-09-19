@@ -144,6 +144,14 @@ public final class TermuxPreferenceConstants {
 
 
         /**
+         * Defines the key for whether to use a custom terminal color scheme loaded from the
+         * {@code colors.properties} file (Termux styling format, supports 24-bit colors).
+         */
+        public static final String KEY_USE_CUSTOM_COLOR_SCHEME = "use_custom_color_scheme";
+        public static final boolean DEFAULT_VALUE_USE_CUSTOM_COLOR_SCHEME = false;
+
+
+        /**
          * Defines the key for last used notification id.
          */
         public static final String KEY_LAST_NOTIFICATION_ID = "last_notification_id";
