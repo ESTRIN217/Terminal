@@ -25,7 +25,7 @@ data class ExtraKeysConfig(
             "[[[\"ESC\",\"/\",{\"key\":\"-\",\"popup\":\"|\"},\"HOME\",\"UP\",\"END\",\"PGUP\"]," +
             "[\"TAB\",\"CTRL\",\"ALT\",\"LEFT\",\"DOWN\",\"RIGHT\",\"PGDN\"]]," +
             "[[\"F1\",\"F2\",\"F3\",\"F4\",\"F5\",\"F6\",\"F7\",\"F8\"]," +
-            "[\"F9\",\"F10\",\"F11\",\"F12\",\"INS\",\"DEL\",\"HOME\",\"END\"]]]"
+            "[\"F9\",\"F10\",\"F11\",\"F12\",\"INS\",\"DEL\"]]]"
         )
 
         /** Keys that support long-press repeat. */
