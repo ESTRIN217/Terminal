@@ -46,6 +46,16 @@ private fun licenses(): List<LicenseInfo> = listOf(
         url = "https://opensource.org/license/mit"
     ),
     LicenseInfo(
+        name = stringResource(R.string.license_gplv2),
+        detail = stringResource(R.string.license_proot),
+        url = "https://github.com/proot-me/proot/blob/master/COPYING"
+    ),
+    LicenseInfo(
+        name = stringResource(R.string.license_debian),
+        detail = stringResource(R.string.license_debian_rootfs),
+        url = "https://www.debian.org/legal/licenses/"
+    ),
+    LicenseInfo(
         name = stringResource(R.string.license_gplv2_classpath),
         detail = stringResource(R.string.license_openjdk),
         url = "https://openjdk.org/legal/gplv2+ce.html"

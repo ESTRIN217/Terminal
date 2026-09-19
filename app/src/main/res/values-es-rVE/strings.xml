@@ -353,6 +353,10 @@
     <string name="license_termux_constants">TermuxConstants y TermuxPropertyConstants</string>
     <string name="license_gplv2_classpath">GPLv2 con excepción Classpath</string>
     <string name="license_openjdk">OpenJDK y librerías de clase</string>
+    <string name="license_gplv2">GPLv2</string>
+    <string name="license_proot">Entorno de usuario aislado PRoot</string>
+    <string name="license_debian">Debian</string>
+    <string name="license_debian_rootfs">Paquetes del sistema rootfs Debian GNU/Linux</string>
     <string name="licenses_footer">Terminal se distribuye bajo GPLv3 e incluye componentes de terceros con sus respectivas licencias.</string>
 
     <!-- Settings Screen -->
