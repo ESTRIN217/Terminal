@@ -1,6 +1,6 @@
 [versions]
-agp = "9.3.1"
-kotlin = "2.4.10"
+agp = "9.4.1"
+kotlin = "2.4.20"
 
 # AndroidX Core
 annotation = "1.10.0"
@@ -26,24 +26,24 @@ commonsIo = "2.22.0"
 commonsCompress = "1.27.1"
 xz = "1.10"
 termuxAmLibrary = "v2.0.0"
-coil = "3.6.2"
+coil = "3.6.3"
 
 # Desugaring
 desugarJdkLibs = "2.1.5"
 
 # Testing
 junit = "4.13.2"
-junitExt = "1.2.1"
+junitExt = "1.3.0"
 espressoCore = "3.7.0"
-robolectric = "4.16.1"
+robolectric = "4.17"
 
 # Kotlin
 ktor = "3.1.3"
 kotlinxSerialization = "1.8.1"
-kotlinxCoroutines = "1.10.2"
+kotlinxCoroutines = "1.11.0"
 
 # Compose
-composeBom = "2025.08.00"
+composeBom = "2026.09.00"
 lifecycle = "2.11.0"
 activity = "1.13.0"
 
