@@ -55,6 +55,9 @@ public final class TerminalView extends View {
 
     public TerminalRenderer mRenderer;
 
+    /** Whether OpenType ligature shaping is enabled in the terminal renderer. */
+    public boolean mEnableLigatures = true;
+
     public TerminalViewClient mClient;
 
     private TextSelectionCursorController mTextSelectionCursorController;
@@ -512,12 +515,26 @@ public final class TerminalView extends View {
      * @param textSize the new font size, in density-independent pixels.
      */
     public void setTextSize(int textSize) {
-        mRenderer = new TerminalRenderer(textSize, mRenderer == null ? Typeface.MONOSPACE : mRenderer.mTypeface);
+        mRenderer = new TerminalRenderer(textSize, mRenderer == null ? Typeface.MONOSPACE : mRenderer.mTypeface, mEnableLigatures);
         updateSize();
     }
 
     public void setTypeface(Typeface newTypeface) {
-        mRenderer = new TerminalRenderer(mRenderer.mTextSize, newTypeface);
+        mRenderer = new TerminalRenderer(mRenderer.mTextSize, newTypeface, mEnableLigatures);
+        updateSize();
+        invalidate();
+    }
+
+    /**
+     * Sets whether OpenType ligature shaping is enabled in the terminal renderer.
+     *
+     * @param enableLigatures Whether fonts with ligature tables (e.g. Fira Code) may render
+     *                        ligatures, or whether every code point must be shaped on its own.
+     */
+    public void setLigaturesEnabled(boolean enableLigatures) {
+        if (mEnableLigatures == enableLigatures) return;
+        mEnableLigatures = enableLigatures;
+        mRenderer = new TerminalRenderer(mRenderer.mTextSize, mRenderer.mTypeface, mEnableLigatures);
         updateSize();
         invalidate();
     }

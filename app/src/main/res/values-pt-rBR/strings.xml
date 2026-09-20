@@ -6,7 +6,6 @@
     <!ENTITY TERMUX_API_APP_NAME "Terminal:API">
     <!ENTITY TERMUX_BOOT_APP_NAME "Terminal:Boot">
     <!ENTITY TERMUX_FLOAT_APP_NAME "Terminal:Float">
-    <!ENTITY TERMUX_STYLING_APP_NAME "Terminal:Styling">
     <!ENTITY TERMUX_TASKER_APP_NAME "Terminal:Tasker">
     <!ENTITY TERMUX_WIDGET_APP_NAME "Terminal:Widget">
     ]>
@@ -104,9 +103,6 @@
     <string name="action_report_issue">Relatar problema</string>
     <string name="msg_generating_report">Gerando relatório</string>
     <string name="msg_add_termux_debug_info">Adicionar informações de depuração do &TERMUX_APP_NAME; ao relatório?</string>
-
-    <string name="error_styling_not_installed">O aplicativo de plugin &TERMUX_STYLING_APP_NAME; não está instalado.</string>
-    <string name="action_styling_install">Instalar</string>
 
 
 

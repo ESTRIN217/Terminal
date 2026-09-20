@@ -50,7 +50,6 @@ android {
         manifestPlaceholders["TERMUX_API_APP_NAME"] = "Terminal:API"
         manifestPlaceholders["TERMUX_BOOT_APP_NAME"] = "Terminal:Boot"
         manifestPlaceholders["TERMUX_FLOAT_APP_NAME"] = "Terminal:Float"
-        manifestPlaceholders["TERMUX_STYLING_APP_NAME"] = "Terminal:Styling"
         manifestPlaceholders["TERMUX_TASKER_APP_NAME"] = "Terminal:Tasker"
         manifestPlaceholders["TERMUX_WIDGET_APP_NAME"] = "Terminal:Widget"
 

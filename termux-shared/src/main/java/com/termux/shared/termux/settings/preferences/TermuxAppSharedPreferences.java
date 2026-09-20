@@ -171,6 +171,38 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
 
 
 
+    /**
+     * Get the identifier of the terminal font. The empty string selects the default monospace
+     * font, {@code "fonts/<name>.ttf"} a font bundled in the app assets, and {@code "custom"} the
+     * {@code ~/.termux/font.ttf} file (custom font).
+     *
+     * @return The terminal font identifier.
+     */
+    public String getTerminalFont() {
+        return SharedPreferenceUtils.getString(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_FONT, TERMUX_APP.DEFAULT_VALUE_TERMINAL_FONT, false);
+    }
+
+    public void setTerminalFont(String value) {
+        SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_FONT, value, false);
+    }
+
+
+
+    /**
+     * Whether OpenType ligature shaping is enabled in the terminal renderer.
+     *
+     * @return {@code true} if ligatures should be rendered when the selected font supports them.
+     */
+    public boolean isTerminalFontLigaturesEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_FONT_LIGATURES, TERMUX_APP.DEFAULT_VALUE_TERMINAL_FONT_LIGATURES);
+    }
+
+    public void setTerminalFontLigaturesEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_FONT_LIGATURES, value, false);
+    }
+
+
+
     public String getCurrentSession() {
         return SharedPreferenceUtils.getString(mSharedPreferences, TERMUX_APP.KEY_CURRENT_SESSION, null, true);
     }

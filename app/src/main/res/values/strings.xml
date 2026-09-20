@@ -6,7 +6,6 @@
     <!ENTITY TERMUX_API_APP_NAME "Terminal:API">
     <!ENTITY TERMUX_BOOT_APP_NAME "Terminal:Boot">
     <!ENTITY TERMUX_FLOAT_APP_NAME "Terminal:Float">
-    <!ENTITY TERMUX_STYLING_APP_NAME "Terminal:Styling">
     <!ENTITY TERMUX_TASKER_APP_NAME "Terminal:Tasker">
     <!ENTITY TERMUX_WIDGET_APP_NAME "Terminal:Widget">
     ]>
@@ -172,8 +171,7 @@
     <string name="msg_generating_report">Generating Report</string>
     <string name="msg_add_termux_debug_info">Add Terminal debug info to report?</string>
 
-    <string name="error_styling_not_installed">The &TERMUX_STYLING_APP_NAME; Plugin App is not installed.</string>
-    <string name="action_styling_install">Install</string>
+    
 
 
 
@@ -323,6 +321,21 @@
     <string name="action_toggle_keep_screen_on_desc">Never turn the screen off while in a session</string>
     <string name="font_size">Font size</string>
     <string name="font_size_desc">Terminal text size in pixels</string>
+    <string name="terminal_font">Terminal font</string>
+    <string name="terminal_font_desc">Monospace font used by the terminal</string>
+    <string name="font_default">Default</string>
+    <string name="font_custom">Custom (~/.termux/font.ttf)</string>
+    <string name="font_fira_code">Fira Code</string>
+    <string name="font_cascadia_code">Cascadia Code</string>
+    <string name="font_jetbrains_mono">JetBrains Mono</string>
+    <string name="font_d2_coding">D2 Coding</string>
+    <string name="font_hack">Hack</string>
+    <string name="font_import">Import font from storage…</string>
+    <string name="font_import_desc">Copy a .ttf/.otf file into ~/.termux/font.ttf</string>
+    <string name="font_import_ok">Font imported</string>
+    <string name="font_import_failed">Could not import the font file</string>
+    <string name="terminal_font_ligatures">Ligatures</string>
+    <string name="terminal_font_ligatures_desc">Render programming ligatures (fonts like Fira Code)</string>
     <string name="use_custom_color_scheme">Custom color scheme</string>
     <string name="use_custom_color_scheme_desc">Apply the colors.properties palette from ~/.termux (supports 24-bit colors)</string>
     <string name="save_to_a_files">Save to a files</string>

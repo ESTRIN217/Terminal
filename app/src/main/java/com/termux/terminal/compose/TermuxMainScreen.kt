@@ -38,6 +38,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
+import android.graphics.Typeface
 import com.termux.app.TermuxComposeActivity
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.bridge.TerminalKeyHandler
@@ -57,6 +58,8 @@ private val MinSplitContentWidth = 600.dp
  * @param viewModel The TermuxViewModel instance
  * @param viewClient The [TerminalViewClient] implementation to attach to the terminal view
  * @param palette Colors applied to the terminal emulator and view background
+ * @param typeface The [Typeface] to use for the terminal text, or null for the default
+ * @param enableLigatures Whether OpenType ligature shaping is enabled in the terminal renderer
  * @param isKeepScreenOnEnabled Whether the keep-screen-on preference is currently enabled
  * @param onSetKeepScreenOn Callback to persist and apply a new keep-screen-on state
  * @param onOpenHelp Callback to open the help activity
@@ -73,6 +76,8 @@ fun TermuxMainScreen(
     viewModel: TermuxViewModel,
     viewClient: TerminalViewClient,
     palette: TerminalPalette,
+    typeface: Typeface?,
+    enableLigatures: Boolean,
     isKeepScreenOnEnabled: Boolean,
     onSetKeepScreenOn: (Boolean) -> Unit,
     onOpenHelp: () -> Unit,
@@ -229,6 +234,8 @@ fun TermuxMainScreen(
                                     model = paneOneModel,
                                     isActivePane = paneOneModel.id == focusedId,
                                     fontSize = uiState.fontSize,
+                                    typeface = typeface,
+                                    enableLigatures = enableLigatures,
                                     viewClient = viewClient,
                                     palette = palette,
                                     onPaneFocused = { viewModel.focusSession(it) },
@@ -248,6 +255,8 @@ fun TermuxMainScreen(
                                     model = paneTwoModel,
                                     isActivePane = paneTwoModel.id == focusedId,
                                     fontSize = uiState.fontSize,
+                                    typeface = typeface,
+                                    enableLigatures = enableLigatures,
                                     viewClient = viewClient,
                                     palette = palette,
                                     onPaneFocused = { viewModel.focusSession(it) },
@@ -264,6 +273,8 @@ fun TermuxMainScreen(
                                     model = model,
                                     isActivePane = true,
                                     fontSize = uiState.fontSize,
+                                    typeface = typeface,
+                                    enableLigatures = enableLigatures,
                                     viewClient = viewClient,
                                     palette = palette,
                                     onPaneFocused = { viewModel.focusSession(it) },
@@ -368,6 +379,8 @@ private fun sendKeyToSession(
  * @param model The session model to render
  * @param isActivePane Whether this pane is the focused (active) pane
  * @param fontSize Font size for terminal panes
+ * @param typeface The [Typeface] to use for the terminal text, or null for the default
+ * @param enableLigatures Whether OpenType ligature shaping is enabled
  * @param viewClient The [TerminalViewClient] for terminal panes
  * @param palette The terminal palette for terminal panes
  * @param onPaneFocused Callback with the session id when the pane requests focus
@@ -380,6 +393,8 @@ private fun SessionPane(
     model: TermuxSessionUiModel,
     isActivePane: Boolean,
     fontSize: Float,
+    typeface: Typeface?,
+    enableLigatures: Boolean,
     viewClient: TerminalViewClient,
     palette: TerminalPalette,
     onPaneFocused: (String) -> Unit,
@@ -391,6 +406,8 @@ private fun SessionPane(
         is TermuxSessionUiModel.Terminal -> TerminalViewHost(
             session = model.session,
             fontSize = fontSize,
+            typeface = typeface,
+            enableLigatures = enableLigatures,
             viewClient = viewClient,
             palette = palette,
             isActivePane = isActivePane,

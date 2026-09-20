@@ -16,6 +16,8 @@ data class SettingsUiState(
     val fontSize: Int = 0,
     val minFontSize: Int = 0,
     val maxFontSize: Int = 256,
+    val terminalFontId: String = "",
+    val terminalFontLigatures: Boolean = true,
     val useCustomColorScheme: Boolean = false,
     val logLevel: Int = 1,
     val terminalViewKeyLogging: Boolean = false,

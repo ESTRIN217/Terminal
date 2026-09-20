@@ -6,7 +6,6 @@
     <!ENTITY TERMUX_API_APP_NAME "Terminal:API">
     <!ENTITY TERMUX_BOOT_APP_NAME "Terminal:Boot">
     <!ENTITY TERMUX_FLOAT_APP_NAME "Terminal:Float">
-    <!ENTITY TERMUX_STYLING_APP_NAME "Terminal:Styling">
     <!ENTITY TERMUX_TASKER_APP_NAME "Terminal:Tasker">
     <!ENTITY TERMUX_WIDGET_APP_NAME "Terminal:Widget">
     ]>
@@ -106,9 +105,6 @@
     <string name="action_report_issue">Reportar problema</string>
     <string name="msg_generating_report">Generando reporte</string>
     <string name="msg_add_termux_debug_info">¿Agregar información de depuración de &TERMUX_APP_NAME; al reporte?</string>
-
-    <string name="error_styling_not_installed">La aplicación complemento &TERMUX_STYLING_APP_NAME; no está instalada.</string>
-    <string name="action_styling_install">Instalar</string>
 
 
 
@@ -317,6 +313,21 @@
     
     <string name="font_size">Tamaño de fuente</string>
     <string name="font_size_desc">Tamaño del texto de la terminal</string>
+    <string name="terminal_font">Fuente de la terminal</string>
+    <string name="terminal_font_desc">Fuente monospace usada por la terminal</string>
+    <string name="font_default">Predeterminada</string>
+    <string name="font_custom">Personalizada (~/.termux/font.ttf)</string>
+    <string name="font_fira_code">Fira Code</string>
+    <string name="font_cascadia_code">Cascadia Code</string>
+    <string name="font_jetbrains_mono">JetBrains Mono</string>
+    <string name="font_d2_coding">D2 Coding</string>
+    <string name="font_hack">Hack</string>
+    <string name="font_import">Importar fuente del almacenamiento…</string>
+    <string name="font_import_desc">Copia un fichero .ttf/.otf a ~/.termux/font.ttf</string>
+    <string name="font_import_ok">Fuente importada</string>
+    <string name="font_import_failed">No se pudo importar el fichero de fuente</string>
+    <string name="terminal_font_ligatures">Ligaduras</string>
+    <string name="terminal_font_ligatures_desc">Dibuja ligaduras de programación (fuentes como Fira Code)</string>
     <string name="use_custom_color_scheme">Esquema de colores personalizado</string>
     <string name="use_custom_color_scheme_desc">Aplica la paleta de ~/.termux/colors.properties (soporta colores 24-bit)</string>
     <string name="toggle_keyboard">Alternar teclado</string>

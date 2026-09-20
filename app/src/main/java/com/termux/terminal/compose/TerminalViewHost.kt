@@ -1,5 +1,6 @@
 package com.termux.terminal.compose
 
+import android.graphics.Typeface
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
@@ -31,6 +32,8 @@ import com.termux.view.TerminalViewClient
  *
  * @param session The terminal session to attach to the view
  * @param fontSize Font size in density-independent pixels
+ * @param typeface The [Typeface] to use for the terminal text, or null for the default
+ * @param enableLigatures Whether OpenType ligature shaping is enabled
  * @param viewClient The [TerminalViewClient] implementation for view callbacks
  * @param palette Colors applied to the emulator and the view; reapplied when it changes, or when
  * the session emulator becomes available later (see [TerminalViewRegistry.reapplyPendingPalette])
@@ -42,6 +45,8 @@ import com.termux.view.TerminalViewClient
 fun TerminalViewHost(
     session: TerminalSession,
     fontSize: Float,
+    typeface: Typeface?,
+    enableLigatures: Boolean,
     viewClient: TerminalViewClient,
     palette: TerminalPalette,
     isActivePane: Boolean = true,
@@ -51,6 +56,8 @@ fun TerminalViewHost(
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
     var appliedSession by remember { mutableStateOf<TerminalSession?>(null) }
     var appliedFontSize by remember { mutableStateOf(0f) }
+    var appliedTypeface by remember { mutableStateOf<Typeface?>(null) }
+    var appliedLigatures by remember { mutableStateOf(true) }
     var appliedPalette by remember { mutableStateOf<TerminalPalette?>(null) }
 
     val focusListener = remember(session, isActivePane, onActivatePane) {
@@ -77,6 +84,11 @@ fun TerminalViewHost(
                 setTerminalViewClient(viewClient)
                 setTextSize(fontSize.toInt())
                 appliedFontSize = fontSize
+                val resolvedTypeface = typeface ?: android.graphics.Typeface.MONOSPACE
+                setTypeface(resolvedTypeface)
+                appliedTypeface = resolvedTypeface
+                setLigaturesEnabled(enableLigatures)
+                appliedLigatures = enableLigatures
                 attachSession(session)
                 appliedSession = session
                 // The emulator is usually not created until the view gets its size from
@@ -112,6 +124,15 @@ fun TerminalViewHost(
             if (appliedFontSize != fontSize) {
                 view.setTextSize(fontSize.toInt())
                 appliedFontSize = fontSize
+            }
+            val resolvedTypeface = typeface ?: android.graphics.Typeface.MONOSPACE
+            if (appliedTypeface !== resolvedTypeface) {
+                view.setTypeface(resolvedTypeface)
+                appliedTypeface = resolvedTypeface
+            }
+            if (appliedLigatures != enableLigatures) {
+                view.setLigaturesEnabled(enableLigatures)
+                appliedLigatures = enableLigatures
             }
             if (appliedPalette != palette) {
                 if (TerminalViewRegistry.applyPalette(view, session, palette)) {

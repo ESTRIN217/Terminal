@@ -409,20 +409,6 @@ public final class TermuxConstants {
     public static final String TERMUX_FLOAT_FDROID_PACKAGE_URL = FDROID_PACKAGES_BASE_URL + "/" + TERMUX_FLOAT_PACKAGE_NAME; // Default: "https://f-droid.org/en/packages/com.estrin217.terminal.window"
 
 
-    /** Terminal:Styling app name */
-    public static final String TERMUX_STYLING_APP_NAME = "Terminal:Styling"; // Default: "Terminal:Styling"
-    /** Terminal:Styling app package name */
-    public static final String TERMUX_STYLING_PACKAGE_NAME = TERMUX_PACKAGE_NAME + ".styling"; // Default: "com.estrin217.terminal.styling"
-    /** Terminal:Styling GitHub repo name */
-    public static final String TERMUX_STYLING_GITHUB_REPO_NAME = "termux-styling"; // Default: "termux-styling"
-    /** Terminal:Styling GitHub repo url */
-    public static final String TERMUX_STYLING_GITHUB_REPO_URL = TERMUX_UPSTREAM_GITHUB_ORGANIZATION_URL + "/" + TERMUX_STYLING_GITHUB_REPO_NAME; // Upstream attribution: "https://github.com/termux/termux-styling"
-    /** Terminal:Styling GitHub issues repo url */
-    public static final String TERMUX_STYLING_GITHUB_ISSUES_REPO_URL = TERMUX_STYLING_GITHUB_REPO_URL + "/issues"; // Default: "https://github.com/termux/termux-styling/issues"
-    /** Terminal:Styling F-Droid package url */
-    public static final String TERMUX_STYLING_FDROID_PACKAGE_URL = FDROID_PACKAGES_BASE_URL + "/" + TERMUX_STYLING_PACKAGE_NAME; // Default: "https://f-droid.org/en/packages/com.estrin217.terminal.styling"
-
-
     /** Terminal:Tasker app name */
     public static final String TERMUX_TASKER_APP_NAME = "Terminal:Tasker"; // Default: "Terminal:Tasker"
     /** Terminal:Tasker app package name */
@@ -462,7 +448,6 @@ public final class TermuxConstants {
         TERMUX_API_APP_NAME,
         TERMUX_BOOT_APP_NAME,
         TERMUX_FLOAT_APP_NAME,
-        TERMUX_STYLING_APP_NAME,
         TERMUX_TASKER_APP_NAME,
         TERMUX_WIDGET_APP_NAME);
 
@@ -470,7 +455,6 @@ public final class TermuxConstants {
         TERMUX_API_PACKAGE_NAME,
         TERMUX_BOOT_PACKAGE_NAME,
         TERMUX_FLOAT_PACKAGE_NAME,
-        TERMUX_STYLING_PACKAGE_NAME,
         TERMUX_TASKER_PACKAGE_NAME,
         TERMUX_WIDGET_PACKAGE_NAME);
 
@@ -737,9 +721,6 @@ public final class TermuxConstants {
 
     /** Terminal:Float app default SharedPreferences file basename without extension */
     public static final String TERMUX_FLOAT_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION = TERMUX_FLOAT_PACKAGE_NAME + "_preferences"; // Default: "com.estrin217.terminal.window_preferences"
-
-    /** Terminal:Styling app default SharedPreferences file basename without extension */
-    public static final String TERMUX_STYLING_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION = TERMUX_STYLING_PACKAGE_NAME + "_preferences"; // Default: "com.estrin217.terminal.styling_preferences"
 
     /** Terminal:Tasker app default SharedPreferences file basename without extension */
     public static final String TERMUX_TASKER_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION = TERMUX_TASKER_PACKAGE_NAME + "_preferences"; // Default: "com.estrin217.terminal.tasker_preferences"
@@ -1286,24 +1267,6 @@ public final class TermuxConstants {
 
 
 
-
-
-    /**
-     * Terminal:Styling app constants.
-     */
-    public static final class TERMUX_STYLING_APP {
-
-        /** Terminal:Styling app core activity name. */
-        public static final String TERMUX_STYLING_ACTIVITY_NAME = TERMUX_STYLING_PACKAGE_NAME + ".TermuxStyleActivity"; // Default: "com.estrin217.terminal.styling.TermuxStyleActivity"
-
-
-        /** Terminal:Styling app main activity name. */
-        public static final String TERMUX_STYLING_MAIN_ACTIVITY_NAME = TERMUX_STYLING_PACKAGE_NAME + ".activities.TermuxStylingMainActivity"; // Default: "com.estrin217.terminal.styling.activities.TermuxStylingMainActivity"
-
-        /** Terminal:Styling app launcher activity name. This is an `activity-alias` for {@link #TERMUX_STYLING_MAIN_ACTIVITY_NAME} used for launchers with {@link Intent#CATEGORY_LAUNCHER}. */
-        public static final String TERMUX_STYLING_LAUNCHER_ACTIVITY_NAME = TERMUX_STYLING_PACKAGE_NAME + ".activities.TermuxStylingLauncherActivity"; // Default: "com.estrin217.terminal.styling.activities.TermuxStylingLauncherActivity"
-
-    }
 
 
 

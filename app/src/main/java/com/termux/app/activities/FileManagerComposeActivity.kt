@@ -11,6 +11,9 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModelProvider
 import com.estrin217.filemanager.FileOperationsHelper
@@ -18,6 +21,8 @@ import com.estrin217.filemanager.compose.FileManagerScreen
 import com.estrin217.filemanager.compose.FileManagerViewModel
 import com.termux.shared.android.PermissionUtils
 import com.termux.shared.logger.Logger
+import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences
+import com.termux.terminal.compose.TerminalFontLoader
 import com.termux.terminal.compose.TermuxExpressiveTheme
 import java.io.File
 
@@ -36,6 +41,13 @@ class FileManagerComposeActivity : ComponentActivity() {
     }
 
     private lateinit var mViewModel: FileManagerViewModel
+    private lateinit var mPreferences: TermuxAppSharedPreferences
+
+    /**
+     * Incremented on every resume. Reading it from composition makes the app UI font
+     * reload when the terminal font changed while this activity was paused.
+     */
+    private var mFontRevision by mutableStateOf(0)
 
     /** Action deferred until the user grants shared-storage access. */
     private var mPendingStorageAction: (() -> Unit)? = null
@@ -53,6 +65,7 @@ class FileManagerComposeActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         mViewModel = ViewModelProvider(this)[FileManagerViewModel::class.java]
+        mPreferences = TermuxAppSharedPreferences.build(this, true)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -63,7 +76,10 @@ class FileManagerComposeActivity : ComponentActivity() {
         })
 
         setContent {
-            TermuxExpressiveTheme {
+            // The whole file manager UI mirrors the terminal font.
+            mFontRevision
+            val terminalTypeface = TerminalFontLoader.resolve(this, mPreferences.getTerminalFont())
+            TermuxExpressiveTheme(terminalTypeface = terminalTypeface) {
                 FileManagerScreen(
                     viewModel = mViewModel,
                     onNavigateUp = { finish() },
@@ -85,6 +101,7 @@ class FileManagerComposeActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         mViewModel.refresh()
+        mFontRevision++
     }
 
     /**

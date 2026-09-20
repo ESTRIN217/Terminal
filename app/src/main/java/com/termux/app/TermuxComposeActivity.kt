@@ -1,7 +1,6 @@
 package com.termux.app
 
 import android.app.AlertDialog
-import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -9,7 +8,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.content.res.Configuration
-import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.os.IBinder
@@ -24,6 +22,7 @@ import android.widget.ListView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -68,6 +67,9 @@ import com.termux.terminal.compose.ComposeTerminalViewClient
 import com.termux.terminal.compose.DebianInstallerScreen
 import com.termux.terminal.compose.ExtraKeysConfig
 import com.termux.terminal.compose.TerminalColorSchemeLoader
+import com.termux.terminal.compose.TerminalFontCatalog
+import com.termux.terminal.compose.TerminalFontImporter
+import com.termux.terminal.compose.TerminalFontLoader
 import com.termux.terminal.compose.TerminalPalette
 import com.termux.terminal.compose.TermuxExpressiveTheme
 import com.termux.terminal.compose.TermuxMainScreen
@@ -158,6 +160,12 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
      */
     private var mPaletteRevision by mutableStateOf(0)
 
+    /**
+     * Incremented on every resume. Reading it from composition makes the terminal font and the
+     * ligature setting reload when returning from the Settings screen (font selector).
+     */
+    private var mFontRevision by mutableStateOf(0)
+
     private lateinit var mProperties: TermuxAppSharedProperties
     private lateinit var mPreferences: TermuxAppSharedPreferences
 
@@ -176,6 +184,22 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
 
     /** Receiver for style-reload, crash and storage-permission broadcasts while visible. */
     private var mTermuxActivityBroadcastReceiver: BroadcastReceiver? = null
+
+    /** System file picker for importing a font from shared storage into ~/.termux/font.ttf. */
+    private val mFontPickerLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            val error = TerminalFontImporter.importFont(this, uri)
+            if (error != null) {
+                Logger.logErrorExtended(LOG_TAG, "Font import failed\n" + error)
+                Toast.makeText(this, R.string.font_import_failed, Toast.LENGTH_LONG).show()
+            } else {
+                mPreferences.setTerminalFont(TerminalFontCatalog.CUSTOM_FONT_ID)
+                // Reload the Typeface in the active terminal via the composition.
+                mFontRevision++
+                Toast.makeText(this, R.string.font_import_ok, Toast.LENGTH_SHORT).show()
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -207,11 +231,17 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         bindService(serviceIntent, this, BIND_AUTO_CREATE)
 
         setContent {
-            TermuxExpressiveTheme {
+            // The terminal Typeface is resolved before the theme so the whole app UI
+            // mirrors the terminal font. mFontRevision forces a reload after Settings.
+            mFontRevision
+            val terminalTypeface = TerminalFontLoader.resolve(this, mPreferences.getTerminalFont())
+            TermuxExpressiveTheme(terminalTypeface = terminalTypeface) {
                 mPaletteRevision
+                mFontRevision
                 val customColorScheme =
                     if (mPreferences.shouldUseCustomColorScheme()) TerminalColorSchemeLoader.load() else null
                 val palette = TerminalPalette.fromTheme(customColorScheme)
+                val enableLigatures = mPreferences.isTerminalFontLigaturesEnabled()
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -231,6 +261,8 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                         viewModel = mViewModel,
                         viewClient = mTerminalViewClient,
                         palette = palette,
+                        typeface = terminalTypeface,
+                        enableLigatures = enableLigatures,
                         isKeepScreenOnEnabled = mIsKeepScreenOnEnabled,
                         onSetKeepScreenOn = { enabled -> setKeepScreenOn(enabled) },
                         onOpenHelp = {
@@ -284,6 +316,8 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         mViewModel.setFontSize(mPreferences.getFontSize().toFloat())
         // Recompute the terminal palette (custom color scheme may have changed in Settings).
         mPaletteRevision++
+        // Reload the terminal font and ligature setting (may have changed in Settings).
+        mFontRevision++
     }
 
     override fun onPause() {
@@ -859,6 +893,9 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             loadExtraKeysConfig()
             mViewModel.setExtraKeysVisible(mPreferences.shouldShowTerminalToolbar())
             mViewModel.setFontSize(mPreferences.getFontSize().toFloat())
+            // Reload the terminal font and ligature setting (the in-app font selector or an
+            // external ~/.termux/font.ttf may have changed).
+            mFontRevision++
         }
 
         FileReceiverActivity.updateFileReceiverActivityComponentsState(this)
@@ -974,7 +1011,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                 true
             }
             CONTEXT_MENU_STYLING_ID -> {
-                showStylingDialog()
+                showTerminalFontDialog()
                 true
             }
             CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON -> {
@@ -1025,30 +1062,36 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         }
     }
 
-    private fun showStylingDialog() {
-        val stylingIntent = Intent().apply {
-            setClassName(
-                TermuxConstants.TERMUX_STYLING_PACKAGE_NAME,
-                TermuxConstants.TERMUX_STYLING_APP.TERMUX_STYLING_ACTIVITY_NAME
-            )
+    /** Show a dialog to pick the terminal font. Mirrors the font selector in Settings. */
+    private fun showTerminalFontDialog() {
+        val fontOptionIds = mutableListOf("")
+        val fontOptionLabels = mutableListOf(getString(R.string.font_default))
+        for (entry in TerminalFontCatalog.bundledFonts) {
+            fontOptionIds.add(entry.id)
+            fontOptionLabels.add(getString(entry.labelRes))
         }
-        try {
-            startActivity(stylingIntent)
-        } catch (e: ActivityNotFoundException) {
-            showStylingNotInstalledDialog()
-        } catch (e: IllegalArgumentException) {
-            showStylingNotInstalledDialog()
+        if (TermuxConstants.TERMUX_FONT_FILE.isFile) {
+            fontOptionIds.add(TerminalFontCatalog.CUSTOM_FONT_ID)
+            fontOptionLabels.add(getString(R.string.font_custom))
         }
-    }
+        val selectedIndex = fontOptionIds.indexOf(mPreferences.getTerminalFont()).coerceAtLeast(0)
 
-    private fun showStylingNotInstalledDialog() {
+        val selectedFont = arrayOf(fontOptionIds[selectedIndex])
         AlertDialog.Builder(this)
-            .setMessage(R.string.error_styling_not_installed)
-            .setPositiveButton(R.string.action_styling_install) { _, _ ->
-                ActivityUtils.startActivity(
-                    this,
-                    Intent(Intent.ACTION_VIEW, Uri.parse(TermuxConstants.TERMUX_STYLING_FDROID_PACKAGE_URL))
-                )
+            .setTitle(R.string.terminal_font)
+            .setSingleChoiceItems(fontOptionLabels.toTypedArray(), selectedIndex) { _, which ->
+                selectedFont[0] = fontOptionIds[which]
+            }
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val fontId = selectedFont[0]
+                if (fontId != mPreferences.getTerminalFont()) {
+                    mPreferences.setTerminalFont(fontId)
+                    // Reload the Typeface in the active terminal via the composition.
+                    mFontRevision++
+                }
+            }
+            .setNeutralButton(R.string.font_import) { _, _ ->
+                mFontPickerLauncher.launch(TerminalFontImporter.PICKER_MIME_TYPES)
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()

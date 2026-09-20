@@ -46,6 +46,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 fontSize = p.getFontSize(),
                 minFontSize = sizes[1],
                 maxFontSize = sizes[2],
+                terminalFontId = p.getTerminalFont(),
+                terminalFontLigatures = p.isTerminalFontLigaturesEnabled(),
                 useCustomColorScheme = p.shouldUseCustomColorScheme(),
                 logLevel = p.getLogLevel(),
                 terminalViewKeyLogging = p.isTerminalViewKeyLoggingEnabled(),
@@ -95,6 +97,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setFontSize(value: Int) {
         prefs?.setFontSize(value)
         _uiState.update { it.copy(fontSize = value) }
+    }
+
+    fun setTerminalFont(value: String) {
+        prefs?.setTerminalFont(value)
+        _uiState.update { it.copy(terminalFontId = value) }
+    }
+
+    fun setTerminalFontLigatures(value: Boolean) {
+        prefs?.setTerminalFontLigaturesEnabled(value)
+        _uiState.update { it.copy(terminalFontLigatures = value) }
     }
 
     fun setUseCustomColorScheme(value: Boolean) {

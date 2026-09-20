@@ -20,6 +20,8 @@ public final class TerminalRenderer {
 
     final int mTextSize;
     final Typeface mTypeface;
+    /** Whether OpenType ligature shaping is enabled (fonts with ligature tables, e.g. Fira Code). */
+    final boolean mEnableLigatures;
     private final Paint mTextPaint = new Paint();
 
     /** The width of a single mono spaced character obtained by {@link Paint#measureText(String)} on a single 'X'. */
@@ -33,9 +35,10 @@ public final class TerminalRenderer {
 
     private final float[] asciiMeasures = new float[127];
 
-    public TerminalRenderer(int textSize, Typeface typeface) {
+    public TerminalRenderer(int textSize, Typeface typeface, boolean enableLigatures) {
         mTextSize = textSize;
         mTypeface = typeface;
+        mEnableLigatures = enableLigatures;
 
         mTextPaint.setTypeface(typeface);
         mTextPaint.setAntiAlias(true);
@@ -111,7 +114,11 @@ public final class TerminalRenderer {
                     currentCharIndex, charsForCodePoint);
                 final boolean fontWidthMismatch = Math.abs(measuredCodePointWidth / mFontWidth - codePointWcWidth) > 0.01;
 
-                if (style != lastRunStyle || insideCursor != lastRunInsideCursor || insideSelection != lastRunInsideSelection || fontWidthMismatch || lastRunFontWidthMismatch) {
+                // Break the run when style, cursor or selection changes, when this code point
+                // (or the one that started the run) has a width that does not match wcwidth(), or
+                // when ligatures are disabled, in which case every code point must be shaped alone
+                // so that the font's ligature tables (GSUB liga/clig) can never combine characters.
+                if (style != lastRunStyle || insideCursor != lastRunInsideCursor || insideSelection != lastRunInsideSelection || fontWidthMismatch || lastRunFontWidthMismatch || !mEnableLigatures) {
                     if (column == 0) {
                         // Skip first column as there is nothing to draw, just record the current style.
                     } else {

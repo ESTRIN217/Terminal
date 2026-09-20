@@ -132,6 +132,22 @@ public final class TermuxPreferenceConstants {
 
 
         /**
+         * Defines the identifier of the terminal font. The empty string selects the default
+         * monospace font, {@code "fonts/<name>.ttf"} selects a font bundled in the app assets,
+         * and {@code "custom"} selects {@code ~/.termux/font.ttf} (custom font).
+         */
+        public static final String KEY_TERMINAL_FONT = "terminal_font";
+        public static final String DEFAULT_VALUE_TERMINAL_FONT = "";
+
+
+        /**
+         * Defines the key for whether OpenType ligature shaping is enabled in the terminal renderer.
+         */
+        public static final String KEY_TERMINAL_FONT_LIGATURES = "terminal_font_ligatures";
+        public static final boolean DEFAULT_VALUE_TERMINAL_FONT_LIGATURES = true;
+
+
+        /**
          * Defines the key for current termux terminal session.
          */
         public static final String KEY_CURRENT_SESSION = "current_session";
@@ -267,20 +283,6 @@ public final class TermuxPreferenceConstants {
          */
         public static final String KEY_TERMINAL_VIEW_KEY_LOGGING_ENABLED = "terminal_view_key_logging_enabled";
         public static final boolean DEFAULT_VALUE_TERMINAL_VIEW_KEY_LOGGING_ENABLED = false;
-
-    }
-
-
-
-    /**
-     * Terminal:Styling app constants.
-     */
-    public static final class TERMUX_STYLING_APP {
-
-        /**
-         * Defines the key for current log level.
-         */
-        public static final String KEY_LOG_LEVEL = "log_level";
 
     }
 
