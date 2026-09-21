@@ -38,7 +38,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
+import android.graphics.Paint
 import android.graphics.Typeface
+import androidx.activity.compose.BackHandler
 import com.termux.app.TermuxComposeActivity
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.bridge.TerminalKeyHandler
@@ -51,6 +53,12 @@ import com.termux.R
  * not rendered and the app behaves as a single pane.
  */
 private val MinSplitContentWidth = 600.dp
+
+/** Font-size clamp for pinch-zoom, matching the legacy `mSizePx` range. */
+private const val MinTerminalFontSizePx = 8f
+
+/** Font-size clamp for pinch-zoom, matching the legacy `mSizePx` range. */
+private const val MaxTerminalFontSizePx = 32f
 
 /**
  * Main screen composable for the Termux app.
@@ -242,6 +250,7 @@ fun TermuxMainScreen(
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
+                                    onFontSizeStep = viewModel::setFontSize,
                                     modifier = Modifier
                                         .weight(1f)
                                         .fillMaxHeight()
@@ -264,6 +273,7 @@ fun TermuxMainScreen(
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
+                                    onFontSizeStep = viewModel::setFontSize,
                                     modifier = Modifier
                                         .weight(1f)
                                         .fillMaxHeight()
@@ -283,6 +293,7 @@ fun TermuxMainScreen(
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
+                                    onFontSizeStep = viewModel::setFontSize,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -391,6 +402,7 @@ private fun sendKeyToSession(
  * @param onPaneFocused Callback with the session id when the pane requests focus
  * @param onRemoveSession Callback to remove the session
  * @param onOpenInTerminal Callback to open a terminal in a directory (file manager panes)
+ * @param onFontSizeStep Callback with a font size in pixels (pinch-zoom target, already clamped)
  * @param modifier Modifier to apply to the pane
  */
 @Composable
@@ -406,6 +418,7 @@ private fun SessionPane(
     onPaneFocused: (String) -> Unit,
     onRemoveSession: (TermuxSessionUiModel) -> Unit,
     onOpenInTerminal: (String) -> Unit,
+    onFontSizeStep: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
     when (model) {
@@ -413,7 +426,18 @@ private fun SessionPane(
             // Native path: the hidden view below owns IME/keys/focus/scroll state, the
             // opaque canvas above is the only renderer. Both are full-size so geometry
             // (and updateSize) stays consistent between them.
+            // The pane shares its scroll/selection state and glyph metrics between the
+            // canvas and the selection overlay so handles and highlight align with paint.
+            val paneState = remember(model.id) { ComposeTerminalViewState() }
+            val paneMetrics = remember(typeface, fontSize) {
+                measureCanvasMetrics(Paint(), typeface ?: Typeface.MONOSPACE, fontSize)
+            }
             Box(modifier = modifier) {
+                // Back closes the selection toolbar like legacy TerminalView.onKeyDown
+                // does for the BACK key while a text selection is active.
+                BackHandler(enabled = paneState.selection != null) {
+                    paneState.selection = null
+                }
                 HiddenTerminalInputHost(
                     session = model.session,
                     fontSize = fontSize,
@@ -431,8 +455,34 @@ private fun SessionPane(
                     typeface = typeface,
                     enableLigatures = enableLigatures,
                     palette = palette,
+                    metrics = paneMetrics,
+                    state = paneState,
                     isActivePane = isActivePane,
                     onActivatePane = { onPaneFocused(model.id) },
+                    onFontSizeStep = { step ->
+                        val target = (fontSize + step).coerceIn(MinTerminalFontSizePx, MaxTerminalFontSizePx)
+                        if (target != fontSize) onFontSizeStep(target)
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+                ComposeTerminalSelectionOverlay(
+                    session = model.session,
+                    state = paneState,
+                    metrics = paneMetrics,
+                    onMore = {
+                        // Legacy "More…" stops the toolbar, stores the selection and shows the
+                        // context menu, which reads it back through TerminalViewRegistry.
+                        val selection = paneState.selection
+                        if (selection != null) {
+                            TerminalViewRegistry.setStoredSelectedText(
+                                model.session.emulator?.getSelectedText(
+                                    selection.x1, selection.y1, selection.x2, selection.y2
+                                )
+                            )
+                        }
+                        paneState.selection = null
+                        TerminalViewRegistry.getViewForSession(model.session)?.showContextMenu()
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
             }

@@ -1,5 +1,6 @@
 package com.termux.terminal.compose
 
+import com.termux.terminal.TerminalBuffer
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalRow
 import com.termux.terminal.TextStyle
@@ -67,6 +68,181 @@ object ComposeTerminalFrame {
         val effect: Int,
         val drawText: Boolean
     )
+
+    /**
+     * A rectangular text selection in external (transcript-aware) row coordinates, mirroring
+     * the legacy `mSelX1/mSelY1/mSelX2/mSelY2` of
+     * {@link com.termux.view.textselection.TextSelectionCursorController}. Rows are external:
+     * when the canvas is scrolled back by `topRow` rows, the top visible row is `topRow`.
+     * Columns are grid-relative, `x2` inclusive.
+     *
+     * @param x1 First selected column
+     * @param y1 First selected (external) row
+     * @param x2 Last selected column (inclusive)
+     * @param y2 Last selected (external) row
+     */
+    data class TextSelection(
+        val x1: Int,
+        val y1: Int,
+        val x2: Int,
+        val y2: Int
+    )
+
+    /**
+     * The selection column range of one line, mirroring the legacy render loop: the first
+     * selected row starts at `selectionX1`, the last ends at `selectionX2`, and full middle
+     * rows are selected entirely. Rows outside the selection yield `-1..-1`.
+     *
+     * @param selection The active selection, or null
+     * @param row The external row to query
+     * @param columns Number of grid columns of the line
+     * @return The inclusive `(selX1, selX2)` for the row, or `(-1, -1)` when not selected
+     */
+    @JvmStatic
+    fun selectionBoundsForRow(selection: TextSelection?, row: Int, columns: Int): Pair<Int, Int> {
+        if (selection == null || row < selection.y1 || row > selection.y2) return -1 to -1
+        val selX1 = if (row == selection.y1) selection.x1 else 0
+        val selX2 = if (row == selection.y2) selection.x2 else columns - 1
+        return selX1 to selX2
+    }
+
+    /**
+     * Start a selection at a column/row of the buffer, expanding the cell to its word when it
+     * is not whitespace, mirroring
+     * {@link com.termux.view.textselection.TextSelectionCursorController#setInitialTextSelectionPosition}.
+     *
+     * @param screen The emulator screen buffer
+     * @param column The tapped column
+     * @param row The tapped (external) row
+     * @param columns Number of grid columns
+     * @return The word (or single cell) selection, or null when the cell is outside the buffer
+     */
+    @JvmStatic
+    fun selectWord(screen: TerminalBuffer, column: Int, row: Int, columns: Int): TextSelection? {
+        val cell = screen.getSelectedText(column, row, column, row) ?: return null
+        var x1 = column
+        var x2 = column
+        if (cell != " ") {
+            while (x1 > 0 && screen.getSelectedText(x1 - 1, row, x1 - 1, row)?.isNotEmpty() == true) {
+                x1--
+            }
+            while (x2 < columns - 1 && screen.getSelectedText(x2 + 1, row, x2 + 1, row)?.isNotEmpty() == true) {
+                x2++
+            }
+        }
+        return TextSelection(x1, row, x2, row)
+    }
+
+    /**
+     * Clamp a dragged selection handle endpoint to valid grid cells, mirroring
+     * {@link com.termux.view.textselection.TextSelectionCursorController#updatePosition}:
+     * columns are clamped to the grid, rows to `[-rowsInHistory, mRows - 1]`, the start handle
+     * never crosses past the end one (and vice versa), and a wide glyph absorbs a drag landing
+     * inside its second half ([validCurX], see [TerminalRow] wide cells).
+     *
+     * @param cx The dragged column in grid coordinates
+     * @param cy The dragged (external) row
+     * @param selection The current selection
+     * @param isStart Whether the dragged handle is the start (left) one
+     * @param mRows The number of screen rows
+     * @param rowsInHistory The maximum scrolled-back history rows
+     * (`screen.getActiveRows() - mRows`)
+     * @param columns Number of grid columns
+     * @param screen The emulator screen buffer used to correct wide-cell columns
+     * @return The normalized selection
+     */
+    @JvmStatic
+    fun clampSelectionHandle(
+        cx: Int,
+        cy: Int,
+        selection: TextSelection,
+        isStart: Boolean,
+        mRows: Int,
+        rowsInHistory: Int,
+        columns: Int,
+        screen: TerminalBuffer
+    ): TextSelection {
+        var x = cx
+        var y = cy
+        if (x < 0) x = 0
+        if (y < -rowsInHistory) {
+            y = -rowsInHistory
+        } else if (y > mRows - 1) {
+            y = mRows - 1
+        }
+        if (isStart) {
+            if (y > selection.y2) y = selection.y2
+            if (y == selection.y2 && x > selection.x2) x = selection.x2
+        } else {
+            if (y < selection.y1) y = selection.y1
+            if (y == selection.y1 && x < selection.x1) x = selection.x1
+        }
+        x = validCurX(screen, y, x, columns)
+        return if (isStart) selection.copy(x1 = x, y1 = y) else selection.copy(x2 = x, y2 = y)
+    }
+
+    /**
+     * Whether a new emulator row shift (from the emulator scroll counter) should keep
+     * or abort the selection, mirroring
+     * {@link com.termux.view.TerminalView#onScreenUpdated}: while selecting, new output shifts
+     * both the scroll offset and the selection up, unless the transcript end is reached, in
+     * which case the selection is aborted and the scroll snaps to the bottom.
+     *
+     * @param selection The current selection, or null
+     * @param scrollRows Current scroll offset in rows (0 or negative), the canvas `topRow`
+     * @param rowShift Rows of new output, `emulator.getScrollCounter()`
+     * @param transcriptRows Available transcript rows (`activeTranscriptRows`)
+     * @return The adjusted scroll offset plus selection, or a null selection to abort
+     */
+    @JvmStatic
+    fun shiftSelectionForNewOutput(
+        selection: TextSelection?,
+        scrollRows: Int,
+        rowShift: Int,
+        transcriptRows: Int
+    ): Pair<Int, TextSelection?> {
+        if (selection == null || rowShift <= 0) return scrollRows to selection
+        val rowsInHistory = maxOf(transcriptRows, 0)
+        if (-scrollRows + rowShift > rowsInHistory) {
+            // End of history: abort the selection and let the scroll snap to the bottom
+            // (legacy onScreenUpdated parity: selection stops, then the next branch forces
+            // mTopRow back to 0 for the default auto-scroll-enabled case).
+            return 0 to null
+        }
+        val shiftedSelection = selection.copy(
+            y1 = selection.y1 - rowShift,
+            y2 = selection.y2 - rowShift
+        )
+        return scrollRows - rowShift to shiftedSelection
+    }
+
+    /** Snap a column into a valid cell when a wide glyph (e.g. a CJK char) absorbs it, so the
+     * handle drag endpoint never lands on the unused second half of a wide cell. Mirror of
+     * {@code TextSelectionCursorController.getValidCurX}. Columns are clamped to the grid. */
+    @JvmStatic
+    fun validCurX(screen: TerminalBuffer, cy: Int, cx: Int, columns: Int): Int {
+        val line = screen.getSelectedText(0, cy, cx, cy)
+        if (!line.isNullOrEmpty()) {
+            var col = 0
+            var i = 0
+            val len = line.length
+            while (i < len) {
+                val ch1 = line[i]
+                if (ch1 == '\u0000') break
+                val wc = if (Character.isHighSurrogate(ch1) && i + 1 < len) {
+                    WcWidth.width(Character.toCodePoint(ch1, line[++i]))
+                } else {
+                    WcWidth.width(ch1.code)
+                }
+                val cend = col + wc
+                if (cx > col && cx < cend) return cend.coerceAtMost(columns - 1)
+                if (cend == col) return col.coerceAtMost(columns - 1)
+                col = cend
+                i++
+            }
+        }
+        return cx.coerceIn(0, columns - 1)
+    }
 
     /**
      * Split one screen line into drawable runs.
@@ -231,6 +407,25 @@ object ComposeTerminalFrame {
         blinkRateMs in TerminalView.TERMINAL_CURSOR_BLINK_RATE_MIN..TerminalView.TERMINAL_CURSOR_BLINK_RATE_MAX
 
     /**
+     * Fling velocity damping, mirroring the legacy `SCALE = 0.25f` in
+     * {@link TerminalView}'s fling listener so a fast swipe decays within roughly the same
+     * distance as the legacy view.
+     */
+    const val FLING_VELOCITY_SCALE = 0.25f
+
+    /**
+     * The fling animation range, mirroring the legacy `Scroller.fling` calls: transcript mode
+     * flings the scroll offset within `[-transcriptRows, 0]`, mouse-tracking mode flings the
+     * synthetic wheel value within `[-mRows / 2, mRows / 2]`.
+     *
+     * @param minRows The minimum animated position (negative for both modes)
+     * @param maxRows The maximum animated position (0 for the transcript, positive for wheels)
+     * @return The inclusive animatable range
+     */
+    @JvmStatic
+    fun flingBounds(minRows: Int, maxRows: Int): IntRange = minRows..maxRows
+
+    /**
      * Resolve the paint colors of a run from its style, mirroring the legacy color logic.
      *
      * @param style The [TextStyle]-encoded run style
@@ -239,19 +434,23 @@ object ComposeTerminalFrame {
      * @param defaultBackground The default background color (ARGB); only non-default
      * backgrounds are painted
      * @param emulatorReverseVideo Whether the emulator is in reverse-video mode
+     * @param inSelection Whether the run is inside the text selection, which inverts the cell
+     * colors the same way the legacy renderer does
      * @param inCursor Whether the run holds the visible cursor cell
      * @param cursorStyle One of the {@code TERMINAL_CURSOR_STYLE_*} constants of
      * [TerminalEmulator]
      * @return The resolved colors and effects
      */
     @JvmStatic
+    @JvmOverloads
     fun resolveRunColors(
         style: Long,
         paletteColors: IntArray,
         defaultBackground: Int,
         emulatorReverseVideo: Boolean,
-        inCursor: Boolean,
-        cursorStyle: Int
+        inSelection: Boolean = false,
+        inCursor: Boolean = false,
+        cursorStyle: Int = TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK
     ): ResolvedRunColors {
         var foreColor = TextStyle.decodeForeColor(style)
         val effect = TextStyle.decodeEffect(style)
@@ -269,9 +468,11 @@ object ComposeTerminalFrame {
         }
 
         // Reverse video here if _one and only one_ of the reverse flags are set. A block
-        // cursor inverts the cell text the same way the legacy renderer does.
+        // cursor inverts the cell text the same way the legacy renderer does, and so does a
+        // cell inside the selection (legacy drawTextRun receives `reverseVideo || invertCursor
+        // || lastRunInsideSelection`).
         val invertCursorText = inCursor && cursorStyle == TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK
-        val reverseVideoHere = (emulatorReverseVideo || invertCursorText) xor
+        val reverseVideoHere = (emulatorReverseVideo || inSelection || invertCursorText) xor
             (effect and TextStyle.CHARACTER_ATTRIBUTE_INVERSE != 0)
         if (reverseVideoHere) {
             val tmp = foreColor

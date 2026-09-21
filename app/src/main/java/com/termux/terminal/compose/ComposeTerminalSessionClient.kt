@@ -18,11 +18,15 @@ class ComposeTerminalSessionClient(
 ) : TermuxTerminalSessionClientBase() {
 
     override fun onTextChanged(changedSession: TerminalSession) {
+        // Capture the emulator scroll count BEFORE the hidden input view updates: its own
+        // onScreenUpdated() clears the shared emulator counter, but the Compose canvas needs
+        // the rows scrolled by this update to shift a text selection on new output.
+        val scrollCount = changedSession.emulator?.scrollCounter ?: 0
         // Repaint the composed view rendering this session, whether it is the focused
         // pane or a secondary pane of a split view.
         TerminalViewRegistry.getViewForSession(changedSession)?.onScreenUpdated()
         // Repaint the experimental Compose Canvas when it renders this session.
-        TerminalViewRegistry.notifyFrameChanged(changedSession)
+        TerminalViewRegistry.notifyFrameChanged(changedSession, scrollCount)
     }
 
     override fun onTitleChanged(updatedSession: TerminalSession) {
@@ -49,7 +53,8 @@ class ComposeTerminalSessionClient(
     }
 
     override fun onColorsChanged(changedSession: TerminalSession) {
+        val scrollCount = changedSession.emulator?.scrollCounter ?: 0
         TerminalViewRegistry.getViewForSession(changedSession)?.onScreenUpdated()
-        TerminalViewRegistry.notifyFrameChanged(changedSession)
+        TerminalViewRegistry.notifyFrameChanged(changedSession, scrollCount)
     }
 }

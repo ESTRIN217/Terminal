@@ -958,10 +958,13 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
 
         val terminalView = TerminalViewRegistry.activeView
         val autoFillEnabled = terminalView?.isAutoFillEnabled == true
+        // The Compose selection overlay stores its text on the registry (the hidden input
+        // view keeps no selection); fall back to the view field for the legacy selection.
+        val storedText = TerminalViewRegistry.storedSelectedText ?: terminalView?.storedSelectedText
 
         menu.add(Menu.NONE, CONTEXT_MENU_SELECT_URL_ID, Menu.NONE, R.string.action_select_url)
         menu.add(Menu.NONE, CONTEXT_MENU_SHARE_TRANSCRIPT_ID, Menu.NONE, R.string.action_share_transcript)
-        if (!DataUtils.isNullOrEmpty(terminalView?.storedSelectedText))
+        if (!DataUtils.isNullOrEmpty(storedText))
             menu.add(Menu.NONE, CONTEXT_MENU_SHARE_SELECTED_TEXT, Menu.NONE, R.string.action_share_selected_text)
         if (autoFillEnabled)
             menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_USERNAME, Menu.NONE, R.string.action_autofill_username)
@@ -1041,6 +1044,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         // onContextMenuClosed() is triggered twice if back button is pressed to dismiss instead
         // of tap for some reason
         TerminalViewRegistry.activeView?.onContextMenuClosed(menu)
+        TerminalViewRegistry.setStoredSelectedText(null)
     }
 
     private fun showKillSessionDialog(session: TerminalSession?) {
@@ -1113,7 +1117,9 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
     }
 
     private fun shareSelectedText() {
-        val selectedText = TerminalViewRegistry.activeView?.storedSelectedText
+        // Prefer the Compose overlay's stored text (registry), then the legacy view field.
+        val selectedText = TerminalViewRegistry.storedSelectedText
+            ?: TerminalViewRegistry.activeView?.storedSelectedText
         if (DataUtils.isNullOrEmpty(selectedText)) return
         ShareUtils.shareText(this, getString(R.string.title_share_selected_text),
             selectedText, getString(R.string.title_share_selected_text_with))

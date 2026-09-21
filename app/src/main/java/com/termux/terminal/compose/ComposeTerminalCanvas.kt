@@ -4,10 +4,14 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.view.InputDevice
 import android.view.MotionEvent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.DraggableState
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -19,7 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -29,6 +33,8 @@ import androidx.compose.ui.input.pointer.isTertiaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.unit.IntSize
 import com.termux.shared.interact.ShareUtils
 import com.termux.shared.logger.Logger
@@ -41,6 +47,7 @@ import com.termux.terminal.WcWidth
 import com.termux.terminal.bridge.TerminalKeyHandler
 import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 /**
@@ -56,7 +63,19 @@ import kotlinx.coroutines.delay
  * the default rate 0) and physical-mouse input (wheel, buttons and clipboard paste), fed
  * from the raw [MotionEvent] exposed on Compose [androidx.compose.ui.input.pointer.PointerEvent].
  *
- * Still deferred: text selection, pinch-zoom and fling inertia.
+ * Beyond the earlier spike this canvas also owns, with full legacy parity:
+ * - **Text selection** (long-press word select, per-row selection bounds feeding
+ *   [ComposeTerminalFrame.buildLineRuns] and reverse-video painting, drag-to-scroll while
+ *   selecting, shift selection up when new output scrolls the screen). The draggable handles
+ *   and the Copy/Paste/More toolbar live in [ComposeTerminalSelectionOverlay], composed on
+ *   top by [TermuxMainScreen], and share the [ComposeTerminalViewState] scroll/selection.
+ * - **Pinch-zoom**: a two-pointer transform gesture steps the font size by ±2 (mirroring
+ *   [ComposeTerminalViewClient.onScale]) through [onFontSizeStep] when the cumulative scale
+ *   leaves `[0.9, 1.1]`.
+ * - **Fling inertia**: a `Modifier.draggable` vertical gesture feeds an exponential decay of
+ *   the scroll offset (transcript) or of a synthetic wheel value (mouse-tracking apps),
+ *   mirroring the legacy `Scroller.fling` damping of 0.25.
+ *
  * The legacy view set via [TerminalViewHost] stays as the default fallback behind the
  * {@code native_compose_renderer} feature flag.
  *
@@ -70,35 +89,48 @@ import kotlinx.coroutines.delay
  * @param typeface The [Typeface] for the terminal text, or null for the default
  * @param enableLigatures Whether OpenType ligature shaping is enabled
  * @param palette Colors applied to the emulator and the canvas background
+ * @param metrics The glyph metrics snapshot (see [measureCanvasMetrics]); hoisted here so the
+ * selection overlay from the same pane positions its handles on identical geometry
+ * @param state The shared scroll/selection state, owned by the pane so the selection overlay
+ * above this canvas can render handles and the toolbar from the same coordinates
  * @param isActivePane Whether this canvas belongs to the focused (active) pane of a split view
  * @param onActivatePane Callback when the canvas is tapped while it is not the active pane
+ * @param onFontSizeStep Callback with a signed font-size step in pixels for pinch-zoom
  * @param modifier Modifier to apply to the canvas
  */
 @Composable
-fun ComposeTerminalCanvas(
+internal fun ComposeTerminalCanvas(
     session: TerminalSession,
     fontSize: Float,
     typeface: Typeface?,
     enableLigatures: Boolean,
     palette: TerminalPalette,
+    metrics: CanvasFontMetrics,
+    state: ComposeTerminalViewState,
     isActivePane: Boolean = true,
     onActivatePane: (() -> Unit)? = null,
+    onFontSizeStep: (Float) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // Repaint tick bumped on every emulator screen update (see ComposeTerminalSessionClient).
     // Read during composition so each tick recomposes and repaints this session only.
     var frameTick by remember(session) { mutableIntStateOf(0) }
+    // Scroll-counter rows captured by the session client for this update (before the hidden
+    // input view clears the counter). Drives the selection up-shift when new output scrolls
+    // the screen while selecting.
+    var frameScrollCount by remember(session) { mutableIntStateOf(0) }
     DisposableEffect(session) {
-        val listener = TerminalViewRegistry.FrameListener { frameTick++ }
+        val listener = TerminalViewRegistry.FrameListener { scrollCount ->
+            frameTick++
+            frameScrollCount = scrollCount
+        }
         TerminalViewRegistry.addFrameListener(session, listener)
         onDispose { TerminalViewRegistry.removeFrameListener(session, listener) }
     }
 
-    // Canvas-owned scroll offset in rows (0 = following live output, negative = scrolled
-    // back). Gestures land on this canvas, so the hidden input view underneath stays at
-    // top row 0 and keeps following output internally.
-    var scrollRows by remember(session) { mutableIntStateOf(0) }
-    // Sub-row drag leftovers, carried across drag events.
+    // The canvas and the selection overlay share this scroll offset (0 = following live
+    // output, negative = scrolled back). Gestures land on this canvas, so the hidden input
+    // view underneath stays at top row 0 and keeps following output internally.
     var dragRemainder by remember(session) { mutableFloatStateOf(0f) }
 
     // Cursor blinking is owned by this canvas: the hidden input view's blinker stays inert
@@ -120,30 +152,69 @@ fun ComposeTerminalCanvas(
     }
 
     // New output while scrolled back: keep the offset, re-clamped in case the transcript
-    // shrank. Following (0) needs no work. State writes stay out of the draw scope.
+    // shrank. Following (0) needs no work. While selecting, shift the selection up with the
+    // scrolled rows so it stays glued to its text, aborting at the transcript end (legacy
+    // onScreenUpdated parity). State writes stay out of the draw scope.
     LaunchedEffect(frameTick) {
-        val transcript = session.emulator?.screen?.activeTranscriptRows ?: 0
-        scrollRows = ComposeTerminalFrame.clampScrollOffset(scrollRows, transcript)
+        val emulator = session.emulator
+        val transcript = emulator?.screen?.activeTranscriptRows ?: 0
+        val selection = state.selection
+        if (emulator != null && selection != null) {
+            val (shiftedScroll, shiftedSelection) =
+                ComposeTerminalFrame.shiftSelectionForNewOutput(
+                    selection, state.scrollRows, frameScrollCount, transcript
+                )
+            state.scrollRows = ComposeTerminalFrame.clampScrollOffset(shiftedScroll, transcript)
+            state.selection = shiftedSelection
+        } else {
+            state.scrollRows = ComposeTerminalFrame.clampScrollOffset(state.scrollRows, transcript)
+        }
     }
 
     // The canvas itself is never focusable: taps forward focus plus the soft keyboard to
     // the hidden input view below (see HiddenTerminalInputHost).
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
 
-    val paint = remember { Paint().apply { isAntiAlias = true } }
     val resolvedTypeface = typeface ?: Typeface.MONOSPACE
-    val metrics = remember(resolvedTypeface, fontSize) {
-        measureCanvasMetrics(paint, resolvedTypeface, fontSize)
+    val paint = remember(resolvedTypeface, fontSize) {
+        Paint().apply {
+            isAntiAlias = true
+            this.typeface = resolvedTypeface
+            textSize = fontSize
+        }
     }
 
     // Last laid-out size, used to derive the grid before first paint.
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+
+    // A layout or font-size / glyph metrics change must re-derive the grid even when the
+    // pixel size is unchanged, mirroring the legacy updateSize() on both onSizeChanged and
+    // setTextSize(). Runs after the layout pass, so canvasSize is populated before first use.
+    LaunchedEffect(canvasSize, metrics) {
+        if (canvasSize == IntSize.Zero) return@LaunchedEffect
+        val columns = (canvasSize.width / metrics.fontWidth).toInt().coerceAtLeast(1)
+        val rows = ((canvasSize.height - metrics.lineSpacingAndAscent) / metrics.lineSpacing)
+            .toInt().coerceAtLeast(1)
+        try {
+            session.updateSize(columns, rows, metrics.fontWidth.toInt(), metrics.lineSpacing)
+        } catch (e: Exception) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "updateSize failed on metrics change", e)
+        }
+    }
 
     // Convert a point in canvas pixels to a 1-based terminal grid cell, mirroring the
     // legacy getColumnAndRow() used for mouse-tracking coordinates.
     fun columnAndRow(x: Float, y: Float): Pair<Int, Int> =
         ((x / metrics.fontWidth).toInt() + 1) to
             (((y - metrics.lineSpacingAndAscent) / metrics.lineSpacing).toInt() + 1)
+
+    // Convert a point to a 0-based grid cell in external row coordinates (visible row plus the
+    // scroll offset), used for long-press word selection like the legacy
+    // getColumnAndRow(event, true).
+    fun gridColumnAndRow(x: Float, y: Float): Pair<Int, Int> =
+        (x / metrics.fontWidth).toInt() to
+            (((y - metrics.lineSpacingAndAscent) / metrics.lineSpacing).toInt() + state.scrollRows)
 
     // Shared scroll router for finger drags and the mouse wheel, mirroring the legacy
     // doScroll(): raw signed rows go to mouse-tracking apps, arrow keys to the alt screen,
@@ -174,8 +245,8 @@ fun ComposeTerminalCanvas(
             else -> {
                 // Legacy doScroll() parity: rows > 0 (swipe down / wheel up) scrolls back
                 // toward older output, negative toward live (0).
-                scrollRows = ComposeTerminalFrame.scrollByDrag(
-                    scrollRows, rows, emulator.screen.activeTranscriptRows
+                state.scrollRows = ComposeTerminalFrame.scrollByDrag(
+                    state.scrollRows, rows, emulator.screen.activeTranscriptRows
                 )
             }
         }
@@ -194,21 +265,83 @@ fun ComposeTerminalCanvas(
         }
     }
 
+    // Fling inertia mirroring the legacy onFling: damp the fling velocity by 0.25 and animate
+    // either the transcript scroll offset (no mouse tracking) or a synthetic wheel position
+    // sent to the app (mouse tracking active). The legacy view aborts a fling that is still
+    // running and when the mouse-tracking state toggles mid-fling; both are mirrored.
+    val flingAnim = remember(session) { Animatable(0f) }
+    var flingRunning by remember(session) { mutableStateOf(false) }
+    // Anchor for wheel events sent to mouse-tracking apps: legacy TerminalView anchors them
+    // at the touch down position, so remember it at drag start.
+    var dragAnchor by remember(session) { mutableStateOf(Offset.Zero) }
+    var fingerScrolled by remember(session) { mutableStateOf(false) }
+    val doFling: suspend (Float) -> Unit = fling@ { rawVelocity ->
+        val emulator = session.emulator ?: return@fling
+        if (flingRunning) return@fling
+        val velocity = -rawVelocity * ComposeTerminalFrame.FLING_VELOCITY_SCALE
+        if (velocity == 0f) return@fling
+        val mouseTrackingAtStart = emulator.isMouseTrackingActive
+        flingRunning = true
+        try {
+            if (mouseTrackingAtStart) {
+                // Virtual wheel value bounded like the legacy Scroller.fling over mRows / 2;
+                // every accumulated row goes through routeScroll so the app sees wheel events.
+                // Negative travel (down-fling) must map to positive scroll-back rows (wheel-up),
+                // so the remainder accumulates the negated travel like the legacy diff carry.
+                val bounds = ComposeTerminalFrame.flingBounds(-emulator.mRows / 2, emulator.mRows / 2)
+                flingAnim.snapTo(0f)
+                var wheelRemainder = 0f
+                var lastValue = 0f
+                flingAnim.animateDecay(velocity, exponentialDecay()) {
+                    // Early-return instead of Animatable.stop(): the decay block is not a
+                    // suspend context. The decay keeps running inertly until it damps out,
+                    // which matches stopping consumption of the fling's scroll.
+                    if (emulator.isMouseTrackingActive != mouseTrackingAtStart) {
+                        return@animateDecay
+                    }
+                    val value = this.value.coerceIn(bounds.first.toFloat(), bounds.last.toFloat())
+                    wheelRemainder -= value - lastValue
+                    lastValue = value
+                    val rows = wheelRemainder.toInt()
+                    if (rows != 0) {
+                        routeScroll(rows, emulator, dragAnchor.x, dragAnchor.y)
+                        wheelRemainder -= rows
+                    }
+                }
+            } else {
+                // Transcript mode: decay the scroll offset within [-transcript, 0], matching
+                // the legacy Scroller.fling over mTopRow.
+                val bounds = ComposeTerminalFrame.flingBounds(
+                    -maxOf(emulator.screen.activeTranscriptRows, 0), 0
+                )
+                flingAnim.snapTo(state.scrollRows.toFloat())
+                flingAnim.animateDecay(velocity, exponentialDecay()) {
+                    // Early-return instead of Animatable.stop(): the decay block is not a
+                    // suspend context (see above).
+                    if (emulator.isMouseTrackingActive != mouseTrackingAtStart) {
+                        return@animateDecay
+                    }
+                    state.scrollRows = this.value.roundToInt().coerceIn(bounds)
+                }
+            }
+        } finally {
+            flingRunning = false
+        }
+    }
+
+    // Cumulative pinch scale, reset whenever a font-size step is applied (mirrors the legacy
+    // mScaleFactor *= onScale() + client returning 1.0f after a step).
+    var pinchScale by remember(session) { mutableFloatStateOf(1f) }
+
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(palette.background))
-            .onSizeChanged { size ->
-                canvasSize = size
-                val columns = (size.width / metrics.fontWidth).toInt().coerceAtLeast(1)
-                val rows = ((size.height - metrics.lineSpacingAndAscent) / metrics.lineSpacing)
-                    .toInt().coerceAtLeast(1)
-                try {
-                    session.updateSize(columns, rows, metrics.fontWidth.toInt(), metrics.lineSpacing)
-                } catch (e: Exception) {
-                    Logger.logStackTraceWithMessage(LOG_TAG, "updateSize failed", e)
-                }
-            }
+            .onSizeChanged { canvasSize = it }
+            // Touch gesture arbitration: mouse events (SOURCE_MOUSE) are consumed by the raw
+            // pointer block below so touch detectors never see them; touch drags feed the
+            // draggable (scroll + fling), taps/long-presses the tap detector, and two-finger
+            // pinches the transform detector (legacy GestureDetector + ScaleDetector coexist,
+            // a two-finger drag both scrolls and zooms).
             .pointerInput(session, metrics) {
                 // Physical mouse (SOURCE_MOUSE). Mirror the legacy TerminalView mouse paths
                 // (doScroll for the wheel, sendMouseEvent for buttons, clipboard paste for the
@@ -227,9 +360,9 @@ fun ComposeTerminalCanvas(
                         event.changes.forEach { it.consume() }
                         val emulator = session.emulator ?: continue
                         if (event.type == PointerEventType.Scroll) {
-                            // Legacy doScroll(): wheel up (AXIS_VSCROLL > 0) reports wheel-up /
-                            // DPAD_UP / scroll back toward older output, three rows per notch.
-                            val rows = if (raw.getAxisValue(MotionEvent.AXIS_VSCROLL) > 0f) -3 else 3
+                            // Legacy onGenericMotionEvent(): wheel up (AXIS_VSCROLL > 0) views
+                            // older output and reports wheel-up, three rows per notch.
+                            val rows = if (raw.getAxisValue(MotionEvent.AXIS_VSCROLL) > 0f) 3 else -3
                             routeScroll(rows, emulator, raw.x, raw.y)
                         } else {
                             val (column, row) = columnAndRow(raw.x, raw.y)
@@ -306,32 +439,87 @@ fun ComposeTerminalCanvas(
                     }
                 }
             }
-            .pointerInput(session, isActivePane) {
-                detectTapGestures(onTap = { activateSession() })
-            }
-            .pointerInput(session, metrics) {
-                // Anchor for wheel events sent to mouse-tracking apps: legacy TerminalView
-                // anchors them at the touch down position, so remember it at drag start.
-                var dragAnchor = androidx.compose.ui.geometry.Offset.Zero
-                detectVerticalDragGestures(
-                    onDragStart = {
-                        dragRemainder = 0f
-                        dragAnchor = it
+            .pointerInput(session, state) {
+                detectTapGestures(
+                    onTap = { offset ->
+                        if (state.selection != null) {
+                            // Legacy onSingleTapUp stops the text selection mode on a tap.
+                            state.selection = null
+                        } else {
+                            activateSession()
+                            // Legacy onUp quick-tap parity: when mouse tracking is active a
+                            // quick touch tap reports the left button press/release to the app.
+                            val emulator = session.emulator
+                            if (emulator?.isMouseTrackingActive == true && !fingerScrolled) {
+                                val (column, row) = columnAndRow(offset.x, offset.y)
+                                emulator.sendMouseEvent(
+                                    TerminalEmulator.MOUSE_LEFT_BUTTON, column, row, true
+                                )
+                                emulator.sendMouseEvent(
+                                    TerminalEmulator.MOUSE_LEFT_BUTTON, column, row, false
+                                )
+                            }
+                        }
                     },
-                    onVerticalDrag = { _, dragAmount ->
+                    onLongPress = { offset ->
+                        // Legacy onLongPress starts the text selection mode (word-expanded)
+                        // unless it is already active or the client consumed the event.
+                        if (state.selection != null) return@detectTapGestures
+                        if (!isActivePane) onActivatePane?.invoke()
+                        val emulator = session.emulator ?: return@detectTapGestures
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val (column, row) = gridColumnAndRow(offset.x, offset.y)
+                        state.selection =
+                            ComposeTerminalFrame.selectWord(emulator.screen, column, row, emulator.mColumns)
+                    }
+                )
+            }
+            .pointerInput(session, state) {
+                detectTransformGestures { _, _, zoom, _ ->
+                    if (state.selection != null || zoom == 1f) {
+                        pinchScale = 1f
+                        return@detectTransformGestures
+                    }
+                    pinchScale *= zoom
+                    when {
+                        pinchScale >= 1.1f -> {
+                            onFontSizeStep(+2f)
+                            pinchScale = 1f
+                        }
+                        pinchScale <= 0.9f -> {
+                            onFontSizeStep(-2f)
+                            pinchScale = 1f
+                        }
+                    }
+                }
+            }
+            .draggable(
+                state = remember(session, metrics) {
+                    DraggableState { delta ->
                         val emulator = session.emulator
                         if (emulator != null) {
                             val (rows, remainder) = ComposeTerminalFrame.accumulateDragRows(
-                                dragRemainder, dragAmount, metrics.lineSpacing
+                                dragRemainder, delta, metrics.lineSpacing
                             )
                             dragRemainder = remainder
                             if (rows != 0) {
+                                fingerScrolled = true
                                 routeScroll(rows, emulator, dragAnchor.x, dragAnchor.y)
                             }
                         }
                     }
-                )
-            }
+                },
+                orientation = Orientation.Vertical,
+                onDragStarted = {
+                    dragRemainder = 0f
+                    fingerScrolled = false
+                    dragAnchor = it
+                },
+                onDragStopped = { velocity ->
+                    dragRemainder = 0f
+                    doFling(velocity)
+                }
+            )
     ) {
         if (canvasSize == IntSize.Zero) return@Canvas
         val emulator = session.emulator ?: return@Canvas
@@ -342,7 +530,7 @@ fun ComposeTerminalCanvas(
         // Display-time clamp covers transcript resizes between frames; the stored offset
         // is re-clamped in LaunchedEffect(frameTick) above.
         val topRow = ComposeTerminalFrame.clampScrollOffset(
-            scrollRows, emulator.screen.activeTranscriptRows
+            state.scrollRows, emulator.screen.activeTranscriptRows
         )
         // Cursor phase: null hands visibility decision back to the emulator (blink off);
         // when blinking, the phase alone decides so the cursor toggles here only.
@@ -351,7 +539,7 @@ fun ComposeTerminalCanvas(
         drawIntoCanvas { drawCanvas ->
             renderComposeFrame(
                 drawCanvas.nativeCanvas, emulator, topRow, paint, metrics, palette, enableLigatures,
-                cursorVisibleOverride
+                cursorVisibleOverride, state.selection
             )
         }
     }
@@ -361,7 +549,7 @@ fun ComposeTerminalCanvas(
  * Font metrics cached per (typeface, size), mirroring the legacy [TerminalRenderer]
  * constructor so grid geometry matches the fallback view.
  */
-private data class CanvasFontMetrics(
+internal data class CanvasFontMetrics(
     val fontWidth: Float,
     val lineSpacing: Int,
     val ascent: Int,
@@ -377,7 +565,7 @@ private data class CanvasFontMetrics(
  * @param fontSize The text size in pixels
  * @return The snapshotted metrics
  */
-private fun measureCanvasMetrics(paint: Paint, typeface: Typeface, fontSize: Float): CanvasFontMetrics {
+internal fun measureCanvasMetrics(paint: Paint, typeface: Typeface, fontSize: Float): CanvasFontMetrics {
     paint.typeface = typeface
     paint.textSize = fontSize
     val lineSpacing = ceil(paint.fontSpacing).toInt()
@@ -394,15 +582,15 @@ private fun measureCanvasMetrics(paint: Paint, typeface: Typeface, fontSize: Flo
 
 /**
  * Paint one emulator frame onto a native canvas, mirroring the legacy render loop
- * (reverse video, per-row runs, cursor rect, text run).
+ * (reverse video, per-row runs, cursor rect, text run, selection reverse video).
  *
- * Still deferred: text selection (TODO(spike): selection).
- *
- * @param topRow Scroll offset owned by the hidden input view (same semantics as the
- * legacy `mTopRow`); rows paint from `topRow` to `topRow + mRows`
+ * @param topRow Scroll offset owned by the canvas (same semantics as the legacy `mTopRow`);
+ * rows paint from `topRow` to `topRow + mRows`
  * @param cursorVisibleOverride When null the emulator decides (blink off); otherwise it
  * overrides [TerminalEmulator.shouldCursorBeVisible] so the canvas blink phase toggles
  * the cursor here only
+ * @param selection The active text selection in external row coordinates, or null. Selected
+ * cells paint with swapped colors exactly like the legacy renderer.
  */
 private fun renderComposeFrame(
     canvas: android.graphics.Canvas,
@@ -412,7 +600,8 @@ private fun renderComposeFrame(
     metrics: CanvasFontMetrics,
     palette: TerminalPalette,
     enableLigatures: Boolean,
-    cursorVisibleOverride: Boolean? = null
+    cursorVisibleOverride: Boolean? = null,
+    selection: ComposeTerminalFrame.TextSelection? = null
 ) {
     val colors = emulator.mColors.mCurrentColors
     val reverseVideo = emulator.isReverseVideo
@@ -433,8 +622,9 @@ private fun renderComposeFrame(
         val externalRow = topRow + row
         val cursorX = if (externalRow == cursorRow && cursorVisible) cursorCol else -1
         val line = screen.allocateFullLineIfNecessary(screen.externalToInternalRow(externalRow))
+        val (selX1, selX2) = ComposeTerminalFrame.selectionBoundsForRow(selection, externalRow, columns)
         val runs = ComposeTerminalFrame.buildLineRuns(
-            line, columns, cursorX, -1, -1, enableLigatures
+            line, columns, cursorX, selX1, selX2, enableLigatures
         ) { codePoint ->
             val measured = if (codePoint < metrics.asciiMeasures.size) {
                 metrics.asciiMeasures[codePoint]
@@ -471,7 +661,8 @@ private fun drawComposeRun(
     metrics: CanvasFontMetrics
 ) {
     val resolved = ComposeTerminalFrame.resolveRunColors(
-        run.style, paletteColors, defaultBackground, emulatorReverseVideo, run.inCursor, cursorStyle
+        run.style, paletteColors, defaultBackground, emulatorReverseVideo,
+        run.inSelection, run.inCursor, cursorStyle
     )
 
     var left = run.startColumn * metrics.fontWidth

@@ -33,6 +33,24 @@ object TerminalViewRegistry {
     var activeView: TerminalView? = null
         private set
 
+    /**
+     * Selected text stored before the "More…" toolbar button is pressed, mirroring
+     * `mStoredSelectedText` of
+     * {@link com.termux.view.textselection.TextSelectionCursorController}. The Compose
+     * selection overlay stores the text here (the hidden input view has no selection of its
+     * own), and the app context menu / share-selected-text reads it as a fallback. Cleared
+     * when the context menu closes.
+     */
+    @Volatile
+    var storedSelectedText: String? = null
+        private set
+
+    /** Store the selected text before the "More…" context menu is shown. */
+    @JvmStatic
+    fun setStoredSelectedText(text: String?) {
+        storedSelectedText = text
+    }
+
     /** Views currently composed, keyed by the session handle they render. */
     private val viewsBySessionHandle = ConcurrentHashMap<String, TerminalView>()
 
@@ -42,10 +60,20 @@ object TerminalViewRegistry {
     /**
      * Listener invoked on the main thread whenever a session screen update arrives.
      * Used by the experimental Compose Canvas ([ComposeTerminalCanvas]) to repaint.
+     *
+     * The scroll count is passed here because the legacy hidden input view (whose own
+     * [com.termux.view.TerminalView.onScreenUpdated] runs earlier in the same callback and
+     * clears the emulator scroll counter) must not consume the value the canvas reads to shift
+     * a text selection on new output.
      */
     fun interface FrameListener {
-        /** Called when the session frame changed and must be repainted. */
-        fun onFrame()
+        /**
+         * Called when the session frame changed and must be repainted.
+         *
+         * @param scrollCount Rows the emulator scrolled for this update, read before the hidden
+         * input view cleared the counter
+         */
+        fun onFrame(scrollCount: Int)
     }
 
     /** Frame listeners per session handle. */
@@ -130,13 +158,16 @@ object TerminalViewRegistry {
      * running on the same callback.
      *
      * @param session The terminal session that changed
+     * @param scrollCount Rows the emulator scrolled for this update; captured by the caller
+     * before the hidden input view's [com.termux.view.TerminalView.onScreenUpdated] clears the
+     * emulator scroll counter
      */
     @JvmStatic
-    fun notifyFrameChanged(session: TerminalSession) {
+    fun notifyFrameChanged(session: TerminalSession, scrollCount: Int = 0) {
         val listeners = frameListenersBySessionHandle[session.mHandle] ?: return
         listeners.toList().forEach { listener ->
             try {
-                listener.onFrame()
+                listener.onFrame(scrollCount)
             } catch (e: Exception) {
                 Logger.logStackTraceWithMessage(LOG_TAG, "Frame listener failed", e)
             }

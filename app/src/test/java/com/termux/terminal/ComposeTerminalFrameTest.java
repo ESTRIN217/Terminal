@@ -267,7 +267,7 @@ public class ComposeTerminalFrameTest {
             TextStyle.CHARACTER_ATTRIBUTE_BOLD);
 
         ComposeTerminalFrame.ResolvedRunColors resolved = ComposeTerminalFrame.resolveRunColors(
-            bold, palette, palette[TextStyle.COLOR_INDEX_BACKGROUND], false, false,
+            bold, palette, palette[TextStyle.COLOR_INDEX_BACKGROUND], false, false, false,
             TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK);
 
         Assert.assertEquals(palette[9], resolved.getForeColor());
@@ -282,7 +282,7 @@ public class ComposeTerminalFrameTest {
         long inverse = TextStyle.encode(2, 3, TextStyle.CHARACTER_ATTRIBUTE_INVERSE);
 
         ComposeTerminalFrame.ResolvedRunColors resolved = ComposeTerminalFrame.resolveRunColors(
-            inverse, palette, palette[TextStyle.COLOR_INDEX_BACKGROUND], false, false,
+            inverse, palette, palette[TextStyle.COLOR_INDEX_BACKGROUND], false, false, false,
             TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK);
 
         Assert.assertEquals(palette[3], resolved.getForeColor());
@@ -297,7 +297,7 @@ public class ComposeTerminalFrameTest {
             TextStyle.COLOR_INDEX_BACKGROUND, TextStyle.CHARACTER_ATTRIBUTE_INVISIBLE);
 
         ComposeTerminalFrame.ResolvedRunColors resolved = ComposeTerminalFrame.resolveRunColors(
-            invisible, palette, palette[TextStyle.COLOR_INDEX_BACKGROUND], false, false,
+            invisible, palette, palette[TextStyle.COLOR_INDEX_BACKGROUND], false, false, false,
             TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK);
 
         Assert.assertFalse(resolved.getDrawText());
@@ -309,11 +309,117 @@ public class ComposeTerminalFrameTest {
         long plain = TextStyle.encode(2, 3, 0);
 
         ComposeTerminalFrame.ResolvedRunColors resolved = ComposeTerminalFrame.resolveRunColors(
-            plain, palette, palette[TextStyle.COLOR_INDEX_BACKGROUND], false, true,
+            plain, palette, palette[TextStyle.COLOR_INDEX_BACKGROUND], false, false, true,
             TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK);
 
         Assert.assertEquals(palette[3], resolved.getForeColor());
         Assert.assertEquals(palette[2], resolved.getBackColor());
         Assert.assertEquals(palette[TextStyle.COLOR_INDEX_CURSOR], resolved.getCursorColor());
+    }
+
+    @Test
+    public void testSelectionBoundsForRow() {
+        ComposeTerminalFrame.TextSelection selection =
+            new ComposeTerminalFrame.TextSelection(3, -2, 7, 0);
+
+        assertBounds(-1, -1, ComposeTerminalFrame.selectionBoundsForRow(null, 0, 12));
+        assertBounds(-1, -1, ComposeTerminalFrame.selectionBoundsForRow(selection, -3, 12));
+        assertBounds(-1, -1, ComposeTerminalFrame.selectionBoundsForRow(selection, 1, 12));
+        // First selected row runs from x1 to the line end, last from 0 to x2, middle whole.
+        assertBounds(3, 11, ComposeTerminalFrame.selectionBoundsForRow(selection, -2, 12));
+        assertBounds(0, 11, ComposeTerminalFrame.selectionBoundsForRow(selection, -1, 12));
+        assertBounds(0, 7, ComposeTerminalFrame.selectionBoundsForRow(selection, 0, 12));
+    }
+
+    private static void assertBounds(int expectedX1, int expectedX2, kotlin.Pair<Integer, Integer> bounds) {
+        Assert.assertEquals(expectedX1, (int) bounds.getFirst());
+        Assert.assertEquals(expectedX2, (int) bounds.getSecond());
+    }
+
+    @Test
+    public void testSelectWord() {
+        TerminalBuffer screen = new TerminalBuffer(6, 6, 6);
+        screen.setChar(0, 0, 'l', 0);
+        screen.setChar(1, 0, 's', 0);
+
+        // Whitespace cell is selected alone.
+        ComposeTerminalFrame.TextSelection space =
+            ComposeTerminalFrame.selectWord(screen, 5, 0, 6);
+        Assert.assertEquals(5, space.getX1());
+        Assert.assertEquals(5, space.getX2());
+        // Non-space expands while neighbors read back non-empty; the trailing space
+        // cells read back "" so the word stops at the used text.
+        ComposeTerminalFrame.TextSelection word =
+            ComposeTerminalFrame.selectWord(screen, 1, 0, 6);
+        Assert.assertEquals(0, word.getX1());
+        Assert.assertEquals(1, word.getX2());
+    }
+
+    @Test
+    public void testValidCurXWideGlyph() {
+        TerminalBuffer screen = new TerminalBuffer(6, 6, 6);
+        screen.setChar(1, 0, 0x4E2D, 0);
+        // Inside the second half of a wide glyph: snap past it.
+        Assert.assertEquals(3, ComposeTerminalFrame.validCurX(screen, 0, 2, 6));
+        // On the wide glyph itself: keep the column.
+        Assert.assertEquals(1, ComposeTerminalFrame.validCurX(screen, 0, 1, 6));
+    }
+
+    @Test
+    public void testClampSelectionHandle() {
+        TerminalBuffer screen = new TerminalBuffer(6, 6, 6);
+        ComposeTerminalFrame.TextSelection original =
+            new ComposeTerminalFrame.TextSelection(1, 0, 4, 0);
+
+        // Start handle dragged past the end handle clamps onto it.
+        ComposeTerminalFrame.TextSelection start =
+            ComposeTerminalFrame.clampSelectionHandle(6, 0, original, true, 6, 0, 6, screen);
+        Assert.assertEquals(4, start.getX1());
+        Assert.assertEquals(4, start.getX2());
+
+        // End handle dragged before the start handle clamps onto it.
+        ComposeTerminalFrame.TextSelection end =
+            ComposeTerminalFrame.clampSelectionHandle(-1, 0, original, false, 6, 0, 6, screen);
+        Assert.assertEquals(1, end.getX1());
+        Assert.assertEquals(1, end.getX2());
+
+        // Rows clamp into [-rowsInHistory, mRows - 1].
+        ComposeTerminalFrame.TextSelection rows =
+            ComposeTerminalFrame.clampSelectionHandle(1, -9, original, true, 6, 2, 6, screen);
+        Assert.assertEquals(-2, rows.getY1());
+        Assert.assertEquals(1, rows.getX1());
+    }
+
+    @Test
+    public void testShiftSelectionForNewOutput() {
+        ComposeTerminalFrame.TextSelection selection =
+            new ComposeTerminalFrame.TextSelection(1, -2, 4, -1);
+
+        // New output scrolls both the offset and the selection up.
+        kotlin.Pair<Integer, ComposeTerminalFrame.TextSelection> shifted =
+            ComposeTerminalFrame.shiftSelectionForNewOutput(selection, -3, 2, 10);
+        Assert.assertEquals(-5, (int) shifted.getFirst());
+        ComposeTerminalFrame.TextSelection shiftedSelection = shifted.getSecond();
+        Assert.assertEquals(-4, shiftedSelection.getY1());
+        Assert.assertEquals(-3, shiftedSelection.getY2());
+
+        // End of history: abort the selection and snap the scroll to live.
+        kotlin.Pair<Integer, ComposeTerminalFrame.TextSelection> aborted =
+            ComposeTerminalFrame.shiftSelectionForNewOutput(selection, -3, 4, 5);
+        Assert.assertEquals(0, (int) aborted.getFirst());
+        Assert.assertNull(aborted.getSecond());
+
+        // No shift or no selection is a no-op.
+        Assert.assertEquals(-3,
+            (int) ComposeTerminalFrame.shiftSelectionForNewOutput(selection, -3, 0, 10).getFirst());
+        Assert.assertNull(ComposeTerminalFrame.shiftSelectionForNewOutput(null, -3, 2, 10).getSecond());
+    }
+
+    @Test
+    public void testFlingBounds() {
+        Assert.assertEquals(new kotlin.ranges.IntRange(-4, 4),
+            ComposeTerminalFrame.flingBounds(-4, 4));
+        Assert.assertEquals(new kotlin.ranges.IntRange(-10, 0),
+            ComposeTerminalFrame.flingBounds(-10, 0));
     }
 }
