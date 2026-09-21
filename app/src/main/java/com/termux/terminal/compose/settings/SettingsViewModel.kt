@@ -49,6 +49,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 terminalFontId = p.getTerminalFont(),
                 terminalFontLigatures = p.isTerminalFontLigaturesEnabled(),
                 useCustomColorScheme = p.shouldUseCustomColorScheme(),
+                nativeComposeRenderer = p.isNativeComposeRendererEnabled(),
                 logLevel = p.getLogLevel(),
                 terminalViewKeyLogging = p.isTerminalViewKeyLoggingEnabled(),
                 pluginErrorNotifications = p.arePluginErrorNotificationsEnabled(false),
@@ -112,6 +113,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setUseCustomColorScheme(value: Boolean) {
         prefs?.setUseCustomColorScheme(value)
         _uiState.update { it.copy(useCustomColorScheme = value) }
+    }
+
+    fun setNativeComposeRenderer(value: Boolean) {
+        prefs?.setNativeComposeRendererEnabled(value)
+        _uiState.update { it.copy(nativeComposeRenderer = value) }
     }
 
     fun setLogLevel(value: Int) {

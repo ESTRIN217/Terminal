@@ -19,6 +19,7 @@ data class SettingsUiState(
     val terminalFontId: String = "",
     val terminalFontLigatures: Boolean = true,
     val useCustomColorScheme: Boolean = false,
+    val nativeComposeRenderer: Boolean = false,
     val logLevel: Int = 1,
     val terminalViewKeyLogging: Boolean = false,
     val pluginErrorNotifications: Boolean = true,

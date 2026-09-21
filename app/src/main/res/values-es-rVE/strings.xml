@@ -330,6 +330,8 @@
     <string name="terminal_font_ligatures_desc">Dibuja ligaduras de programación (fuentes como Fira Code)</string>
     <string name="use_custom_color_scheme">Esquema de colores personalizado</string>
     <string name="use_custom_color_scheme_desc">Aplica la paleta de ~/.termux/colors.properties (soporta colores 24-bit)</string>
+    <string name="native_compose_renderer">Renderizado Compose nativo [Experimental]</string>
+    <string name="native_compose_renderer_desc">Pinta la terminal con un prototipo Canvas de Compose. La vista clásica sigue como respaldo</string>
     <string name="toggle_keyboard">Alternar teclado</string>
 
     <!-- About Screen -->

@@ -15,6 +15,8 @@ import com.termux.terminal.TerminalSession
  * @param extraKeysModifiers Sticky modifier keys active on the extra keys bar
  * @param isSoftKeyboardVisible Whether the soft keyboard is visible
  * @param fontSize Font size for the terminal, in density-independent pixels
+ * @param useNativeRenderer Whether the experimental Compose Canvas renderer is enabled
+ * (legacy TerminalView stays as fallback when false)
  * @param debianInstaller Debian rootfs installer overlay state
  */
 data class TermuxUiState(
@@ -26,6 +28,7 @@ data class TermuxUiState(
     val extraKeysModifiers: Set<String> = emptySet(),
     val isSoftKeyboardVisible: Boolean = false,
     val fontSize: Float = 14f,
+    val useNativeRenderer: Boolean = false,
     val extraKeysConfig: ExtraKeysConfig = ExtraKeysConfig(pages = emptyList()),
     val debianInstaller: DebianInstallerUiState = DebianInstallerUiState()
 ) {

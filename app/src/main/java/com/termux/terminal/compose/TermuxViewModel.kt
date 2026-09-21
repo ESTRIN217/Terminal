@@ -284,6 +284,21 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
+     * Enable or disable the experimental native Compose Canvas renderer.
+     *
+     * When false (default) terminal panes keep using the legacy TerminalView.
+     *
+     * @param enabled Whether the Compose Canvas spike should be used
+     */
+    fun setNativeRenderer(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.update { state ->
+                state.copy(useNativeRenderer = enabled)
+            }
+        }
+    }
+
+    /**
      * Update the title for a session.
      *
      * @param session The session whose title changed

@@ -168,6 +168,14 @@ public final class TermuxPreferenceConstants {
 
 
         /**
+         * Defines the key for whether the experimental native Compose Canvas terminal renderer
+         * is enabled. When disabled (default) the legacy {@code TerminalView} is used.
+         */
+        public static final String KEY_NATIVE_COMPOSE_RENDERER = "native_compose_renderer";
+        public static final boolean DEFAULT_VALUE_NATIVE_COMPOSE_RENDERER = false;
+
+
+        /**
          * Defines the key for last used notification id.
          */
         public static final String KEY_LAST_NOTIFICATION_ID = "last_notification_id";

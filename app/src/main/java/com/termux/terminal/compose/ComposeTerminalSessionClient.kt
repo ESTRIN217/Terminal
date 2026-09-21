@@ -21,6 +21,8 @@ class ComposeTerminalSessionClient(
         // Repaint the composed view rendering this session, whether it is the focused
         // pane or a secondary pane of a split view.
         TerminalViewRegistry.getViewForSession(changedSession)?.onScreenUpdated()
+        // Repaint the experimental Compose Canvas when it renders this session.
+        TerminalViewRegistry.notifyFrameChanged(changedSession)
     }
 
     override fun onTitleChanged(updatedSession: TerminalSession) {
@@ -48,5 +50,6 @@ class ComposeTerminalSessionClient(
 
     override fun onColorsChanged(changedSession: TerminalSession) {
         TerminalViewRegistry.getViewForSession(changedSession)?.onScreenUpdated()
+        TerminalViewRegistry.notifyFrameChanged(changedSession)
     }
 }

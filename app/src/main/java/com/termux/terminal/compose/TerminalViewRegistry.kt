@@ -1,5 +1,6 @@
 package com.termux.terminal.compose
 
+import com.termux.shared.logger.Logger
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
@@ -25,6 +26,8 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object TerminalViewRegistry {
 
+    private const val LOG_TAG = "TerminalViewRegistry"
+
     /** The view of the focused (active) pane, or null when no terminal is focused. */
     @Volatile
     var activeView: TerminalView? = null
@@ -35,6 +38,18 @@ object TerminalViewRegistry {
 
     /** Palettes that failed to apply (no emulator yet), per view. */
     private val pendingPalettes = ConcurrentHashMap<TerminalView, TerminalPalette>()
+
+    /**
+     * Listener invoked on the main thread whenever a session screen update arrives.
+     * Used by the experimental Compose Canvas ([ComposeTerminalCanvas]) to repaint.
+     */
+    fun interface FrameListener {
+        /** Called when the session frame changed and must be repainted. */
+        fun onFrame()
+    }
+
+    /** Frame listeners per session handle. */
+    private val frameListenersBySessionHandle = ConcurrentHashMap<String, MutableSet<FrameListener>>()
 
     /**
      * Register or refresh a composed view for a session.
@@ -82,6 +97,50 @@ object TerminalViewRegistry {
     @JvmStatic
     fun forComposedViews(action: (TerminalView) -> Unit) {
         viewsBySessionHandle.values.forEach { action(it) }
+    }
+
+    /**
+     * Register a frame listener repainted on every screen update of a session.
+     *
+     * @param session The terminal session to observe
+     * @param listener The listener to invoke on the main thread per update
+     */
+    @JvmStatic
+    fun addFrameListener(session: TerminalSession, listener: FrameListener) {
+        frameListenersBySessionHandle
+            .getOrPut(session.mHandle) { ConcurrentHashMap.newKeySet() }
+            .add(listener)
+    }
+
+    /**
+     * Unregister a frame listener when it leaves composition.
+     *
+     * @param session The terminal session that was observed
+     * @param listener The listener to remove
+     */
+    @JvmStatic
+    fun removeFrameListener(session: TerminalSession, listener: FrameListener) {
+        frameListenersBySessionHandle[session.mHandle]?.remove(listener)
+    }
+
+    /**
+     * Notify frame listeners that a session screen update arrived.
+     *
+     * Never throws: a failing listener must not break the legacy view invalidate path
+     * running on the same callback.
+     *
+     * @param session The terminal session that changed
+     */
+    @JvmStatic
+    fun notifyFrameChanged(session: TerminalSession) {
+        val listeners = frameListenersBySessionHandle[session.mHandle] ?: return
+        listeners.toList().forEach { listener ->
+            try {
+                listener.onFrame()
+            } catch (e: Exception) {
+                Logger.logStackTraceWithMessage(LOG_TAG, "Frame listener failed", e)
+            }
+        }
     }
 
     /**

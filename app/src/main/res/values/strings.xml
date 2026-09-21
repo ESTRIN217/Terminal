@@ -338,6 +338,8 @@
     <string name="terminal_font_ligatures_desc">Render programming ligatures (fonts like Fira Code)</string>
     <string name="use_custom_color_scheme">Custom color scheme</string>
     <string name="use_custom_color_scheme_desc">Apply the colors.properties palette from ~/.termux (supports 24-bit colors)</string>
+    <string name="native_compose_renderer">Native Compose renderer [Experimental]</string>
+    <string name="native_compose_renderer_desc">Paint the terminal with a Compose Canvas spike. Legacy view stays as fallback</string>
     <string name="save_to_a_files">Save to a files</string>
 
     <!-- About Screen -->

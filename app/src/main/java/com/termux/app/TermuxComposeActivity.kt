@@ -225,6 +225,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         loadExtraKeysConfig()
         mViewModel.setExtraKeysVisible(mPreferences.shouldShowTerminalToolbar())
         mViewModel.setFontSize(mPreferences.getFontSize().toFloat())
+        mViewModel.setNativeRenderer(mPreferences.isNativeComposeRendererEnabled())
 
         val serviceIntent = Intent(this, TermuxService::class.java)
         startService(serviceIntent)
@@ -314,6 +315,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         // Sync SharedPreferences → TermuxViewModel (bridge from Settings screen)
         mViewModel.setExtraKeysVisible(mPreferences.shouldShowTerminalToolbar())
         mViewModel.setFontSize(mPreferences.getFontSize().toFloat())
+        mViewModel.setNativeRenderer(mPreferences.isNativeComposeRendererEnabled())
         // Recompute the terminal palette (custom color scheme may have changed in Settings).
         mPaletteRevision++
         // Reload the terminal font and ligature setting (may have changed in Settings).

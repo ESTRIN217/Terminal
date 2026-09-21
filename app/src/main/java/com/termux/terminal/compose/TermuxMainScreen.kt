@@ -238,6 +238,7 @@ fun TermuxMainScreen(
                                     enableLigatures = enableLigatures,
                                     viewClient = viewClient,
                                     palette = palette,
+                                    useNativeRenderer = uiState.useNativeRenderer,
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
@@ -259,6 +260,7 @@ fun TermuxMainScreen(
                                     enableLigatures = enableLigatures,
                                     viewClient = viewClient,
                                     palette = palette,
+                                    useNativeRenderer = uiState.useNativeRenderer,
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
@@ -277,6 +279,7 @@ fun TermuxMainScreen(
                                     enableLigatures = enableLigatures,
                                     viewClient = viewClient,
                                     palette = palette,
+                                    useNativeRenderer = uiState.useNativeRenderer,
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
@@ -383,6 +386,8 @@ private fun sendKeyToSession(
  * @param enableLigatures Whether OpenType ligature shaping is enabled
  * @param viewClient The [TerminalViewClient] for terminal panes
  * @param palette The terminal palette for terminal panes
+ * @param useNativeRenderer Whether terminal panes use the native Canvas plus a hidden
+ * input view instead of the legacy view
  * @param onPaneFocused Callback with the session id when the pane requests focus
  * @param onRemoveSession Callback to remove the session
  * @param onOpenInTerminal Callback to open a terminal in a directory (file manager panes)
@@ -397,23 +402,53 @@ private fun SessionPane(
     enableLigatures: Boolean,
     viewClient: TerminalViewClient,
     palette: TerminalPalette,
+    useNativeRenderer: Boolean,
     onPaneFocused: (String) -> Unit,
     onRemoveSession: (TermuxSessionUiModel) -> Unit,
     onOpenInTerminal: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     when (model) {
-        is TermuxSessionUiModel.Terminal -> TerminalViewHost(
-            session = model.session,
-            fontSize = fontSize,
-            typeface = typeface,
-            enableLigatures = enableLigatures,
-            viewClient = viewClient,
-            palette = palette,
-            isActivePane = isActivePane,
-            onActivatePane = { onPaneFocused(model.id) },
-            modifier = modifier
-        )
+        is TermuxSessionUiModel.Terminal -> if (useNativeRenderer) {
+            // Native path: the hidden view below owns IME/keys/focus/scroll state, the
+            // opaque canvas above is the only renderer. Both are full-size so geometry
+            // (and updateSize) stays consistent between them.
+            Box(modifier = modifier) {
+                HiddenTerminalInputHost(
+                    session = model.session,
+                    fontSize = fontSize,
+                    typeface = typeface,
+                    enableLigatures = enableLigatures,
+                    viewClient = viewClient,
+                    palette = palette,
+                    isActivePane = isActivePane,
+                    onActivatePane = { onPaneFocused(model.id) },
+                    modifier = Modifier.fillMaxSize()
+                )
+                ComposeTerminalCanvas(
+                    session = model.session,
+                    fontSize = fontSize,
+                    typeface = typeface,
+                    enableLigatures = enableLigatures,
+                    palette = palette,
+                    isActivePane = isActivePane,
+                    onActivatePane = { onPaneFocused(model.id) },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        } else {
+            TerminalViewHost(
+                session = model.session,
+                fontSize = fontSize,
+                typeface = typeface,
+                enableLigatures = enableLigatures,
+                viewClient = viewClient,
+                palette = palette,
+                isActivePane = isActivePane,
+                onActivatePane = { onPaneFocused(model.id) },
+                modifier = modifier
+            )
+        }
         is TermuxSessionUiModel.FileManager -> FileManagerSessionHost(
             sessionId = model.id,
             onCloseSession = { onRemoveSession(model) },

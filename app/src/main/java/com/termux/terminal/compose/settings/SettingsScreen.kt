@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
@@ -161,6 +162,13 @@ fun SettingsScreen(
                     icon = Icons.Default.Palette,
                     checked = state.useCustomColorScheme,
                     onCheckedChange = viewModel::setUseCustomColorScheme
+                )
+                SettingsSwitchTile(
+                    title = stringResource(R.string.native_compose_renderer),
+                    subtitle = stringResource(R.string.native_compose_renderer_desc),
+                    icon = Icons.Default.Terminal,
+                    checked = state.nativeComposeRenderer,
+                    onCheckedChange = viewModel::setNativeComposeRenderer
                 )
             }
 
