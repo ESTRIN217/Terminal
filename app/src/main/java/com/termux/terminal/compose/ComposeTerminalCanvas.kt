@@ -2,6 +2,8 @@ package com.termux.terminal.compose
 
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.view.InputDevice
+import android.view.MotionEvent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -20,11 +22,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isPrimaryPressed
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.isTertiaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
+import com.termux.shared.interact.ShareUtils
 import com.termux.shared.logger.Logger
+import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties
 import com.termux.shared.view.KeyboardUtils
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
@@ -33,6 +41,7 @@ import com.termux.terminal.WcWidth
 import com.termux.terminal.bridge.TerminalKeyHandler
 import kotlin.math.abs
 import kotlin.math.ceil
+import kotlinx.coroutines.delay
 
 /**
  * Experimental native terminal canvas (Fase 3.6): paints a [TerminalSession] with a
@@ -43,10 +52,11 @@ import kotlin.math.ceil
  * focuses that view and shows the soft keyboard. The scroll offset, however, is owned here
  * (gestures land on this canvas, so the hidden view stays at top row 0): dragging moves a
  * row offset clamped to the transcript, and new output keeps following only while the
- * offset is 0.
+ * offset is 0. The canvas also owns cursor blinking (the hidden view's blinker stays inert at
+ * the default rate 0) and physical-mouse input (wheel, buttons and clipboard paste), fed
+ * from the raw [MotionEvent] exposed on Compose [androidx.compose.ui.input.pointer.PointerEvent].
  *
- * Still deferred: text selection, cursor blinking (painted statically when visible),
- * pinch-zoom and fling inertia.
+ * Still deferred: text selection, pinch-zoom and fling inertia.
  * The legacy view set via [TerminalViewHost] stays as the default fallback behind the
  * {@code native_compose_renderer} feature flag.
  *
@@ -91,6 +101,24 @@ fun ComposeTerminalCanvas(
     // Sub-row drag leftovers, carried across drag events.
     var dragRemainder by remember(session) { mutableFloatStateOf(0f) }
 
+    // Cursor blinking is owned by this canvas: the hidden input view's blinker stays inert
+    // at the default rate 0, so its blink state never toggles. The rate is the same property
+    // the legacy TerminalView reads, and the phase only ticks while this pane is active.
+    // Reading both states in the draw scope repaints on every phase flip.
+    val blinkRate = remember { TermuxAppSharedProperties.getProperties()?.getTerminalCursorBlinkRate() ?: 0 }
+    val blinkEnabled = isActivePane && ComposeTerminalFrame.isValidCursorBlinkRate(blinkRate)
+    var blinkOn by remember(session, blinkEnabled) { mutableStateOf(true) }
+    LaunchedEffect(session, blinkEnabled, blinkRate) {
+        if (!blinkEnabled) {
+            blinkOn = true
+            return@LaunchedEffect
+        }
+        while (true) {
+            delay(blinkRate.toLong())
+            blinkOn = !blinkOn
+        }
+    }
+
     // New output while scrolled back: keep the offset, re-clamped in case the transcript
     // shrank. Following (0) needs no work. State writes stay out of the draw scope.
     LaunchedEffect(frameTick) {
@@ -111,6 +139,61 @@ fun ComposeTerminalCanvas(
     // Last laid-out size, used to derive the grid before first paint.
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
 
+    // Convert a point in canvas pixels to a 1-based terminal grid cell, mirroring the
+    // legacy getColumnAndRow() used for mouse-tracking coordinates.
+    fun columnAndRow(x: Float, y: Float): Pair<Int, Int> =
+        ((x / metrics.fontWidth).toInt() + 1) to
+            (((y - metrics.lineSpacingAndAscent) / metrics.lineSpacing).toInt() + 1)
+
+    // Shared scroll router for finger drags and the mouse wheel, mirroring the legacy
+    // doScroll(): raw signed rows go to mouse-tracking apps, arrow keys to the alt screen,
+    // and the canvas-owned transcript offset otherwise.
+    fun routeScroll(rows: Int, emulator: TerminalEmulator, anchorX: Float, anchorY: Float) {
+        if (rows == 0) return
+        when {
+            emulator.isMouseTrackingActive -> {
+                // Mouse-tracking apps (opencode TUI, vim mouse mode, ...) consume wheel
+                // events instead of the transcript or the alt screen. Mirror legacy
+                // doScroll(): rows > 0 reports wheel-up (a swipe down).
+                val (column, row) = columnAndRow(anchorX, anchorY)
+                val button = if (rows > 0) TerminalEmulator.MOUSE_WHEELUP_BUTTON
+                    else TerminalEmulator.MOUSE_WHEELDOWN_BUTTON
+                repeat(abs(rows)) {
+                    emulator.sendMouseEvent(button, column, row, true)
+                }
+            }
+            emulator.isAlternateBufferActive -> {
+                // Full-screen apps (vim, less) have no transcript: drive the cursor with
+                // arrow keys instead. Legacy doScroll() parity: rows > 0 moves up.
+                repeat(abs(rows)) {
+                    session.write(
+                        TerminalKeyHandler.getKeySequence(if (rows > 0) "UP" else "DOWN")
+                    )
+                }
+            }
+            else -> {
+                // Legacy doScroll() parity: rows > 0 (swipe down / wheel up) scrolls back
+                // toward older output, negative toward live (0).
+                scrollRows = ComposeTerminalFrame.scrollByDrag(
+                    scrollRows, rows, emulator.screen.activeTranscriptRows
+                )
+            }
+        }
+    }
+
+    // Tap or a physical-mouse click with no drag: promote a secondary split pane first,
+    // then hand focus and the soft keyboard to the hidden input view owning this session.
+    fun activateSession() {
+        if (!isActivePane) onActivatePane?.invoke()
+        val inputView = TerminalViewRegistry.getViewForSession(session)
+        if (inputView != null) {
+            inputView.requestFocus()
+            KeyboardUtils.showSoftKeyboard(context, inputView)
+        } else {
+            Logger.logWarn(LOG_TAG, "Tap with no hidden input view for session")
+        }
+    }
+
     Canvas(
         modifier = modifier
             .fillMaxSize()
@@ -126,21 +209,105 @@ fun ComposeTerminalCanvas(
                     Logger.logStackTraceWithMessage(LOG_TAG, "updateSize failed", e)
                 }
             }
-            .pointerInput(session, isActivePane) {
-                detectTapGestures(
-                    onTap = {
-                        // Promote a secondary split pane first, then hand focus and the
-                        // soft keyboard to the hidden input view owning this session.
-                        if (!isActivePane) onActivatePane?.invoke()
-                        val inputView = TerminalViewRegistry.getViewForSession(session)
-                        if (inputView != null) {
-                            inputView.requestFocus()
-                            KeyboardUtils.showSoftKeyboard(context, inputView)
+            .pointerInput(session, metrics) {
+                // Physical mouse (SOURCE_MOUSE). Mirror the legacy TerminalView mouse paths
+                // (doScroll for the wheel, sendMouseEvent for buttons, clipboard paste for the
+                // middle button). All mouse events are consumed here so the touch tap/drag
+                // detectors below never see them and finger vs mouse gestures stay disjoint.
+                awaitPointerEventScope {
+                    var mouseDown = false
+                    var mouseLeftDown = false
+                    var mouseDragged = false
+                    var mouseRemainder = 0f
+                    var mouseLastY = 0f
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val raw = event.motionEvent ?: continue
+                        if (!raw.isFromSource(InputDevice.SOURCE_MOUSE)) continue
+                        event.changes.forEach { it.consume() }
+                        val emulator = session.emulator ?: continue
+                        if (event.type == PointerEventType.Scroll) {
+                            // Legacy doScroll(): wheel up (AXIS_VSCROLL > 0) reports wheel-up /
+                            // DPAD_UP / scroll back toward older output, three rows per notch.
+                            val rows = if (raw.getAxisValue(MotionEvent.AXIS_VSCROLL) > 0f) -3 else 3
+                            routeScroll(rows, emulator, raw.x, raw.y)
                         } else {
-                            Logger.logWarn(LOG_TAG, "Tap with no hidden input view for session")
+                            val (column, row) = columnAndRow(raw.x, raw.y)
+                            when (event.type) {
+                                PointerEventType.Press -> {
+                                    mouseDown = true
+                                    mouseDragged = false
+                                    mouseRemainder = 0f
+                                    mouseLastY = raw.y
+                                    val buttons = event.buttons
+                                    when {
+                                        buttons.isTertiaryPressed -> {
+                                            // Middle click pastes the clipboard, like the legacy view.
+                                            session.emulator?.paste(
+                                                ShareUtils.getTextStringFromClipboardIfSet(context, true)
+                                            )
+                                            mouseDown = false
+                                        }
+                                        buttons.isSecondaryPressed -> {
+                                            // Right click opens the legacy context menu; out of scope
+                                            // here (still consumed so nothing else acts on it).
+                                            mouseDown = false
+                                        }
+                                        buttons.isPrimaryPressed -> {
+                                            mouseLeftDown = true
+                                            if (emulator.isMouseTrackingActive) {
+                                                emulator.sendMouseEvent(
+                                                    TerminalEmulator.MOUSE_LEFT_BUTTON, column, row, true
+                                                )
+                                            }
+                                        }
+                                        else -> mouseDown = false
+                                    }
+                                }
+                                PointerEventType.Move -> {
+                                    if (!mouseDown) continue
+                                    // Hover moves (no button) are skipped; only real drags act.
+                                    val primary = event.buttons.isPrimaryPressed
+                                    if (emulator.isMouseTrackingActive && primary) {
+                                        emulator.sendMouseEvent(
+                                            TerminalEmulator.MOUSE_LEFT_BUTTON_MOVED, column, row, true
+                                        )
+                                    } else if (!emulator.isMouseTrackingActive && primary) {
+                                        // No mouse tracking: a drag scrolls the transcript like a
+                                        // finger, accumulating sub-row remainders across events.
+                                        val (rows, remainder) = ComposeTerminalFrame.accumulateDragRows(
+                                            mouseRemainder, raw.y - mouseLastY, metrics.lineSpacing
+                                        )
+                                        mouseRemainder = remainder
+                                        mouseLastY = raw.y
+                                        if (rows != 0) {
+                                            mouseDragged = true
+                                            routeScroll(rows, emulator, raw.x, raw.y)
+                                        }
+                                    }
+                                }
+                                PointerEventType.Release -> {
+                                    if (mouseDown) {
+                                        if (mouseLeftDown) {
+                                            if (emulator.isMouseTrackingActive) {
+                                                emulator.sendMouseEvent(
+                                                    TerminalEmulator.MOUSE_LEFT_BUTTON, column, row, false
+                                                )
+                                            }
+                                            if (!mouseDragged) activateSession()
+                                        }
+                                        mouseDown = false
+                                        mouseLeftDown = false
+                                    }
+                                }
+                                else -> mouseDown = false
+                            }
                         }
                     }
-                )
+                }
+            }
+            .pointerInput(session, isActivePane) {
+                detectTapGestures(onTap = { activateSession() })
             }
             .pointerInput(session, metrics) {
                 // Anchor for wheel events sent to mouse-tracking apps: legacy TerminalView
@@ -159,41 +326,7 @@ fun ComposeTerminalCanvas(
                             )
                             dragRemainder = remainder
                             if (rows != 0) {
-                                when {
-                                    emulator.isMouseTrackingActive -> {
-                                        // Mouse-tracking apps (opencode TUI, vim mouse mode, ...)
-                                        // consume wheel events instead of the transcript or the
-                                        // alt screen. Mirror legacy doScroll(): a swipe down
-                                        // (rows > 0) reports wheel-up.
-                                        val column = (dragAnchor.x / metrics.fontWidth).toInt() + 1
-                                        val row = ((dragAnchor.y - metrics.lineSpacingAndAscent) / metrics.lineSpacing)
-                                            .toInt() + 1
-                                        val button = if (rows > 0) TerminalEmulator.MOUSE_WHEELUP_BUTTON
-                                            else TerminalEmulator.MOUSE_WHEELDOWN_BUTTON
-                                        repeat(abs(rows)) {
-                                            emulator.sendMouseEvent(button, column, row, true)
-                                        }
-                                    }
-                                    emulator.isAlternateBufferActive -> {
-                                        // Full-screen apps (vim, less) have no transcript:
-                                        // drive the cursor with arrow keys instead. Legacy
-                                        // doScroll() parity: swipe down moves up.
-                                        repeat(abs(rows)) {
-                                            session.write(
-                                                TerminalKeyHandler.getKeySequence(
-                                                    if (rows > 0) "UP" else "DOWN"
-                                                )
-                                            )
-                                        }
-                                    }
-                                    else -> {
-                                        // Legacy doScroll() parity: swipe down scrolls back
-                                        // toward older output, swipe up toward live (0).
-                                        scrollRows = ComposeTerminalFrame.scrollByDrag(
-                                            scrollRows, rows, emulator.screen.activeTranscriptRows
-                                        )
-                                    }
-                                }
+                                routeScroll(rows, emulator, dragAnchor.x, dragAnchor.y)
                             }
                         }
                     }
@@ -211,9 +344,14 @@ fun ComposeTerminalCanvas(
         val topRow = ComposeTerminalFrame.clampScrollOffset(
             scrollRows, emulator.screen.activeTranscriptRows
         )
+        // Cursor phase: null hands visibility decision back to the emulator (blink off);
+        // when blinking, the phase alone decides so the cursor toggles here only.
+        // Read inside the draw scope subscribes the canvas to phase flips.
+        val cursorVisibleOverride = if (blinkEnabled) blinkOn else null
         drawIntoCanvas { drawCanvas ->
             renderComposeFrame(
-                drawCanvas.nativeCanvas, emulator, topRow, paint, metrics, palette, enableLigatures
+                drawCanvas.nativeCanvas, emulator, topRow, paint, metrics, palette, enableLigatures,
+                cursorVisibleOverride
             )
         }
     }
@@ -258,11 +396,13 @@ private fun measureCanvasMetrics(paint: Paint, typeface: Typeface, fontSize: Flo
  * Paint one emulator frame onto a native canvas, mirroring the legacy render loop
  * (reverse video, per-row runs, cursor rect, text run).
  *
- * Still deferred: text selection (TODO(spike): selection) and cursor blinking
- * (TODO(spike): blink — painted statically when visible).
+ * Still deferred: text selection (TODO(spike): selection).
  *
  * @param topRow Scroll offset owned by the hidden input view (same semantics as the
  * legacy `mTopRow`); rows paint from `topRow` to `topRow + mRows`
+ * @param cursorVisibleOverride When null the emulator decides (blink off); otherwise it
+ * overrides [TerminalEmulator.shouldCursorBeVisible] so the canvas blink phase toggles
+ * the cursor here only
  */
 private fun renderComposeFrame(
     canvas: android.graphics.Canvas,
@@ -271,7 +411,8 @@ private fun renderComposeFrame(
     paint: Paint,
     metrics: CanvasFontMetrics,
     palette: TerminalPalette,
-    enableLigatures: Boolean
+    enableLigatures: Boolean,
+    cursorVisibleOverride: Boolean? = null
 ) {
     val colors = emulator.mColors.mCurrentColors
     val reverseVideo = emulator.isReverseVideo
@@ -281,7 +422,7 @@ private fun renderComposeFrame(
     val columns = emulator.mColumns
     val cursorCol = emulator.cursorCol
     val cursorRow = emulator.cursorRow
-    val cursorVisible = emulator.shouldCursorBeVisible()
+    val cursorVisible = cursorVisibleOverride ?: emulator.shouldCursorBeVisible()
     val cursorStyle = emulator.cursorStyle
     val screen = emulator.screen
     val defaultBackground = colors[TextStyle.COLOR_INDEX_BACKGROUND]

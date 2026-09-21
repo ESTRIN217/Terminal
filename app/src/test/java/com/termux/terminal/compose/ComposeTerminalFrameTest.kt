@@ -1,6 +1,8 @@
 package com.termux.terminal.compose
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -51,5 +53,20 @@ class ComposeTerminalFrameTest {
         val (rows, remainder) = ComposeTerminalFrame.accumulateDragRows(0f, -25f, 10)
         assertEquals(-2, rows)
         assertEquals(-5f, remainder, 0f)
+    }
+
+    @Test
+    fun isValidCursorBlinkRate_acceptsRange() {
+        assertTrue(ComposeTerminalFrame.isValidCursorBlinkRate(100))
+        assertTrue(ComposeTerminalFrame.isValidCursorBlinkRate(2000))
+        assertTrue(ComposeTerminalFrame.isValidCursorBlinkRate(500))
+    }
+
+    @Test
+    fun isValidCursorBlinkRate_rejectsDisabledAndOutOfRange() {
+        assertFalse(ComposeTerminalFrame.isValidCursorBlinkRate(0))
+        assertFalse(ComposeTerminalFrame.isValidCursorBlinkRate(99))
+        assertFalse(ComposeTerminalFrame.isValidCursorBlinkRate(2001))
+        assertFalse(ComposeTerminalFrame.isValidCursorBlinkRate(-100))
     }
 }

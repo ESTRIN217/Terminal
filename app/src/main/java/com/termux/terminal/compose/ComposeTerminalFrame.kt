@@ -4,6 +4,7 @@ import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalRow
 import com.termux.terminal.TextStyle
 import com.termux.terminal.WcWidth
+import com.termux.view.TerminalView
 
 /**
  * Pure (Android-free) model of one rendered terminal line for the experimental Compose Canvas
@@ -214,6 +215,20 @@ object ComposeTerminalFrame {
     @JvmStatic
     fun scrollByDrag(offsetRows: Int, dragRows: Int, transcriptRows: Int): Int =
         clampScrollOffset(offsetRows - dragRows, transcriptRows)
+
+    /**
+     * Whether a cursor blink rate in milliseconds is valid, mirroring
+     * {@link TerminalView#setTerminalCursorBlinkerRate}: a wrong rate silently disables the
+     * blinker. The canvas uses this instead of the legacy in-view blinker, which stays inert
+     * at the default rate 0.
+     *
+     * @param blinkRateMs The rate read from the cursor-blink-rate property (0 = disabled)
+     * @return Whether the rate is within
+     * [TerminalView.TERMINAL_CURSOR_BLINK_RATE_MIN]..[TerminalView.TERMINAL_CURSOR_BLINK_RATE_MAX]
+     */
+    @JvmStatic
+    fun isValidCursorBlinkRate(blinkRateMs: Int): Boolean =
+        blinkRateMs in TerminalView.TERMINAL_CURSOR_BLINK_RATE_MIN..TerminalView.TERMINAL_CURSOR_BLINK_RATE_MAX
 
     /**
      * Resolve the paint colors of a run from its style, mirroring the legacy color logic.
