@@ -1,6 +1,7 @@
 package com.termux.terminal.compose
 
 import android.graphics.Typeface
+import android.view.KeyEvent
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
@@ -21,8 +22,8 @@ import com.termux.view.TerminalViewClient
  * The Android IME requires a [View] ([TerminalView.onCreateInputConnection], hardware
  * `onKeyDown`, `KeyCharacterMap`, combining accents), which a pure Compose `Canvas` cannot
  * provide — and [TerminalView] is final, so it cannot be subclassed into a non-sizing stub.
- * Instead this host composes a full-size [TerminalView] with `willNotDraw` enabled
- * **below** the opaque canvas: it lays out (so [TerminalSession.updateSize] runs with the
+ * Instead this host composes a full-size [TerminalView] with `willNotDraw` enabled and
+ * alpha 0 **below** the opaque canvas: it lays out (so [TerminalSession.updateSize] runs with the
  * real geometry), takes focus and owns the IME/key pipeline, but never paints.
  *
  * It registers in [TerminalViewRegistry] exactly like [TerminalViewHost], so the active view,
@@ -39,6 +40,12 @@ import com.termux.view.TerminalViewClient
  * the session emulator becomes available later (see [TerminalViewRegistry.reapplyPendingPalette])
  * @param isActivePane Whether this view belongs to the focused (active) pane of a split view
  * @param onActivatePane Callback when the view gains focus while it is not the active pane
+ * @param onUserKeyInput Invoked before any hardware key down reaches the session write path,
+ * mirroring legacy `TerminalView.onKeyDown` which stops an active text selection mode first.
+ * The pane uses it to clear its own selection state (the hidden view holds no selection of
+ * its own). KEYCODE_BACK is excluded: the Compose `BackHandler` owns that path with the same
+ * legacy parity (`TerminalView.onKeyPreIme`). Soft-IME text input does not invoke it either,
+ * matching legacy behavior.
  * @param modifier Modifier to apply to the composable
  */
 @Composable
@@ -51,6 +58,7 @@ fun HiddenTerminalInputHost(
     palette: TerminalPalette,
     isActivePane: Boolean = true,
     onActivatePane: (() -> Unit)? = null,
+    onUserKeyInput: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
@@ -74,6 +82,7 @@ fun HiddenTerminalInputHost(
                 // Never paint: the Compose canvas above us is the only renderer. Layout,
                 // focus, InputConnection and key dispatch keep working normally.
                 setWillNotDraw(true)
+                alpha = 0f
                 isFocusableInTouchMode = true
                 (context as? ComponentActivity)?.registerForContextMenu(this)
                 setTerminalViewClient(viewClient)
@@ -132,6 +141,16 @@ fun HiddenTerminalInputHost(
                 }
             }
             view.setOnFocusChangeListener(focusListener)
+            // Hardware key down observed before TerminalView.onKeyDown writes it to the
+            // session (View.dispatchKeyEvent runs the OnKeyListener first). Returning false
+            // keeps the normal pipeline untouched; BACK is left to the pane BackHandler so a
+            // selection-dismiss cannot swallow the back event.
+            view.setOnKeyListener { _, keyCode, event ->
+                if (keyCode != KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_DOWN) {
+                    onUserKeyInput()
+                }
+                false
+            }
             if (isActivePane && !view.hasFocus() && view.isAttachedToWindow) {
                 view.requestFocus()
             }

@@ -639,6 +639,10 @@ internal fun measureCanvasMetrics(paint: Paint, typeface: Typeface, fontSize: Fl
 /**
  * Paint one emulator frame onto a native canvas, mirroring the legacy render loop
  * (reverse video, per-row runs, cursor rect, text run, selection reverse video).
+ * The frame starts with a full fill of the default background color so the canvas is
+ * opaque: default-background cells are never painted per-run (the legacy renderer relied
+ * on the view background color), and a transparent canvas would show the hidden input
+ * view underneath as a static second copy of the text while the canvas scrolls.
  *
  * @param topRow Scroll offset owned by the canvas (same semantics as the legacy `mTopRow`);
  * rows paint from `topRow` to `topRow + mRows`
@@ -661,6 +665,7 @@ private fun renderComposeFrame(
 ) {
     val colors = emulator.mColors.mCurrentColors
     val reverseVideo = emulator.isReverseVideo
+    canvas.drawColor(colors[TextStyle.COLOR_INDEX_BACKGROUND])
     if (reverseVideo) canvas.drawColor(colors[TextStyle.COLOR_INDEX_FOREGROUND])
 
     val rows = emulator.mRows

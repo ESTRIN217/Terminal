@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
@@ -34,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -424,15 +427,37 @@ private fun SessionPane(
     when (model) {
         is TermuxSessionUiModel.Terminal -> if (useNativeRenderer) {
             // Native path: the hidden view below owns IME/keys/focus/scroll state, the
-            // opaque canvas above is the only renderer. Both are full-size so geometry
-            // (and updateSize) stays consistent between them.
+            // opaque canvas above is the only renderer (it fills the default background
+            // every frame; the hidden view is alpha 0 so it can never show through).
+            // Both are full-size so geometry (and updateSize) stays consistent between them.
             // The pane shares its scroll/selection state and glyph metrics between the
             // canvas and the selection overlay so handles and highlight align with paint.
             val paneState = remember(model.id) { ComposeTerminalViewState() }
             val paneMetrics = remember(typeface, fontSize) {
                 measureCanvasMetrics(Paint(), typeface ?: Typeface.MONOSPACE, fontSize)
             }
-            Box(modifier = modifier) {
+            // Legacy parity: TerminalView.start/stopTextSelectionMode notify
+            // mClient.copyModeChanged(isSelectingText()). Observe the pane selection so every
+            // clear path (tap, back, hardware key, toolbar action, transcript-end abort)
+            // reports the same state, and flush a trailing false if the pane is disposed
+            // while still selecting (legacy onDetachedFromWindow stops the mode).
+            val selecting = paneState.selection != null
+            var copyModeNotified by remember { mutableStateOf(false) }
+            LaunchedEffect(selecting) {
+                if (copyModeNotified != selecting) {
+                    copyModeNotified = selecting
+                    viewClient.copyModeChanged(selecting)
+                }
+            }
+            DisposableEffect(paneState) {
+                onDispose {
+                    if (copyModeNotified) {
+                        copyModeNotified = false
+                        viewClient.copyModeChanged(false)
+                    }
+                }
+            }
+            Box(modifier = modifier.background(Color(palette.background))) {
                 // Back closes the selection toolbar like legacy TerminalView.onKeyDown
                 // does for the BACK key while a text selection is active.
                 BackHandler(enabled = paneState.selection != null) {
@@ -447,6 +472,7 @@ private fun SessionPane(
                     palette = palette,
                     isActivePane = isActivePane,
                     onActivatePane = { onPaneFocused(model.id) },
+                    onUserKeyInput = { paneState.selection = null },
                     modifier = Modifier.fillMaxSize()
                 )
                 ComposeTerminalCanvas(
