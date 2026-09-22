@@ -216,6 +216,41 @@ object ComposeTerminalFrame {
         return scrollRows - rowShift to shiftedSelection
     }
 
+    /**
+     * The canvas scroll offset after new output without an active selection, mirroring
+     * {@link com.termux.view.TerminalView#onScreenUpdated}:
+     * - With auto-scroll enabled, any screen update snaps the scroll back to live (legacy
+     *   `mTopRow = 0`), so scrolled-back output always follows the newest line again.
+     * - With auto-scroll disabled, the offset keeps its position relative to the transcript,
+     *   shifted up by [rowShift], and pins at the transcript end (legacy `-rowsInHistory`).
+     *
+     * Selecting consumers should use [shiftSelectionForNewOutput] instead, which also shifts
+     * the selection up and aborts it at the transcript end.
+     *
+     * @param scrollRows Current scroll offset in rows (0 or negative)
+     * @param rowShift Rows of new output, `emulator.getScrollCounter()`
+     * @param transcriptRows Available transcript rows (`activeTranscriptRows`)
+     * @param isAutoScrollDisabled Whether the emulator auto-scroll is disabled, which keeps
+     * the pinned transcript position instead of snapping to live
+     * @return The new scroll offset, clamped to `[-transcriptRows, 0]`
+     */
+    @JvmStatic
+    fun scrollOffsetForNewOutput(
+        scrollRows: Int,
+        rowShift: Int,
+        transcriptRows: Int,
+        isAutoScrollDisabled: Boolean
+    ): Int {
+        val rowsInHistory = maxOf(transcriptRows, 0)
+        val clamped = scrollRows.coerceIn(-rowsInHistory, 0)
+        if (!isAutoScrollDisabled) return 0
+        return if (-clamped + rowShift > rowsInHistory) {
+            -rowsInHistory
+        } else {
+            (clamped - rowShift).coerceIn(-rowsInHistory, 0)
+        }
+    }
+
     /** Snap a column into a valid cell when a wide glyph (e.g. a CJK char) absorbs it, so the
      * handle drag endpoint never lands on the unused second half of a wide cell. Mirror of
      * {@code TextSelectionCursorController.getValidCurX}. Columns are clamped to the grid. */
@@ -391,6 +426,34 @@ object ComposeTerminalFrame {
     @JvmStatic
     fun scrollByDrag(offsetRows: Int, dragRows: Int, transcriptRows: Int): Int =
         clampScrollOffset(offsetRows - dragRows, transcriptRows)
+
+    /**
+     * Derive the terminal grid from an available pixel size, mirroring
+     * {@link com.termux.view.TerminalView#updateSize}: the grid is clamped to a minimum of
+     * 4 columns and 4 rows like the legacy `Math.max(4, ...)`, so a very small canvas never
+     * collapses the emulator to a single column/row.
+     *
+     * @param widthPx The available width in pixels
+     * @param heightPx The available height in pixels
+     * @param fontWidthPx The monospace glyph width in pixels (must be > 0)
+     * @param lineSpacingPx Pixels per terminal row (must be > 0)
+     * @param lineSpacingAndAscentPx [lineSpacingPx] plus the font ascent, the vertical pixel
+     * offset of the first text baseline
+     * @return The `(columns, rows)` grid
+     */
+    @JvmStatic
+    fun gridSize(
+        widthPx: Int,
+        heightPx: Int,
+        fontWidthPx: Float,
+        lineSpacingPx: Int,
+        lineSpacingAndAscentPx: Int
+    ): Pair<Int, Int> {
+        if (fontWidthPx <= 0f || lineSpacingPx <= 0) return 4 to 4
+        val columns = (widthPx / fontWidthPx).toInt().coerceAtLeast(4)
+        val rows = ((heightPx - lineSpacingAndAscentPx) / lineSpacingPx).coerceAtLeast(4)
+        return columns to rows
+    }
 
     /**
      * Whether a cursor blink rate in milliseconds is valid, mirroring

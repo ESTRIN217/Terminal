@@ -1,5 +1,7 @@
 package com.termux.terminal.compose
 
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
@@ -174,6 +176,10 @@ internal fun ComposeTerminalSelectionOverlay(
                             state.selection = null
                             session.onPasteTextFromClipboard()
                         },
+                        // Legacy parity: Paste is only enabled when the clipboard holds a
+                        // primary clip (TextSelectionCursorController onCreateActionMode).
+                        enabled = (context.getSystemService(Context.CLIPBOARD_SERVICE)
+                            as? ClipboardManager)?.hasPrimaryClip() == true,
                         modifier = Modifier.padding(horizontal = 4.dp)
                     ) {
                         Text(text = context.getString(R.string.paste_text))

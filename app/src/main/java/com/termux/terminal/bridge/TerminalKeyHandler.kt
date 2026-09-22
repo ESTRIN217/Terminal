@@ -61,13 +61,19 @@ object TerminalKeyHandler {
      * @param ctrlActive Whether Ctrl modifier is active
      * @param altActive Whether Alt modifier is active
      * @param shiftActive Whether Shift modifier is active
+     * @param cursorAppMode Whether the terminal is in cursor application mode (DECCKM),
+     * like [getKeyCode]: control keys such as the arrows are then sent in their application
+     * (SS3) form instead of the CSI form
+     * @param keypadAppMode Whether the terminal is in keypad application mode (DECKPAM)
      * @return The escape sequence string, or the raw character if not a control key
      */
     fun getKeySequence(
         key: String,
         ctrlActive: Boolean = false,
         altActive: Boolean = false,
-        shiftActive: Boolean = false
+        shiftActive: Boolean = false,
+        cursorAppMode: Boolean = false,
+        keypadAppMode: Boolean = false
     ): String {
         val keyMod = (if (ctrlActive) KEYMOD_CTRL else 0) or
                 (if (altActive) KEYMOD_ALT else 0) or
@@ -76,7 +82,7 @@ object TerminalKeyHandler {
         val keyCode = KEY_CODE_MAP[key]
         if (keyCode != null) {
             val seq = com.termux.terminal.KeyHandler.getCode(
-                keyCode, keyMod, false, false
+                keyCode, keyMod, cursorAppMode, keypadAppMode
             )
             if (seq != null) return seq
         }

@@ -2,6 +2,7 @@ package com.termux.terminal.compose
 
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
 import androidx.compose.animation.core.Animatable
@@ -75,6 +76,15 @@ import kotlinx.coroutines.delay
  * - **Fling inertia**: a `Modifier.draggable` vertical gesture feeds an exponential decay of
  *   the scroll offset (transcript) or of a synthetic wheel value (mouse-tracking apps),
  *   mirroring the legacy `Scroller.fling` damping of 0.25.
+ * - **onScreenUpdated parity**: new output snaps the scroll back to live (legacy
+ *   `mTopRow = 0`) unless auto-scroll is disabled or text is being selected; selecting
+ *   shifts the selection up with the scrolled rows. Grid sizing clamps to a minimum of
+ *   4 columns and 4 rows like the legacy `updateSize()`.
+ * - **Input parity**: any new frame (keyed or pasted input) shows the cursor immediately
+ *   (legacy `setCursorBlinkState(true)`), alt-buffer wheel arrows respect the emulator
+ *   cursor/keypad application modes (DECCKM/DECKPAM), long-press honors the scale-gesture
+ *   and client vetoes, and a tap right after starting a selection is ignored for 300 ms
+ *   (legacy `TextSelectionCursorController.hide()` guard).
  *
  * The legacy view set via [TerminalViewHost] stays as the default fallback behind the
  * {@code native_compose_renderer} feature flag.
@@ -95,6 +105,9 @@ import kotlinx.coroutines.delay
  * above this canvas can render handles and the toolbar from the same coordinates
  * @param isActivePane Whether this canvas belongs to the focused (active) pane of a split view
  * @param onActivatePane Callback when the canvas is tapped while it is not the active pane
+ * @param onLongPressConsumed Client veto for the long-press gesture, mirroring the legacy
+ * `mClient.onLongPress(event)`: when it returns true the canvas does not start a text
+ * selection
  * @param onFontSizeStep Callback with a signed font-size step in pixels for pinch-zoom
  * @param modifier Modifier to apply to the canvas
  */
@@ -109,6 +122,7 @@ internal fun ComposeTerminalCanvas(
     state: ComposeTerminalViewState,
     isActivePane: Boolean = true,
     onActivatePane: (() -> Unit)? = null,
+    onLongPressConsumed: () -> Boolean = { false },
     onFontSizeStep: (Float) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -151,23 +165,31 @@ internal fun ComposeTerminalCanvas(
         }
     }
 
-    // New output while scrolled back: keep the offset, re-clamped in case the transcript
-    // shrank. Following (0) needs no work. While selecting, shift the selection up with the
-    // scrolled rows so it stays glued to its text, aborting at the transcript end (legacy
-    // onScreenUpdated parity). State writes stay out of the draw scope.
+    // New output while scrolled back: mirror legacy onScreenUpdated(). While selecting, shift
+    // the selection up with the scrolled rows so it stays glued to its text, aborting at the
+    // transcript end. Without a selection, snap the offset back to live unless auto-scroll is
+    // disabled (which keeps the pinned transcript position, shifted). Any screen update also
+    // shows the cursor immediately (legacy inputCodePoint/handleKeyCode setCursorBlinkState
+    // parity). State writes stay out of the draw scope.
     LaunchedEffect(frameTick) {
         val emulator = session.emulator
         val transcript = emulator?.screen?.activeTranscriptRows ?: 0
         val selection = state.selection
-        if (emulator != null && selection != null) {
-            val (shiftedScroll, shiftedSelection) =
-                ComposeTerminalFrame.shiftSelectionForNewOutput(
-                    selection, state.scrollRows, frameScrollCount, transcript
+        if (emulator != null) {
+            blinkOn = true
+            if (selection != null) {
+                val (shiftedScroll, shiftedSelection) =
+                    ComposeTerminalFrame.shiftSelectionForNewOutput(
+                        selection, state.scrollRows, frameScrollCount, transcript
+                    )
+                state.scrollRows = ComposeTerminalFrame.clampScrollOffset(shiftedScroll, transcript)
+                state.selection = shiftedSelection
+            } else {
+                state.scrollRows = ComposeTerminalFrame.scrollOffsetForNewOutput(
+                    state.scrollRows, frameScrollCount, transcript,
+                    isAutoScrollDisabled = emulator.isAutoScrollDisabled()
                 )
-            state.scrollRows = ComposeTerminalFrame.clampScrollOffset(shiftedScroll, transcript)
-            state.selection = shiftedSelection
-        } else {
-            state.scrollRows = ComposeTerminalFrame.clampScrollOffset(state.scrollRows, transcript)
+            }
         }
     }
 
@@ -193,9 +215,11 @@ internal fun ComposeTerminalCanvas(
     // setTextSize(). Runs after the layout pass, so canvasSize is populated before first use.
     LaunchedEffect(canvasSize, metrics) {
         if (canvasSize == IntSize.Zero) return@LaunchedEffect
-        val columns = (canvasSize.width / metrics.fontWidth).toInt().coerceAtLeast(1)
-        val rows = ((canvasSize.height - metrics.lineSpacingAndAscent) / metrics.lineSpacing)
-            .toInt().coerceAtLeast(1)
+        // Grid sizing mirrors TerminalView.updateSize(), including the 4x4 minimum clamp.
+        val (columns, rows) = ComposeTerminalFrame.gridSize(
+            canvasSize.width, canvasSize.height,
+            metrics.fontWidth, metrics.lineSpacing, metrics.lineSpacingAndAscent
+        )
         try {
             session.updateSize(columns, rows, metrics.fontWidth.toInt(), metrics.lineSpacing)
         } catch (e: Exception) {
@@ -235,10 +259,16 @@ internal fun ComposeTerminalCanvas(
             }
             emulator.isAlternateBufferActive -> {
                 // Full-screen apps (vim, less) have no transcript: drive the cursor with
-                // arrow keys instead. Legacy doScroll() parity: rows > 0 moves up.
+                // arrow keys instead. Legacy doScroll() parity: rows > 0 moves up, and the
+                // sequences respect the emulator cursor/keypad application modes (DECCKM /
+                // DECKPAM) like TerminalView.handleKeyCode does.
                 repeat(abs(rows)) {
                     session.write(
-                        TerminalKeyHandler.getKeySequence(if (rows > 0) "UP" else "DOWN")
+                        TerminalKeyHandler.getKeySequence(
+                            if (rows > 0) "UP" else "DOWN",
+                            cursorAppMode = emulator.isCursorKeysApplicationMode(),
+                            keypadAppMode = emulator.isKeypadApplicationMode()
+                        )
                     )
                 }
             }
@@ -332,6 +362,11 @@ internal fun ComposeTerminalCanvas(
     // Cumulative pinch scale, reset whenever a font-size step is applied (mirrors the legacy
     // mScaleFactor *= onScale() + client returning 1.0f after a step).
     var pinchScale by remember(session) { mutableFloatStateOf(1f) }
+
+    // Whether two or more pointers are currently down. detectTapGestures does not cancel its
+    // long-press when a second finger lands, so this mirrors the legacy
+    // mGestureRecognizer.isInProgress() guard that skips starting a text selection mid-pinch.
+    var isPinching by remember(session) { mutableStateOf(false) }
 
     Canvas(
         modifier = modifier
@@ -439,12 +474,29 @@ internal fun ComposeTerminalCanvas(
                     }
                 }
             }
+            .pointerInput(session) {
+                // Track when multiple pointers are down (a pinch). Never consumes: the tap
+                // and transform detectors below keep their own arbitration, and the tap
+                // long-press reads this to mirror the legacy scale-in-progress guard.
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        isPinching = event.changes.size >= 2
+                    }
+                }
+            }
             .pointerInput(session, state) {
                 detectTapGestures(
                     onTap = { offset ->
                         if (state.selection != null) {
-                            // Legacy onSingleTapUp stops the text selection mode on a tap.
-                            state.selection = null
+                            // Legacy onSingleTapUp stops the text selection mode on a tap, but
+                            // the 300ms hide() guard blocks a tap right after the selection was
+                            // started so it is not dismissed instantly (legacy
+                            // TextSelectionCursorController.hide() parity). Toolbar actions and
+                            // the back button clear it unconditionally.
+                            if (SystemClock.uptimeMillis() - state.selectionStartedAt >= SelectionHideGuardMs) {
+                                state.selection = null
+                            }
                         } else {
                             activateSession()
                             // Legacy onUp quick-tap parity: when mouse tracking is active a
@@ -463,7 +515,10 @@ internal fun ComposeTerminalCanvas(
                     },
                     onLongPress = { offset ->
                         // Legacy onLongPress starts the text selection mode (word-expanded)
-                        // unless it is already active or the client consumed the event.
+                        // unless a scale gesture is in progress, the client consumed the
+                        // event, or the mode is already active.
+                        if (isPinching) return@detectTapGestures
+                        if (onLongPressConsumed()) return@detectTapGestures
                         if (state.selection != null) return@detectTapGestures
                         if (!isActivePane) onActivatePane?.invoke()
                         val emulator = session.emulator ?: return@detectTapGestures
@@ -471,6 +526,7 @@ internal fun ComposeTerminalCanvas(
                         val (column, row) = gridColumnAndRow(offset.x, offset.y)
                         state.selection =
                             ComposeTerminalFrame.selectWord(emulator.screen, column, row, emulator.mColumns)
+                        state.selectionStartedAt = SystemClock.uptimeMillis()
                     }
                 )
             }
@@ -722,3 +778,10 @@ private fun drawComposeRun(
 }
 
 private const val LOG_TAG = "ComposeTerminalCanvas"
+
+/**
+ * Minimum time in milliseconds a text selection must live before a canvas tap dismisses it,
+ * mirroring the legacy `TextSelectionCursorController.hide()` guard against cancelling a
+ * selection right after it was started.
+ */
+private const val SelectionHideGuardMs = 300L

@@ -459,6 +459,7 @@ private fun SessionPane(
                     state = paneState,
                     isActivePane = isActivePane,
                     onActivatePane = { onPaneFocused(model.id) },
+                    onLongPressConsumed = { viewClient.onLongPress(null) },
                     onFontSizeStep = { step ->
                         val target = (fontSize + step).coerceIn(MinTerminalFontSizePx, MaxTerminalFontSizePx)
                         if (target != fontSize) onFontSizeStep(target)

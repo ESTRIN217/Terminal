@@ -2,6 +2,7 @@ package com.termux.terminal.compose
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
@@ -30,4 +31,12 @@ class ComposeTerminalViewState {
      * the system back button, and by new output reaching the transcript end.
      */
     var selection by mutableStateOf<ComposeTerminalFrame.TextSelection?>(null)
+
+    /**
+     * System uptime millis ([android.os.SystemClock.uptimeMillis]) when the current selection
+     * started, mirroring the legacy `mShowStartTime` of
+     * [com.termux.view.textselection.TextSelectionCursorController] so a canvas tap within the
+     * first 300 ms does not dismiss a freshly started selection (legacy `hide()` guard).
+     */
+    var selectionStartedAt by mutableLongStateOf(0L)
 }

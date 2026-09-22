@@ -179,4 +179,35 @@ class ComposeTerminalFrameTest {
         assertEquals(-4..4, ComposeTerminalFrame.flingBounds(-4, 4))
         assertEquals(-10..0, ComposeTerminalFrame.flingBounds(-10, 0))
     }
+
+    @Test
+    fun gridSize_clampsToMinimumFour() {
+        // Legacy Math.max(4, ...) parity: a tiny canvas never collapses below 4 columns/rows.
+        assertEquals(4 to 4, ComposeTerminalFrame.gridSize(10, 10, 20f, 20, 40))
+        assertEquals(4 to 4, ComposeTerminalFrame.gridSize(0, 0, 20f, 20, 40))
+        // Normal sizing truncates like TerminalView.updateSize (float width division,
+        // integer height division).
+        assertEquals(200 to 49, ComposeTerminalFrame.gridSize(2000, 1000, 10f, 20, 5))
+        // Degenerate metrics never divide by zero.
+        assertEquals(4 to 4, ComposeTerminalFrame.gridSize(500, 500, 0f, 0, 0))
+    }
+
+    @Test
+    fun scrollOffsetForNewOutput_snapsToLiveWhenAutoScrollEnabled() {
+        // Legacy onScreenUpdated: with auto-scroll enabled a scrolled-back view snaps to live
+        // on the next screen update, even with no new rows.
+        assertEquals(0, ComposeTerminalFrame.scrollOffsetForNewOutput(-5, 2, 50, isAutoScrollDisabled = false))
+        assertEquals(0, ComposeTerminalFrame.scrollOffsetForNewOutput(0, 0, 50, isAutoScrollDisabled = false))
+    }
+
+    @Test
+    fun scrollOffsetForNewOutput_keepsPinnedWhenAutoScrollDisabled() {
+        // Auto-scroll disabled keeps the detached position, shifted up by the new rows.
+        assertEquals(-5, ComposeTerminalFrame.scrollOffsetForNewOutput(-3, 2, 50, isAutoScrollDisabled = true))
+        // No new output keeps the offset untouched.
+        assertEquals(-3, ComposeTerminalFrame.scrollOffsetForNewOutput(-3, 0, 50, isAutoScrollDisabled = true))
+        // Hitting the transcript end pins to the oldest row.
+        assertEquals(-50, ComposeTerminalFrame.scrollOffsetForNewOutput(-50, 3, 50, isAutoScrollDisabled = true))
+        assertEquals(-50, ComposeTerminalFrame.scrollOffsetForNewOutput(-60, 3, 50, isAutoScrollDisabled = true))
+    }
 }
