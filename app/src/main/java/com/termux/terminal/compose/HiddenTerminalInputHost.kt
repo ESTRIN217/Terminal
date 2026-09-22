@@ -43,9 +43,11 @@ import com.termux.view.TerminalViewClient
  * @param onUserKeyInput Invoked before any hardware key down reaches the session write path,
  * mirroring legacy `TerminalView.onKeyDown` which stops an active text selection mode first.
  * The pane uses it to clear its own selection state (the hidden view holds no selection of
- * its own). KEYCODE_BACK is excluded: the Compose `BackHandler` owns that path with the same
- * legacy parity (`TerminalView.onKeyPreIme`). Soft-IME text input does not invoke it either,
- * matching legacy behavior.
+ * its own). KEYCODE_BACK is excluded: the Compose `BackHandler` and the view client's
+ * `onKeyDown` own that path with the same legacy parity (`TerminalView.onKeyPreIme`).
+ * Soft-IME text input clears the pane selection through
+ * [TerminalViewClient.onCodePoint] → [TerminalViewRegistry.dismissActivePaneSelection],
+ * mirroring legacy `sendTextToTerminal()` → `stopTextSelectionMode()`.
  * @param modifier Modifier to apply to the composable
  */
 @Composable

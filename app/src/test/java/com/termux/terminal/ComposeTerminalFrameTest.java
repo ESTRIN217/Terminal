@@ -403,11 +403,18 @@ public class ComposeTerminalFrameTest {
         Assert.assertEquals(-4, shiftedSelection.getY1());
         Assert.assertEquals(-3, shiftedSelection.getY2());
 
-        // End of history: abort the selection and snap the scroll to live.
+        // End of history: abort the selection and snap the scroll to live (auto-scroll on).
         kotlin.Pair<Integer, ComposeTerminalFrame.TextSelection> aborted =
             ComposeTerminalFrame.shiftSelectionForNewOutput(selection, -3, 4, 5);
         Assert.assertEquals(0, (int) aborted.getFirst());
         Assert.assertNull(aborted.getSecond());
+
+        // Auto-scroll disabled: pin at the oldest transcript row instead of snapping live
+        // (legacy onScreenUpdated sets mTopRow = -rowsInHistory after stopping selection).
+        kotlin.Pair<Integer, ComposeTerminalFrame.TextSelection> pinned =
+            ComposeTerminalFrame.shiftSelectionForNewOutput(selection, -3, 4, 5, true);
+        Assert.assertEquals(-5, (int) pinned.getFirst());
+        Assert.assertNull(pinned.getSecond());
 
         // No shift or no selection is a no-op.
         Assert.assertEquals(-3,

@@ -34,9 +34,13 @@ import androidx.compose.ui.input.pointer.isTertiaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalView
+import android.view.ViewTreeObserver
 import com.termux.shared.interact.ShareUtils
 import com.termux.shared.logger.Logger
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties
@@ -80,11 +84,11 @@ import kotlinx.coroutines.delay
  *   `mTopRow = 0`) unless auto-scroll is disabled or text is being selected; selecting
  *   shifts the selection up with the scrolled rows. Grid sizing clamps to a minimum of
  *   4 columns and 4 rows like the legacy `updateSize()`.
- * - **Input parity**: any new frame (keyed or pasted input) shows the cursor immediately
- *   (legacy `setCursorBlinkState(true)`), alt-buffer wheel arrows respect the emulator
- *   cursor/keypad application modes (DECCKM/DECKPAM), long-press honors the scale-gesture
- *   and client vetoes, and a tap right after starting a selection is ignored for 300 ms
- *   (legacy `TextSelectionCursorController.hide()` guard).
+ * - **Input parity**: soft-IME and hardware input re-show the cursor immediately via
+ *   [ComposeTerminalViewState.blinkResetTick] (legacy `setCursorBlinkState(true)`), alt-buffer
+ *   wheel arrows respect the emulator cursor/keypad application modes (DECCKM/DECKPAM),
+ *   long-press honors the scale-gesture and client vetoes, and a tap right after starting a
+ *   selection is ignored for 300 ms (legacy `TextSelectionCursorController.hide()` guard).
  *
  * The legacy view set via [TerminalViewHost] stays as the default fallback behind the
  * {@code native_compose_renderer} feature flag.
@@ -124,6 +128,7 @@ internal fun ComposeTerminalCanvas(
     onActivatePane: (() -> Unit)? = null,
     onLongPressConsumed: () -> Boolean = { false },
     onFontSizeStep: (Float) -> Unit = {},
+    onClientTap: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Repaint tick bumped on every emulator screen update (see ComposeTerminalSessionClient).
@@ -148,9 +153,10 @@ internal fun ComposeTerminalCanvas(
     var dragRemainder by remember(session) { mutableFloatStateOf(0f) }
 
     // Cursor blinking is owned by this canvas: the hidden input view's blinker stays inert
-    // at the default rate 0, so its blink state never toggles. The rate is the same property
-    // the legacy TerminalView reads, and the phase only ticks while this pane is active.
-    // Reading both states in the draw scope repaints on every phase flip.
+    // at the default rate 0, so its blink state never toggles (legacy TerminalViewHost sets
+    // the rate for the fallback path). The phase only ticks while this pane is active, and
+    // input re-shows the cursor via blinkResetTick. Reading both states in the draw scope
+    // repaints on every phase flip.
     val blinkRate = remember { TermuxAppSharedProperties.getProperties()?.getTerminalCursorBlinkRate() ?: 0 }
     val blinkEnabled = isActivePane && ComposeTerminalFrame.isValidCursorBlinkRate(blinkRate)
     var blinkOn by remember(session, blinkEnabled) { mutableStateOf(true) }
@@ -164,23 +170,48 @@ internal fun ComposeTerminalCanvas(
             blinkOn = !blinkOn
         }
     }
+    // Input re-shows the cursor immediately (legacy setCursorBlinkState(true) from
+    // inputCodePoint/handleKeyCode), without treating background output as input.
+    LaunchedEffect(state.blinkResetTick) {
+        if (blinkEnabled) blinkOn = true
+    }
+
+    // Leaving touch mode (hardware keyboard attached) dismisses an active selection, like
+    // legacy TextSelectionCursorController.onTouchModeChanged → stopTextSelectionMode().
+    val touchModeView = LocalView.current
+    DisposableEffect(touchModeView, state) {
+        val observer = touchModeView.viewTreeObserver
+        val listener = ViewTreeObserver.OnTouchModeChangeListener { isInTouchMode ->
+            if (!isInTouchMode) state.selection = null
+        }
+        observer.addOnTouchModeChangeListener(listener)
+        onDispose {
+            // The observer instance can be swapped on attach; re-resolve for removal.
+            touchModeView.viewTreeObserver.removeOnTouchModeChangeListener(listener)
+        }
+    }
+    val density = LocalDensity.current
+    val scrollBarWidthPx = with(density) { 3.dp.toPx() }
 
     // New output while scrolled back: mirror legacy onScreenUpdated(). While selecting, shift
     // the selection up with the scrolled rows so it stays glued to its text, aborting at the
-    // transcript end. Without a selection, snap the offset back to live unless auto-scroll is
-    // disabled (which keeps the pinned transcript position, shifted). Any screen update also
-    // shows the cursor immediately (legacy inputCodePoint/handleKeyCode setCursorBlinkState
-    // parity). State writes stay out of the draw scope.
+    // transcript end (pinning at the oldest row when auto-scroll is disabled). Without a
+    // selection, snap the offset back to live unless auto-scroll is disabled. Output does not
+    // re-show the cursor; input bumps blinkResetTick instead. State writes stay out of the
+    // draw scope.
     LaunchedEffect(frameTick) {
         val emulator = session.emulator
         val transcript = emulator?.screen?.activeTranscriptRows ?: 0
         val selection = state.selection
         if (emulator != null) {
-            blinkOn = true
+            // Output does not force the cursor visible (legacy setCursorBlinkState runs only
+            // from inputCodePoint/handleKeyCode); the input host bumps blink via onUserKeyInput
+            // wiring in the pane. Keep the phase here only when already on.
             if (selection != null) {
                 val (shiftedScroll, shiftedSelection) =
                     ComposeTerminalFrame.shiftSelectionForNewOutput(
-                        selection, state.scrollRows, frameScrollCount, transcript
+                        selection, state.scrollRows, frameScrollCount, transcript,
+                        isAutoScrollDisabled = emulator.isAutoScrollDisabled()
                     )
                 state.scrollRows = ComposeTerminalFrame.clampScrollOffset(shiftedScroll, transcript)
                 state.selection = shiftedSelection
@@ -199,11 +230,14 @@ internal fun ComposeTerminalCanvas(
     val haptic = LocalHapticFeedback.current
 
     val resolvedTypeface = typeface ?: Typeface.MONOSPACE
-    val paint = remember(resolvedTypeface, fontSize) {
+    // Measure and paint at the integer size the hidden TerminalView receives via
+    // setTextSize(int) so both grids stay identical if a fractional fontSize ever arrives.
+    val paintFontSize = fontSize.toInt().toFloat()
+    val paint = remember(resolvedTypeface, paintFontSize) {
         Paint().apply {
             isAntiAlias = true
             this.typeface = resolvedTypeface
-            textSize = fontSize
+            textSize = paintFontSize
         }
     }
 
@@ -221,7 +255,13 @@ internal fun ComposeTerminalCanvas(
             metrics.fontWidth, metrics.lineSpacing, metrics.lineSpacingAndAscent
         )
         try {
+            val emulatorBefore = session.emulator
+            val gridChanged = emulatorBefore == null ||
+                emulatorBefore.mColumns != columns || emulatorBefore.mRows != rows
             session.updateSize(columns, rows, metrics.fontWidth.toInt(), metrics.lineSpacing)
+            // Legacy updateSize() snaps mTopRow to 0 whenever the grid changes so the view
+            // never stays scrolled into a reflowed transcript at a stale offset.
+            if (gridChanged) state.scrollRows = 0
         } catch (e: Exception) {
             Logger.logStackTraceWithMessage(LOG_TAG, "updateSize failed on metrics change", e)
         }
@@ -410,10 +450,14 @@ internal fun ComposeTerminalCanvas(
                                     val buttons = event.buttons
                                     when {
                                         buttons.isTertiaryPressed -> {
-                                            // Middle click pastes the clipboard, like the legacy view.
-                                            session.emulator?.paste(
+                                            // Middle click pastes the clipboard, like the legacy
+                                            // view, which null-checks the clip and skips empty text
+                                            // (TerminalEmulator.paste dereferences unconditionally).
+                                            val clipText =
                                                 ShareUtils.getTextStringFromClipboardIfSet(context, true)
-                                            )
+                                            if (!clipText.isNullOrEmpty()) {
+                                                session.emulator?.paste(clipText)
+                                            }
                                             mouseDown = false
                                         }
                                         buttons.isSecondaryPressed -> {
@@ -499,6 +543,10 @@ internal fun ComposeTerminalCanvas(
                             }
                         } else {
                             activateSession()
+                            // Legacy onSingleTapUp contract: notify the client so any tap
+                            // side effects (soft keyboard, etc.) still run. The canvas also
+                            // focuses the hidden view above so focus order matches.
+                            onClientTap?.invoke()
                             // Legacy onUp quick-tap parity: when mouse tracking is active a
                             // quick touch tap reports the left button press/release to the app.
                             val emulator = session.emulator
@@ -589,14 +637,44 @@ internal fun ComposeTerminalCanvas(
             state.scrollRows, emulator.screen.activeTranscriptRows
         )
         // Cursor phase: null hands visibility decision back to the emulator (blink off);
-        // when blinking, the phase alone decides so the cursor toggles here only.
-        // Read inside the draw scope subscribes the canvas to phase flips.
-        val cursorVisibleOverride = if (blinkEnabled) blinkOn else null
+        // when blinking, the phase decides but DECSET 25 (?25l) still wins so the cursor
+        // never shows while disabled (legacy TerminalRenderer ANDs blink with
+        // shouldCursorBeVisible). Read inside the draw scope to subscribe to phase flips.
+        val cursorVisibleOverride =
+            if (blinkEnabled) blinkOn && emulator.isCursorEnabled else null
         drawIntoCanvas { drawCanvas ->
             renderComposeFrame(
                 drawCanvas.nativeCanvas, emulator, topRow, paint, metrics, palette, enableLigatures,
                 cursorVisibleOverride, state.selection
             )
+        }
+        // Vertical scrollbar (legacy setVerticalScrollBarEnabled + computeVerticalScroll*):
+        // thumb over the full range when the transcript makes range > extent; only drawn
+        // while scrolled back (parity: no bar during normal typing at live).
+        val scrollRange = emulator.screen.activeRows
+        val scrollExtent = emulator.mRows
+        if (scrollRange > scrollExtent && topRow < 0) {
+            // Legacy computeVerticalScrollOffset: activeRows + mTopRow - mRows.
+            val scrollOffset = (scrollRange + topRow - scrollExtent)
+                .coerceIn(0, scrollRange - scrollExtent)
+            val viewHeight = canvasSize.height.toFloat()
+            val thumbHeight = (scrollExtent.toFloat() / scrollRange * viewHeight)
+                .coerceAtLeast(16f)
+            val trackHeight = viewHeight - thumbHeight
+            val thumbTop = trackHeight * scrollOffset / (scrollRange - scrollExtent)
+            val barWidthPx = scrollBarWidthPx
+            drawIntoCanvas { drawCanvas ->
+                val c = drawCanvas.nativeCanvas
+                val scrollPaint = Paint().apply {
+                    color = android.graphics.Color.argb(115, 255, 255, 255)
+                    isAntiAlias = true
+                }
+                val right = canvasSize.width.toFloat()
+                c.drawRoundRect(
+                    right - barWidthPx, thumbTop, right, thumbTop + thumbHeight,
+                    barWidthPx / 2f, barWidthPx / 2f, scrollPaint
+                )
+            }
         }
     }
 }
@@ -616,14 +694,17 @@ internal data class CanvasFontMetrics(
 /**
  * Measure monospace metrics into [paint] and snapshot them.
  *
+ * The size is floored to an integer first so the canvas grid matches the legacy
+ * [com.termux.view.TerminalView.setTextSize] path, which only accepts `int`.
+ *
  * @param paint The paint to configure (typeface, size) and measure with
  * @param typeface The typeface to measure
- * @param fontSize The text size in pixels
+ * @param fontSize The text size in pixels (may be fractional; floored before measure)
  * @return The snapshotted metrics
  */
 internal fun measureCanvasMetrics(paint: Paint, typeface: Typeface, fontSize: Float): CanvasFontMetrics {
     paint.typeface = typeface
-    paint.textSize = fontSize
+    paint.textSize = fontSize.toInt().toFloat()
     val lineSpacing = ceil(paint.fontSpacing).toInt()
     val ascent = ceil(paint.ascent()).toInt()
     val fontWidth = paint.measureText("X")

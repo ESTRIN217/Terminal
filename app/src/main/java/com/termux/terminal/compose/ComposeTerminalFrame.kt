@@ -192,22 +192,27 @@ object ComposeTerminalFrame {
      * @param scrollRows Current scroll offset in rows (0 or negative), the canvas `topRow`
      * @param rowShift Rows of new output, `emulator.getScrollCounter()`
      * @param transcriptRows Available transcript rows (`activeTranscriptRows`)
+     * @param isAutoScrollDisabled Whether the emulator auto-scroll is disabled: at the
+     * transcript end the offset pins at `-transcriptRows` instead of snapping to live
+     * (legacy `onScreenUpdated` sets `mTopRow = -rowsInHistory` after stopping the mode)
      * @return The adjusted scroll offset plus selection, or a null selection to abort
      */
     @JvmStatic
+    @JvmOverloads
     fun shiftSelectionForNewOutput(
         selection: TextSelection?,
         scrollRows: Int,
         rowShift: Int,
-        transcriptRows: Int
+        transcriptRows: Int,
+        isAutoScrollDisabled: Boolean = false
     ): Pair<Int, TextSelection?> {
         if (selection == null || rowShift <= 0) return scrollRows to selection
         val rowsInHistory = maxOf(transcriptRows, 0)
         if (-scrollRows + rowShift > rowsInHistory) {
-            // End of history: abort the selection and let the scroll snap to the bottom
-            // (legacy onScreenUpdated parity: selection stops, then the next branch forces
-            // mTopRow back to 0 for the default auto-scroll-enabled case).
-            return 0 to null
+            // End of history: abort the selection. With auto-scroll enabled the scroll snaps
+            // to live (0); with auto-scroll disabled it pins at the oldest row like legacy
+            // onScreenUpdated() sets mTopRow = -rowsInHistory after stopping the mode.
+            return (if (isAutoScrollDisabled) -rowsInHistory else 0) to null
         }
         val shiftedSelection = selection.copy(
             y1 = selection.y1 - rowShift,

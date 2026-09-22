@@ -48,7 +48,15 @@ class ComposeTerminalViewClient(
         showSoftKeyboard()
     }
 
+    /** Whether the last BACK key-down consumed a native-pane selection dismiss. */
+    private var mSelectionBackKeyUp = false
+
     override fun shouldBackButtonBeMappedToEscape(): Boolean {
+        // While the native pane has a text selection, force the escape-mapping branch in
+        // TerminalView.onKeyPreIme so BACK reaches onKeyDown, which dismisses the selection
+        // and consumes the event without writing ESC (legacy onKeyPreIme checks
+        // isSelectingText() on the view itself, which is always false for the hidden host).
+        if (TerminalViewRegistry.isActivePaneSelecting) return true
         return mProperties.isBackKeyTheEscapeKey()
     }
 
@@ -72,6 +80,13 @@ class ComposeTerminalViewClient(
             Logger.logDebug(LOG_TAG, "Ignoring fingerprint sensor key event: " + e)
             return true
         }
+        if (keyCode == KeyEvent.KEYCODE_BACK && TerminalViewRegistry.isActivePaneSelecting) {
+            // Legacy TerminalView.onKeyDown stops an active text selection on any key down
+            // before the escape branch; consume BACK so ESC is never written while selecting.
+            TerminalViewRegistry.dismissActivePaneSelection()
+            mSelectionBackKeyUp = true
+            return true
+        }
         val s = session ?: return handleVirtualKeys(keyCode, e, true)
         if (keyCode == KeyEvent.KEYCODE_ENTER && !s.isRunning()) {
             // Enter on a finished session removes it, instead of writing to the
@@ -83,6 +98,12 @@ class ComposeTerminalViewClient(
     }
 
     override fun onKeyUp(keyCode: Int, e: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK && mSelectionBackKeyUp) {
+            // Pair for the selection-dismiss key-down: consume the UP too so it does not
+            // fall through to the activity as a real back press.
+            mSelectionBackKeyUp = false
+            return true
+        }
         return handleVirtualKeys(keyCode, e, false)
     }
 
@@ -122,6 +143,12 @@ class ComposeTerminalViewClient(
     }
 
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession?): Boolean {
+        // Legacy TerminalView.sendTextToTerminal() calls stopTextSelectionMode() before
+        // writing IME text; soft-IME commitText never hits the OnKeyListener, so clear the
+        // native pane selection here (also reached for hardware-produced code points, where
+        // a second clear is a no-op) and re-show the cursor like setCursorBlinkState(true).
+        TerminalViewRegistry.dismissActivePaneSelection()
+        TerminalViewRegistry.fireNativeTextInput()
         val s = session ?: return false
         if (ctrlDown && codePoint == 106 /* Ctrl+j or \n */ && !s.isRunning()) {
             // Remove a finished session on Ctrl+j.
@@ -136,7 +163,11 @@ class ComposeTerminalViewClient(
     override fun onEmulatorSet() {
         // The emulator of any composed view (focused or secondary pane) may be created after
         // layout; re-apply the pending palette and enable the cursor blinker on each of them.
+        // The blinker rate must be set first: setTerminalCursorBlinkerState() no-ops while the
+        // rate stays at the default 0, so the legacy path never blinked until now.
+        val blinkRate = mProperties.terminalCursorBlinkRate
         TerminalViewRegistry.forComposedViews { view ->
+            view.setTerminalCursorBlinkerRate(blinkRate)
             view.setTerminalCursorBlinkerState(true, true)
             TerminalViewRegistry.reapplyPendingPalette(view)
         }

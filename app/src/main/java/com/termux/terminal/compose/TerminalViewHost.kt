@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import com.termux.terminal.TerminalSession
+import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 
@@ -82,6 +83,12 @@ fun TerminalViewHost(
                 // menu handled by TermuxComposeActivity.
                 (context as? ComponentActivity)?.registerForContextMenu(this)
                 setTerminalViewClient(viewClient)
+                // Honor terminal-cursor-blink-rate on the legacy path too: without an explicit
+                // rate the blinker stays inert at the default 0 even when setTerminalCursorBlinkerState
+                // is later called from onEmulatorSet (parity with the native canvas blink).
+                setTerminalCursorBlinkerRate(
+                    TermuxAppSharedProperties.getProperties()?.getTerminalCursorBlinkRate() ?: 0
+                )
                 setTextSize(fontSize.toInt())
                 appliedFontSize = fontSize
                 val resolvedTypeface = typeface ?: android.graphics.Typeface.MONOSPACE

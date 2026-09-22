@@ -163,6 +163,20 @@ class ComposeTerminalFrameTest {
             0 to null,
             ComposeTerminalFrame.shiftSelectionForNewOutput(selection, -3, 4, 5)
         )
+        // Auto-scroll disabled pins at the oldest transcript row instead (legacy onScreenUpdated).
+        assertEquals(
+            -5 to null,
+            ComposeTerminalFrame.shiftSelectionForNewOutput(
+                selection, -3, 4, 5, isAutoScrollDisabled = true
+            )
+        )
+        // Mid-transcript shift still applies with auto-scroll disabled.
+        assertEquals(
+            -5 to ComposeTerminalFrame.TextSelection(1, -4, 4, -3),
+            ComposeTerminalFrame.shiftSelectionForNewOutput(
+                selection, -3, 2, 10, isAutoScrollDisabled = true
+            )
+        )
         // No shift or no selection is a no-op.
         assertEquals(
             -3 to selection,

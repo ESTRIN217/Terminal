@@ -443,7 +443,20 @@ private fun SessionPane(
             // while still selecting (legacy onDetachedFromWindow stops the mode).
             val selecting = paneState.selection != null
             var copyModeNotified by remember { mutableStateOf(false) }
-            LaunchedEffect(selecting) {
+            // Identity for registry hooks so a disposing pane cannot clobber another pane's.
+            val paneHookToken = remember(paneState) { Any() }
+            // Expose selection to the shared view client so BACK/IME code points can dismiss
+            // it before the escape branch (legacy onKeyPreIme / sendTextToTerminal parity).
+            // Only the active pane owns the registry hooks; a secondary pane's selection is
+            // not reachable from the focused hidden view's key pipeline anyway.
+            LaunchedEffect(selecting, isActivePane) {
+                if (isActivePane) {
+                    TerminalViewRegistry.activePaneHookToken = paneHookToken
+                    TerminalViewRegistry.isActivePaneSelecting = selecting
+                    TerminalViewRegistry.clearActivePaneSelection =
+                        if (selecting) ({ paneState.selection = null }) else null
+                    TerminalViewRegistry.nativeTextInputListener = { paneState.blinkResetTick++ }
+                }
                 if (copyModeNotified != selecting) {
                     copyModeNotified = selecting
                     viewClient.copyModeChanged(selecting)
@@ -451,6 +464,7 @@ private fun SessionPane(
             }
             DisposableEffect(paneState) {
                 onDispose {
+                    TerminalViewRegistry.clearPaneHooks(paneHookToken)
                     if (copyModeNotified) {
                         copyModeNotified = false
                         viewClient.copyModeChanged(false)
@@ -472,7 +486,12 @@ private fun SessionPane(
                     palette = palette,
                     isActivePane = isActivePane,
                     onActivatePane = { onPaneFocused(model.id) },
-                    onUserKeyInput = { paneState.selection = null },
+                    onUserKeyInput = {
+                        // Hardware key path: dismiss selection and re-show the cursor phase
+                        // like legacy setCursorBlinkState(true) from onKeyDown/inputCodePoint.
+                        paneState.selection = null
+                        paneState.blinkResetTick++
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
                 ComposeTerminalCanvas(
@@ -486,6 +505,7 @@ private fun SessionPane(
                     isActivePane = isActivePane,
                     onActivatePane = { onPaneFocused(model.id) },
                     onLongPressConsumed = { viewClient.onLongPress(null) },
+                    onClientTap = { viewClient.onSingleTapUp(null) },
                     onFontSizeStep = { step ->
                         val target = (fontSize + step).coerceIn(MinTerminalFontSizePx, MaxTerminalFontSizePx)
                         if (target != fontSize) onFontSizeStep(target)

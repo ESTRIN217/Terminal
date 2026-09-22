@@ -49,6 +49,36 @@ Fecha: septiembre 2026 · Base: commit `f8ce27e2` (v1.119.0) · Rama de trabajo:
 6. **Terminal nativa pintada con Compose** — spike operativo (commit `cee30ff5`): `ComposeTerminalCanvas` pinta la sesión con un `Canvas` Compose en lugar de la vista legada, con la lógica pura de runs en `ComposeTerminalFrame` (agrupación por estilo, reverse video, cursor block/underline/bar, caracteres anchos y combining, escala de glifos no-mono). Detrás del **feature-flag** `native_compose_renderer` (Ajustes → Experimental) con la vista legada como fallback, tal como exige el roadmap. El input vive en `HiddenTerminalInputHost` (vista oculta full-size que posee IME/teclas/foco; el offset de scroll lo posee el canvas), ambos con la misma geometría (`updateSize`). Gestos con paridad `TerminalView.doScroll`: swipe abajo = volver (transcript), swipe arriba = live; en alt-buffer manda flechas UP/DOWN; con **mouse-tracking activo** (TUIs como opencode) manda eventos de rueda anclados a la posición del dedo. **Iteración blink:** el cursor parpadea cuando la propiedad `terminal-cursor-blink-rate` es válida, solo en el pane activo (`LaunchedEffect` + fase propia del canvas; el blinker de la vista oculta queda inerte en rate 0). **Iteración ratón físico (SOURCE_MOUSE):** rueda → `doScroll` (±3/fila), botón izq → `sendMouseEvent` en mouse-tracking (drag = transcript sin tracking), medio → pegar portapapeles, clic → foco/teclado; todo consumido para no interferir con el touch. **Iteración selección/gestos (commit `11ef4864`):** selección de texto por long-press (expansión a palabra), handles draggables con clamping y scroll en el borde, toolbar flotante Copiar/Pegar/Más, pinch-zoom (±2px por paso, igual que el legacy) y fling con inercia (`Scroller.fling` × 0.25). **Cierre de brechas de paridad:** grid mínimo 4×4 (`Math.max(4, ...)` de `updateSize`), auto-scroll a live con salida nueva (paridad `onScreenUpdated`: snap a `mTopRow = 0` salvo selección activa o auto-scroll deshabilitado), flechas UP/DOWN en alt-buffer respetando cursor/keypad application mode (DECCKM/DECKPAM), vetos de long-press (escala en curso + consumido por el client), cursor visible al instante tras input (blink reset), botón Pegar deshabilitado sin clip en el portapapeles y guardia de 300 ms al cancelar la selección con un tap. Tests de la lógica en `ComposeTerminalFrameTest` (Kotlin + Java), `TermuxViewModelSplitTest` y `TerminalKeyHandlerTest`. **Paridad de selección (cierre):** una tecla hardware cierra el modo de selección como el legacy `onKeyDown` (hook `onUserKeyInput` del `HiddenTerminalInputHost`, con BACK delegado al `BackHandler`), la toolbar flotante se oculta mientras se arrastra un handle y reaparece al soltarlo (`updateFloatingToolbarVisibility`) y el pane notifica `viewClient.copyModeChanged` al iniciar/cerrar la selección y al descomponerse (paridad `start/stopTextSelectionMode` y `onDetachedFromWindow`). **Cierre del fantasma de scroll:** el canvas nativo rellena el fondo por defecto en cada frame (las celdas de fondo por defecto no se pintaban por run y dejaban ver la capa oculta `HiddenTerminalInputHost` en `mTopRow=0` como una copia estática del texto mientras el canvas scrolleaba), el `TerminalView` oculto pasa a `alpha = 0` (su único aporte era el color de fondo, que ahora pinta el canvas) y el pane pone `palette.background` de respaldo para los frames iniciales. **Paridad de gotas (handles):** cada gota se dibuja desplazada por el hotspot legacy (`0.75W` inicio / `0.25W` fin, `mHotspotX`) para que la punta caiga exacto en la esquina inferior de su celda ancla; el arrastre agarra en el touch-down de cero-slop (consume el `DOWN`, sigue el dedo hasta `UP/CANCEL` sin cancelarse al cruzar celdas — teclas estables + lecturas vía `rememberUpdatedState` — y un tap sobre la gota no limpia la selección); el drawable vuelve a voltearse cerca de los bordes de pantalla (`checkChangedOrientation` con throttle de 50 ms durante el drag y chequeo forzado al mostrarse, paridad `show()` con force=true).
 7. **Hipervínculos (OSC 8) e imágenes** — toca `terminal-emulator` (protocolo) y el view (render). Necesita los tests del emulador (`./gradlew test`) verdes antes de mergear.
 
+### Fase 3.6 — Paridad legacy vs nativa (cierre de brechas) ✅
+
+Auditoría `TerminalView` (legacy) vs `ComposeTerminalCanvas` + hosts (nativa). Todo se arregla en `app` (más pruebas); el input ya está a paridad porque el host oculta un `TerminalView` real.
+
+**P0 (crash) — Fixed**
+1. Middle-click paste con portapapeles vacío: guard null/empty antes de `paste` (paridad `TerminalView.onTouchEvent` BUTTON_TERTIARY); `TerminalEmulator.paste` no tolera null.
+
+**P1 (estado visible) — Fixed**
+2. BACK con selección: el pane activo registra hooks en `TerminalViewRegistry`; `shouldBackButtonBeMappedToEscape` fuerza la rama de escape para que `onKeyDown` del client limpie la selección y consuma BACK sin escribir ESC (paridad `onKeyPreIme`). El key-up pareado también se consume.
+3. IME de software limpia la selección en `onCodePoint` → `dismissActivePaneSelection` (paridad `sendTextToTerminal` → `stopTextSelectionMode`); el comentario del host que decía que el IME no lo hacía era incorrecto.
+4. Blink del cursor: el override del canvas hace AND con `emulator.isCursorEnabled` (respeta `?25l`); la fase solo se resetea en input (`blinkResetTick`), no en cada frame de output.
+5. `terminal-cursor-blink-rate` en la ruta legacy: `TerminalViewHost` llama `setTerminalCursorBlinkerRate` al montar (antes el blinker se quedaba en rate 0 y nunca parpadeaba al alternar el flag).
+
+**P2 (paridad fina) — Fixed**
+6. Snap a live al cambiar el grid en `updateSize` del canvas (`mTopRow = 0` solo si cambió columns/rows).
+7. Selección + auto-scroll deshabilitado: `shiftSelectionForNewOutput(..., isAutoScrollDisabled)` ancla a `-transcript` al fin del historial (paridad `onScreenUpdated`).
+8. Tap del canvas invoca `onSingleTapUp` del client (`onClientTap`).
+9. Salir de touch mode (teclado hardware) cierra la selección (paridad `TextSelectionCursorController.onTouchModeChanged`).
+10. Métricas de fuente: `measureCanvasMetrics` y el `Paint` del canvas usan `fontSize.toInt()` igual que `TerminalView.setTextSize(int)` (evita drift si llegara un tamaño fraccional).
+11. Scrollbar vertical en el canvas: thumb con la fórmula `activeRows + mTopRow - mRows`, visible solo con scrollback (`topRow < 0`), paridad `computeVerticalScroll*` + `awakenScrollBars`.
+
+**Aceptado / fuera de alcance**
+- Right-click → menú legacy (out of scope, ya anotado en el canvas).
+- Fling: `exponentialDecay` ≈ `Scroller` (sensación aproximada, documentado).
+- Handles de selección: la nativa usa matemática exacta; la legacy tiene offset hard-coded de 40 px — no se “paridad” hacia atrás.
+
+**Pendiente (auditoría en dispositivo / no bloquea 2.0)**
+- Accesibilidad/TalkBack (semantics del canvas vs `contentDescription` en la view alpha-0), contrato `onLongPress(event)` con el `MotionEvent` real.
+- Tests: branching `useNativeRenderer` sin cobertura de UI; extraer más lógica de composables a `ComposeTerminalFrame` para unit tests. La lógica de abort/pin de selección ya tiene tests (`ComposeTerminalFrameTest`).
+
 ### Fase 4 — Release 2.0
 
 - Bump `versionName` → `2.0.0` y `versionCode` → `120` (el validador semver de `app/build.gradle.kts` ya acepta `2.0.0`).
@@ -64,5 +94,5 @@ Fecha: septiembre 2026 · Base: commit `f8ce27e2` (v1.119.0) · Rama de trabajo:
 | Fase 0 — Cimientos | Completada |
 | Fase 1 — Quick wins | Completada |
 | Fase 2 — UI Compose | Completada |
-| Fase 3 — Rendering | Completada (canvas Compose nativo tras el flag; paridad cerrada con `TerminalView`) |
+| Fase 3 — Rendering | Completada (canvas Compose nativo tras el flag; paridad principal cerrada — ver Fase 3.6 para brechas restantes) |
 | Fase 4 — Release 2.0 | Pendiente |

@@ -39,4 +39,11 @@ class ComposeTerminalViewState {
      * first 300 ms does not dismiss a freshly started selection (legacy `hide()` guard).
      */
     var selectionStartedAt by mutableLongStateOf(0L)
+
+    /**
+     * Bumped on hardware/IME input so the canvas can re-show the cursor phase immediately,
+     * mirroring legacy `TerminalEmulator.setCursorBlinkState(true)` from
+     * `inputCodePoint`/`handleKeyCode` without treating ordinary screen output as input.
+     */
+    var blinkResetTick by mutableIntStateOf(0)
 }

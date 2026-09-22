@@ -51,6 +51,70 @@ object TerminalViewRegistry {
         storedSelectedText = text
     }
 
+    /**
+     * Whether the active native pane currently has a text selection (canvas selection
+     * overlay, not the hidden view's own controller). Lets
+     * [ComposeTerminalViewClient.shouldBackButtonBeMappedToEscape] keep BACK on the
+     * selection-dismiss path instead of sending ESC while selecting (legacy
+     * `TerminalView.onKeyPreIme` parity).
+     */
+    @Volatile
+    @JvmStatic
+    var isActivePaneSelecting: Boolean = false
+
+    /**
+     * Clear callback for the active native pane's selection, registered by the pane so
+     * client hooks (IME code points, BACK) can dismiss it the same way legacy
+     * `stopTextSelectionMode()` does from `sendTextToTerminal` / `onKeyDown`.
+     */
+    @Volatile
+    @JvmStatic
+    var clearActivePaneSelection: (() -> Unit)? = null
+
+    /**
+     * Notified on soft-IME / client code-point input so the native canvas can re-show the
+     * cursor blink phase (legacy `setCursorBlinkState(true)` from `inputCodePoint`), which
+     * the hardware-key [com.termux.view.TerminalView] OnKeyListener path does not cover.
+     */
+    @Volatile
+    @JvmStatic
+    var nativeTextInputListener: (() -> Unit)? = null
+
+    /**
+     * Identity token of the pane that currently owns [clearActivePaneSelection] /
+     * [nativeTextInputListener], so a disposing inactive pane cannot clear another pane's hooks.
+     */
+    @Volatile
+    @JvmStatic
+    var activePaneHookToken: Any? = null
+
+    /** Dismiss the active native pane's selection if any. Safe to call when none is set. */
+    @JvmStatic
+    fun dismissActivePaneSelection() {
+        clearActivePaneSelection?.invoke()
+    }
+
+    /** Re-show the native canvas cursor after soft-IME input. No-op when no pane registered. */
+    @JvmStatic
+    fun fireNativeTextInput() {
+        nativeTextInputListener?.invoke()
+    }
+
+    /**
+     * Clear selection/text-input hooks owned by [token]. No-op when another pane has since
+     * taken ownership.
+     *
+     * @param token The pane identity that registered the hooks
+     */
+    @JvmStatic
+    fun clearPaneHooks(token: Any) {
+        if (activePaneHookToken !== token) return
+        activePaneHookToken = null
+        isActivePaneSelecting = false
+        clearActivePaneSelection = null
+        nativeTextInputListener = null
+    }
+
     /** Views currently composed, keyed by the session handle they render. */
     private val viewsBySessionHandle = ConcurrentHashMap<String, TerminalView>()
 
