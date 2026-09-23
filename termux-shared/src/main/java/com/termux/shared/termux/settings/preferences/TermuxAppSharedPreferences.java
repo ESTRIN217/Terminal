@@ -311,6 +311,46 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
 
 
 
+    /**
+     * Whether device-tier defaults were already evaluated for this install by the
+     * hardware defaults seeder.
+     *
+     * @return {@code true} once the first-run seed has run (fresh or existing install).
+     */
+    public boolean isHardwareDefaultsSeeded() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_HARDWARE_DEFAULTS_SEEDED, TERMUX_APP.DEFAULT_VALUE_HARDWARE_DEFAULTS_SEEDED);
+    }
+
+    /**
+     * Set the hardware defaults seeded marker. Committed synchronously so a crash cannot
+     * cause the first-run seed to run twice.
+     *
+     * @param value Whether the seed has been evaluated.
+     */
+    public void setHardwareDefaultsSeeded(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_HARDWARE_DEFAULTS_SEEDED, value, true);
+    }
+
+    /**
+     * Set the seeded fallback default for the {@code terminal-transcript-rows} property.
+     *
+     * @param value Scrollback rows computed for the device tier.
+     */
+    public void setSeededTerminalTranscriptRows(int value) {
+        SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_SEEDED_TERMINAL_TRANSCRIPT_ROWS, value, false);
+    }
+
+    /**
+     * Set the seeded fallback default for the {@code terminal-cursor-blink-rate} property.
+     *
+     * @param value Blink rate in milliseconds; {@code 0} disables blinking.
+     */
+    public void setSeededTerminalCursorBlinkRate(int value) {
+        SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_SEEDED_TERMINAL_CURSOR_BLINK_RATE, value, false);
+    }
+
+
+
     public boolean arePluginErrorNotificationsEnabled(boolean readFromFile) {
         if (readFromFile)
             return SharedPreferenceUtils.getBoolean(mMultiProcessSharedPreferences, TERMUX_APP.KEY_PLUGIN_ERROR_NOTIFICATIONS_ENABLED, TERMUX_APP.DEFAULT_VALUE_PLUGIN_ERROR_NOTIFICATIONS_ENABLED);

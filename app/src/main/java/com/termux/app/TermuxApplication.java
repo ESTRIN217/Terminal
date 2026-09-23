@@ -27,6 +27,10 @@ public class TermuxApplication extends Application {
         // Set crash handler for the app
         TermuxCrashUtils.setDefaultCrashHandler(this);
 
+        // Seed device-tier defaults on a fresh install before any other preference writes
+        // (fresh-install detection requires the preferences file to still be empty)
+        HardwareDefaultsSeeder.seedIfFreshInstall(context);
+
         // Set log config for the app
         setLogConfig(context);
 

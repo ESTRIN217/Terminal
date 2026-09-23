@@ -1,7 +1,7 @@
 package com.termux.shared.termux.settings.preferences;
 
 /*
- * Version: v0.17.0
+ * Version: v0.18.0
  *
  * Changelog
  *
@@ -73,6 +73,11 @@ package com.termux.shared.termux.settings.preferences;
  * - 0.17.0 (2026-09-23)
  *      - Added following to `TERMUX_APP`:
  *          `KEY_FORCE_60HZ` and `DEFAULT_VALUE_FORCE_60HZ`.
+ *
+ * - 0.18.0 (2026-09-23)
+ *      - Added following to `TERMUX_APP`:
+ *          `KEY_HARDWARE_DEFAULTS_SEEDED`, `KEY_SEEDED_TERMINAL_TRANSCRIPT_ROWS` and
+ *          `KEY_SEEDED_TERMINAL_CURSOR_BLINK_RATE` (with their `DEFAULT_VALUE_*` constants).
  */
 
 import com.termux.shared.shell.command.ExecutionCommand;
@@ -186,6 +191,30 @@ public final class TermuxPreferenceConstants {
          */
         public static final String KEY_FORCE_60HZ = "force_60hz";
         public static final boolean DEFAULT_VALUE_FORCE_60HZ = false;
+
+
+        /**
+         * Defines the key marking that device-tier defaults were already evaluated for this
+         * install by the hardware defaults seeder (written once, fresh and existing installs).
+         */
+        public static final String KEY_HARDWARE_DEFAULTS_SEEDED = "hardware_defaults_seeded";
+        public static final boolean DEFAULT_VALUE_HARDWARE_DEFAULTS_SEEDED = false;
+
+        /**
+         * Defines the seeded fallback default for the {@code terminal-transcript-rows}
+         * property, used when the key is absent from {@code termux.properties}. The value
+         * {@code -1} means "not seeded" (existing installs keep the compiled-in default).
+         */
+        public static final String KEY_SEEDED_TERMINAL_TRANSCRIPT_ROWS = "seeded_terminal_transcript_rows";
+        public static final int DEFAULT_VALUE_SEEDED_TERMINAL_TRANSCRIPT_ROWS = -1;
+
+        /**
+         * Defines the seeded fallback default for the {@code terminal-cursor-blink-rate}
+         * property (milliseconds; {@code 0} disables blinking), used when the key is absent
+         * from {@code termux.properties}. The value {@code -1} means "not seeded".
+         */
+        public static final String KEY_SEEDED_TERMINAL_CURSOR_BLINK_RATE = "seeded_terminal_cursor_blink_rate";
+        public static final int DEFAULT_VALUE_SEEDED_TERMINAL_CURSOR_BLINK_RATE = -1;
 
 
         /**
