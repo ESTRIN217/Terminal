@@ -458,8 +458,8 @@ fun FileManagerScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = if (isBroken) stringResource(R.string.filemanager_broken_link, linkTarget!!)
-                                else if (isLink) stringResource(R.string.filemanager_link_target, linkTarget!!)
+                                text = if (isBroken) stringResource(R.string.filemanager_broken_link, linkTarget ?: file.absolutePath)
+                                else if (isLink) stringResource(R.string.filemanager_link_target, linkTarget)
                                 else if (file.isDirectory) stringResource(R.string.filemanager_folder)
                                 else FileOperationsHelper.formatSize(file.length()),
                                 style = MaterialTheme.typography.bodySmall,

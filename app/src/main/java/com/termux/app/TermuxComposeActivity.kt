@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -158,13 +159,13 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
      * Incremented on every resume. Reading it from composition makes the terminal palette
      * recompute when returning from the Settings screen (custom color scheme toggle).
      */
-    private var mPaletteRevision by mutableStateOf(0)
+    private var mPaletteRevision by mutableIntStateOf(0)
 
     /**
      * Incremented on every resume. Reading it from composition makes the terminal font and the
      * ligature setting reload when returning from the Settings screen (font selector).
      */
-    private var mFontRevision by mutableStateOf(0)
+    private var mFontRevision by mutableIntStateOf(0)
 
     private lateinit var mProperties: TermuxAppSharedProperties
     private lateinit var mPreferences: TermuxAppSharedPreferences
@@ -943,6 +944,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
         Logger.logVerbose(LOG_TAG, "onActivityResult: requestCode: $requestCode")
         if (requestCode == PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION) {
@@ -950,7 +952,9 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         }
     }
 
+    @Deprecated("Deprecated in Java")
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        @Suppress("DEPRECATION")
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         Logger.logVerbose(LOG_TAG, "onRequestPermissionsResult: requestCode: $requestCode")
         if (requestCode == PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION) {
@@ -1060,11 +1064,11 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         AlertDialog.Builder(this)
             .setIcon(android.R.drawable.ic_dialog_alert)
             .setMessage(R.string.title_confirm_kill_process)
-            .setPositiveButton(android.R.string.yes) { dialog, _ ->
+            .setPositiveButton(getString(com.termux.shared.R.string.action_yes)) { dialog, _ ->
                 dialog.dismiss()
                 session.finishIfRunning()
             }
-            .setNegativeButton(android.R.string.no, null)
+            .setNegativeButton(getString(com.termux.shared.R.string.action_no), null)
             .show()
     }
 

@@ -33,14 +33,14 @@ Fecha: septiembre 2026 · Base: commit `f8ce27e2` (v1.119.0) · Rama de trabajo:
 - Framework de **feature-flags** para features de alto riesgo (si no existe: validar en `TermuxViews`/`Settings`).
 - Decidir la estrategia de ramas: `master` con bugs-solo + rama `release/2.0` acumulando features (recomendado) **o** features mergeadas directo a `master` con el checklist.
 
-### Fase 1 — Quick wins de bajo riesgo (aisladas, `Added:`) — ítems 1–3 ✅ · 8–10 pendientes
+### Fase 1 — Quick wins de bajo riesgo (aisladas, `Added:`) — ítems 1–3 ✅ · 8–10 ✅
 
 1. **Mostrar licencia de proot y Debian** — ✅ hecho (`d78ff9ba`): entradas GPLv2/PRoot y Debian en `LicensesScreen.kt`, strings EN/ES. Proot es GPL-2.0+ y Debian enlaza a `debian.org/legal/licenses/` (las carpetas `assets/` solo contienen binarios, no textos de licencia).
 2. **Copiar ruta de archivos/carpetas** — ✅ hecho (`1155a17e`): botón "Copiar ruta" en el diálogo de detalles y en la barra de selección múltiple (modo multi-selección), strings EN/ES/PT.
 3. **Colores verdaderos 24-bit** — ✅ hecho (`43648445`): toggle "Esquema de colores personalizado" en Ajustes. `TerminalColorSchemeLoader` lee `~/.termux/colors.properties` (claves `foreground/background/cursor/color0..15` con `#RRGGBB`) reutilizando `TerminalColorScheme` del emulador; `TerminalPalette` acomoda un `scheme` completo de 259 colores y `applyPalette` lo copia al emulador. Recarga automática al volver de Ajustes. El emulador ya soportaba SGR `38;2;r;g;b`/`48;2;...`.
-8. **Restaurar informes de crash al reabrir la app** — el pipeline Termux completo ya existe (`CrashHandler` → `~/crash_log.md` → notificación → `ReportActivity` con Share/Copy/Save), pero la comprobación en `onResume` se perdió al borrar `TermuxActivity` (commit `a0da79f3`) y nunca se portó a Compose; un crash no mandaba broadcast y el archivo quedaba sin leer. Fix mínimo en `TermuxComposeActivity`: llamar `TermuxCrashUtils.notifyAppCrashFromCrashLogFile(this, LOG_TAG)` en `onResume()` (paridad upstream) y restaurar `ReportActivity.deleteReportInfoFilesOlderThanXDays(this, 14, false)` en `onCreate`. Respeta el pref `crash_report_notifications_enabled`; sin UI nueva.
-9. **Pintar el prompt `root@localhost:~#`** — la app no configura `PS1`: sale del rootfs stock Debian vía `bash --login`. Añadir script `etc/profile.d/10-termux-ps1.sh` (constante nueva junto a `DEBIAN_WELCOME_PROFILE_RELATIVE_PATH` en `TermuxConstants`, escrito en `DebianInstaller.writePostInstallConfig()` + `repairInstalledRootfsPermissions()`, test en `DebianInstallerTest`) con PS1 coloreado (`\[email protected]\h:\w#`, colores 256/truecolor vía `TERM=xterm-256color`). Mismo patrón que el welcome message existente.
-10. **Reducir warnings** — correr `./gradlew lintDebug` + warnings del compilador Java/Kotlin, limpiar lo accionable (deprecaciones reales, código muerto). No se añade lint al gate de CI (sigue siendo solo `./gradlew test`, decisión explícita del fork).
+8. **Restaurar informes de crash al reabrir la app** — ✅ hecho: `TermuxCrashUtils.notifyAppCrashFromCrashLogFile(this, LOG_TAG)` en `onResume()` y `ReportActivity.deleteReportInfoFilesOlderThanXDays(this, 14, false)` en `onCreate` de `TermuxComposeActivity` (paridad con el `TermuxActivity` borrado en `a0da79f3`). El pref `crash_report_notifications_enabled` se respeta dentro de `TermuxCrashUtils` (doble check: cached + file). Sin UI nueva.
+9. **Pintar el prompt `root@localhost:~#`** — ✅ hecho: constantes `DEBIAN_PS1_PROFILE_RELATIVE_PATH` (`etc/profile.d/10-termux-ps1.sh`) + `DEBIAN_PS1_SHELL_SCRIPT` (PS1 256-color `\u@\h:\w\$` con `\[`/`\]`) en `TermuxConstants`; escrito por `DebianInstaller.writePs1Config()` desde `writePostInstallConfig()` (install fresco) y `repairInstalledRootfsPermissions()` (existe → reescribe en la próxima pestaña, patrón welcome). Test `testPs1Constants_pathAndScript_consistent` en `DebianInstallerTest`. Verificado contra el rootfs OCI: `/etc/profile` carga `bash.bashrc` (PS1 plano) **y después** `profile.d/*.sh`; `/root/.bashrc` tiene el PS1 comentado → el script gana.
+10. **Reducir warnings** — ✅ hecho: 0 warnings Kotlin (antes 9: deprecaciones M3 `ScrollableTabRow`/`Slider`/`android.R.string.yes|no`, override sin `@Deprecated`, `!!` innecesario); fixes de lint accionables (`new Handler()`, `FLAG_IMMUTABLE` en PendingIntents, `DefaultLocale`, `ExtraTranslation` de `termux_keyboard_header`, `tools:ignore`/label redundantes, `AutoboxingStateCreation`, `UseKtx` `toUri`, `NewApi` de `java.nio` en filemanager con `@SuppressLint` documentado). **No** se añade lint al gate de CI (sigue siendo solo `./gradlew test`).
 
 ### Fase 2 — UI Compose (medio riesgo) — ítems 4–5 ✅ · 11–12 pendientes
 
@@ -126,7 +126,7 @@ Análisis metodológico del renderer nativo y de la UI Compose; entrega = inform
 | Fase | Estado |
 |---|---|
 | Fase 0 — Cimientos | Completada |
-| Fase 1 — Quick wins | Completada (ítems 1–3; 8–10 pendientes) |
+| Fase 1 — Quick wins | Completada (ítems 1–3 y 8–10) |
 | Fase 2 — UI Compose | Completada (ítems 4–5; 11 menú "Más" terminal y 12 editar en filemanager pendientes) |
 | Fase 2.5 — Rendimiento de plataforma | Pendiente (13–15) |
 | Fase 3 — Rendering | Completada (canvas Compose nativo tras el flag; paridad principal cerrada — ver Fase 3.6 para brechas restantes) |

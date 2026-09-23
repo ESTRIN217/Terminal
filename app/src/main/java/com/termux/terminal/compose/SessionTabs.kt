@@ -9,10 +9,9 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.SecondaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults.SecondaryIndicator
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -40,22 +39,22 @@ fun SessionTabs(
     onCloseSessionClick: (TermuxSessionUiModel) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    ScrollableTabRow(
+    SecondaryScrollableTabRow(
         selectedTabIndex = activeSessionIndex.coerceIn(0, (sessions.size + 1).coerceAtLeast(0)),
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
         edgePadding = 0.dp,
-        indicator = { tabPositions ->
-            if (activeSessionIndex in tabPositions.indices) {
+        indicator = {
+            if (activeSessionIndex in sessions.indices) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.TopStart // 3. Forzamos la alineación ARRIBA
                 ) {
-                SecondaryIndicator(
-                    modifier = Modifier.tabIndicatorOffset(tabPositions[activeSessionIndex]),
-                    color = MaterialTheme.colorScheme.primary
-                )
+                    SecondaryIndicator(
+                        modifier = Modifier.tabIndicatorOffset(activeSessionIndex),
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         },

@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -65,7 +66,7 @@ fun HiddenTerminalInputHost(
 ) {
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
     var appliedSession by remember { mutableStateOf<TerminalSession?>(null) }
-    var appliedFontSize by remember { mutableStateOf(0f) }
+    var appliedFontSize by remember { mutableFloatStateOf(0f) }
     var appliedTypeface by remember { mutableStateOf<Typeface?>(null) }
     var appliedLigatures by remember { mutableStateOf(true) }
     var appliedPalette by remember { mutableStateOf<TerminalPalette?>(null) }

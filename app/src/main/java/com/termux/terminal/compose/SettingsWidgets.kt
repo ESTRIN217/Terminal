@@ -229,9 +229,7 @@ fun SettingsSliderTile(
     onValueChangeFinished: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var sliderValue by androidx.compose.runtime.remember(value) {
-        androidx.compose.runtime.mutableFloatStateOf(value)
-    }
+    val sliderState = rememberSliderState(value, steps, valueRange)
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -257,11 +255,9 @@ fun SettingsSliderTile(
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Slider(
-                    value = sliderValue,
-                    onValueChange = { sliderValue = it },
-                    onValueChangeFinished = { onValueChangeFinished(sliderValue) },
-                    valueRange = valueRange,
-                    steps = steps,
+                    state = sliderState,
+                    onValueChange = {},
+                    onValueChangeFinished = { onValueChangeFinished(sliderState.value) },
                     modifier = Modifier.weight(1f)
                 )
                 if (valueLabel != null) {

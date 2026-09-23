@@ -12,9 +12,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import androidx.lifecycle.ViewModelProvider
 import com.estrin217.filemanager.FileOperationsHelper
 import com.estrin217.filemanager.compose.FileManagerScreen
@@ -47,7 +49,7 @@ class FileManagerComposeActivity : ComponentActivity() {
      * Incremented on every resume. Reading it from composition makes the app UI font
      * reload when the terminal font changed while this activity was paused.
      */
-    private var mFontRevision by mutableStateOf(0)
+    private var mFontRevision by mutableIntStateOf(0)
 
     /** Action deferred until the user grants shared-storage access. */
     private var mPendingStorageAction: (() -> Unit)? = null
@@ -130,7 +132,7 @@ class FileManagerComposeActivity : ComponentActivity() {
         } else {
             val intent = Intent(
                 Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                Uri.parse("package:$packageName")
+                "package:$packageName".toUri()
             )
             mManageStorageLauncher.launch(intent)
         }

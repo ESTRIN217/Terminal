@@ -31,6 +31,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -108,7 +109,7 @@ fun TermuxMainScreen(
     // Track the available content width so the split button and the panes share the same
     // "is there room for two panes" gate (see MinSplitContentWidth). Updated by the content
     // Box's onSizeChanged below.
-    var contentWidthPx by remember { mutableStateOf(0) }
+    var contentWidthPx by remember { mutableIntStateOf(0) }
     val minSplitContentWidthPx = with(LocalDensity.current) {
         MinSplitContentWidth.roundToPx()
     }

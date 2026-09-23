@@ -1976,7 +1976,7 @@ public final class TerminalEmulator {
                 mBackColor = code - 100 + 8;
             } else {
                 if (LOG_ESCAPE_SEQUENCES)
-                    Logger.logWarn(mClient, LOG_TAG, String.format("SGR unknown code %d", code));
+                    Logger.logWarn(mClient, LOG_TAG, String.format(java.util.Locale.ROOT, "SGR unknown code %d", code));
             }
         }
     }
@@ -2292,7 +2292,7 @@ public final class TerminalEmulator {
     }
 
     private void unimplementedSequence(int b) {
-        logError("Unimplemented sequence char '" + (char) b + "' (U+" + String.format("%04x", b) + ")");
+        logError("Unimplemented sequence char '" + (char) b + "' (U+" + String.format(java.util.Locale.ROOT, "%04x", b) + ")");
         finishSequence();
     }
 

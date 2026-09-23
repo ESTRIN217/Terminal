@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -48,7 +49,7 @@ class SettingsComposeActivity : ComponentActivity() {
      * Incremented on every resume. Reading it from composition makes the app UI font
      * reload when returning from the system font picker (font import).
      */
-    private var mFontRevision by mutableStateOf(0)
+    private var mFontRevision by mutableIntStateOf(0)
 
     /** System file picker for importing a font from shared storage into ~/.termux/font.ttf. */
     private val mFontPickerLauncher =

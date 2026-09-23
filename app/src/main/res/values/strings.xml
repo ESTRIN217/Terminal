@@ -253,6 +253,7 @@
         <string name="termux_terminal_io_preferences_summary">Preferences for terminal I/O</string>
 
             <!-- Keyboard Category -->
+            <string name="termux_keyboard_header">Keyboard</string>
 
                 <!-- Soft Keyboard -->
                 <string name="termux_soft_keyboard_enabled_title">Soft Keyboard Enabled</string>
