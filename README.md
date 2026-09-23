@@ -79,6 +79,12 @@ dentro de la sesión Debian. No es un bug: el acceso a dispositivos concretos
 (`/dev/null`, `/dev/tty`, ...) sigue funcionando. Detalles en
 [`docs/proot-debian-arm64-plan.md`](docs/proot-debian-arm64-plan.md) (sección 7).
 
+Del mismo modo, desde Android 8 (API 26) SELinux deniega a las apps `untrusted_app`
+leer `/proc/stat`, así que los monitores de CPU (`btop`, `htop`) no mostrarán
+estadísticas de CPU en un dispositivo stock con SELinux enforcing (`btop` falla con
+`Failed to parse /proc/stat`). El bind `-b /proc` está presente y correcto; sin root
+o SELinux permissive no hay workaround.
+
 ## Mantenimiento y contribuciones
 
 - Java 17 requerido. NDK `30.0.14904198`, CMake `3.31.6`.

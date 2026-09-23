@@ -222,3 +222,12 @@ Sin root no hay workaround. proot no sintetiza entradas `getdents` para bindings
 (`app/src/main/cpp/proot/path/glue.c`), por lo que bindear nodos sueltos tampoco los
 listaría. La sesión y los programas que solo abren dispositivos concretos funcionan con
 normalidad.
+
+La misma clase de restricción afecta a `/proc/stat`: desde Android 8 (API 26) el dominio
+`untrusted_app` no tiene permiso `read` sobre los archivos sensibles de `proc`, como
+`/proc/stat`, aunque el bind `-b /proc` en
+`ProotShellEnvironment.buildProotCommand()` esté presente y correcto. Los monitores de
+CPU del invitado (`btop`, `htop`) no mostrarán estadísticas de CPU en un dispositivo
+stock con SELinux enforcing — `btop` falla con `Failed to parse /proc/stat` — y como en
+el resto de esta sección, sin root o SELinux permissive no hay workaround. Ver también
+el README, sección «Limitaciones conocidas (SELinux OEM)».
