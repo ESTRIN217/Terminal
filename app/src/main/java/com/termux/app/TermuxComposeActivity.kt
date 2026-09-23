@@ -209,6 +209,9 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
 
         mIsActivityRecreated = savedInstanceState?.getBoolean("activity_recreated", false) ?: false
 
+        // Delete ReportInfo serialized object files from cache older than 14 days
+        ReportActivity.deleteReportInfoFilesOlderThanXDays(this, 14, false)
+
         mProperties = TermuxAppSharedProperties.getProperties()
         mPreferences = TermuxAppSharedPreferences.build(this, true)
         mViewModel = ViewModelProvider(this)[TermuxViewModel::class.java]
@@ -320,6 +323,10 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         mPaletteRevision++
         // Reload the terminal font and ligature setting (may have changed in Settings).
         mFontRevision++
+
+        // Check if a crash happened on last run of the app or if a plugin crashed and show a
+        // notification with the crash details if it did
+        TermuxCrashUtils.notifyAppCrashFromCrashLogFile(this, LOG_TAG)
     }
 
     override fun onPause() {
