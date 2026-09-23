@@ -26,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
@@ -235,15 +236,18 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         bindService(serviceIntent, this, BIND_AUTO_CREATE)
 
         setContent {
-            // The terminal Typeface is resolved before the theme so the whole app UI
-            // mirrors the terminal font. mFontRevision forces a reload after Settings.
-            mFontRevision
-            val terminalTypeface = TerminalFontLoader.resolve(this, mPreferences.getTerminalFont())
+            // Disk-backed font/palette loads are keyed on revision + pref values so unrelated
+            // recompositions (menu state, uiState) do not re-read assets or colors.properties;
+            // mFontRevision/mPaletteRevision still force a reload after Settings.
+            val fontId = mPreferences.getTerminalFont()
+            val terminalTypeface = remember(mFontRevision, fontId) {
+                TerminalFontLoader.resolve(this@TermuxComposeActivity, fontId)
+            }
             TermuxExpressiveTheme(terminalTypeface = terminalTypeface) {
-                mPaletteRevision
-                mFontRevision
-                val customColorScheme =
-                    if (mPreferences.shouldUseCustomColorScheme()) TerminalColorSchemeLoader.load() else null
+                val useCustomColorScheme = mPreferences.shouldUseCustomColorScheme()
+                val customColorScheme = remember(mPaletteRevision, useCustomColorScheme) {
+                    if (useCustomColorScheme) TerminalColorSchemeLoader.load() else null
+                }
                 val palette = TerminalPalette.fromTheme(customColorScheme)
                 val enableLigatures = mPreferences.isTerminalFontLigaturesEnabled()
                 Surface(

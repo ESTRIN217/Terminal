@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -39,6 +40,15 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
 
     /** Cancels the previous listing when a new one is requested. */
     private var refreshJob: Job? = null
+
+    /**
+     * Raw result of the last successful `listFiles` for [lastListedDir].
+     *
+     * Lets search/sort/hidden toggles re-filter in memory without re-enumerating
+     * the directory (the expensive part of a keystroke-driven refresh).
+     */
+    private var lastListed: Array<File>? = null
+    private var lastListedDir: String? = null
 
     /** Last trashed file + original path, for Snackbar undo. */
     var lastTrash: Pair<File, File>? = null
@@ -178,70 +188,110 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
      * Relists the current directory off the main thread and publishes the
      * result to the [uiState] flow.
      *
-     * <p>The listing (enumerate, filter, sort, symlink scan) runs on
-     * {@code Dispatchers.IO}; a stale result from an outdated navigation is
-     * discarded when [currentDir] no longer matches the listed directory.
+     * <p>Enumeration, filter, sort and the symlink scan all run on
+     * {@code Dispatchers.IO}; only the final [MutableStateFlow.update] hops to
+     * the main thread. A stale result from an outdated navigation is discarded
+     * when [currentDir] no longer matches the listed directory.
      * [FileManagerUiState.busy] stays set until the listing is applied.</p>
      */
     fun refresh() {
         val dir = currentDir ?: return
         _uiState.update { it.copy(busy = true) }
-        val s = _uiState.value
         refreshJob?.cancel()
+        // Drop the cache so a concurrent search/sort reapply cannot cancel this
+        // full relist and serve a listing that predates a file mutation.
+        lastListed = null
+        lastListedDir = null
         refreshJob = viewModelScope.launch(Dispatchers.IO) {
             val listed = FileOperationsHelper.listFiles(dir)
+            if (!isActive) return@launch
+            if (listed != null) {
+                lastListed = listed
+                lastListedDir = dir.absolutePath
+            }
+            applyListing(dir, listed)
+        }
+    }
+
+    /**
+     * Re-applies filter/sort/symlink scan from [lastListed] when it still matches
+     * the current directory; otherwise falls back to a full [refresh].
+     */
+    private fun reapplyCachedListing() {
+        val dir = currentDir ?: return
+        val cached = lastListed
+        if (cached == null || lastListedDir != dir.absolutePath) {
+            refresh()
+            return
+        }
+        _uiState.update { it.copy(busy = true) }
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch(Dispatchers.IO) {
+            applyListing(dir, cached)
+        }
+    }
+
+    /**
+     * Filters, sorts and scans [listed] on the calling (IO) dispatcher, then
+     * publishes the result on the main thread. [listed] of `null` publishes the
+     * unreadable-directory error state.
+     */
+    private suspend fun applyListing(dir: File, listed: Array<File>?) {
+        if (listed == null) {
             withContext(Dispatchers.Main) {
                 if (currentDir != dir) return@withContext
-                if (listed == null) {
-                    _uiState.update {
-                        it.copy(
-                            busy = false,
-                            currentPath = dir.absolutePath,
-                            title = titleFor(dir),
-                            files = emptyList(),
-                            focusedIndex = -1,
-                            canGoBack = backStack.isNotEmpty(),
-                            canGoForward = forwardStack.isNotEmpty(),
-                            hasClipboard = FileOperationsHelper.hasClipboard(),
-                            statusMessage = if (FileOperationsHelper.isSharedStoragePath(dir))
-                                getApplication<Application>().getString(R.string.filemanager_error_cannot_read_access, dir.absolutePath)
-                            else
-                                getApplication<Application>().getString(R.string.filemanager_error_cannot_read, dir.absolutePath)
-                        )
-                    }
-                    return@withContext
-                }
-                val visible = listed.filter { s.showHidden || !it.name.startsWith(".") }
-                val filtered = if (s.searchQuery.isEmpty()) visible
-                else visible.filter { it.name.contains(s.searchQuery, ignoreCase = true) }
-                val sorted = filtered.sortedWith(s.sortOption.getComparator(s.sortAscending))
-                val symlinkTargets = HashMap<String, String?>()
-                val brokenLinks = HashSet<String>()
-                for (f in listed) {
-                    val raw = FileOperationsHelper.readSymlinkTargetRaw(f)
-                    if (raw != null) {
-                        symlinkTargets[f.absolutePath] = raw
-                        if (FileOperationsHelper.isBrokenSymlink(f)) brokenLinks.add(f.absolutePath)
-                    }
-                }
                 _uiState.update {
-                    // Normalize the focused cursor to the new listing: keep the current
-                    // position when it still fits, else fall back to the first entry.
-                    val normalized = if (sorted.isEmpty()) -1
-                    else it.focusedIndex.coerceIn(0, sorted.lastIndex)
                     it.copy(
                         busy = false,
                         currentPath = dir.absolutePath,
                         title = titleFor(dir),
-                        files = sorted,
-                        focusedIndex = normalized,
+                        files = emptyList(),
+                        focusedIndex = -1,
                         canGoBack = backStack.isNotEmpty(),
                         canGoForward = forwardStack.isNotEmpty(),
                         hasClipboard = FileOperationsHelper.hasClipboard(),
-                        symlinkTargets = symlinkTargets,
-                        brokenLinks = brokenLinks
+                        statusMessage = if (FileOperationsHelper.isSharedStoragePath(dir))
+                            getApplication<Application>().getString(R.string.filemanager_error_cannot_read_access, dir.absolutePath)
+                        else
+                            getApplication<Application>().getString(R.string.filemanager_error_cannot_read, dir.absolutePath)
                     )
                 }
+            }
+            return
+        }
+        val s = _uiState.value
+        val visible = listed.filter { s.showHidden || !it.name.startsWith(".") }
+        val filtered = if (s.searchQuery.isEmpty()) visible
+        else visible.filter { it.name.contains(s.searchQuery, ignoreCase = true) }
+        val sorted = filtered.sortedWith(s.sortOption.getComparator(s.sortAscending))
+        val symlinkTargets = HashMap<String, String?>()
+        val brokenLinks = HashSet<String>()
+        for (f in listed) {
+            val raw = FileOperationsHelper.readSymlinkTargetRaw(f)
+            if (raw != null) {
+                symlinkTargets[f.absolutePath] = raw
+                if (FileOperationsHelper.isBrokenSymlink(f)) brokenLinks.add(f.absolutePath)
+            }
+        }
+        withContext(Dispatchers.Main) {
+            if (currentDir != dir) return@withContext
+            _uiState.update {
+                // Normalize the focused cursor to the new listing: keep the current
+                // position when it still fits, else fall back to the first entry.
+                val normalized = if (sorted.isEmpty()) -1
+                else it.focusedIndex.coerceIn(0, sorted.lastIndex)
+                it.copy(
+                    busy = false,
+                    currentPath = dir.absolutePath,
+                    title = titleFor(dir),
+                    files = sorted,
+                    focusedIndex = normalized,
+                    canGoBack = backStack.isNotEmpty(),
+                    canGoForward = forwardStack.isNotEmpty(),
+                    hasClipboard = FileOperationsHelper.hasClipboard(),
+                    symlinkTargets = symlinkTargets,
+                    brokenLinks = brokenLinks
+                )
             }
         }
     }
@@ -255,7 +305,7 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
 
     fun setSearchQuery(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
-        refresh()
+        reapplyCachedListing()
     }
 
     fun toggleSort(option: FileSortOption) {
@@ -264,13 +314,13 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
             else it.copy(sortOption = option, sortAscending = true)
         }
         persistPrefs()
-        refresh()
+        reapplyCachedListing()
     }
 
     fun toggleHidden() {
         _uiState.update { it.copy(showHidden = !it.showHidden) }
         persistPrefs()
-        refresh()
+        reapplyCachedListing()
     }
 
     /**

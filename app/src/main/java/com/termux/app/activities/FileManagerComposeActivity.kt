@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
@@ -78,9 +79,12 @@ class FileManagerComposeActivity : ComponentActivity() {
         })
 
         setContent {
-            // The whole file manager UI mirrors the terminal font.
-            mFontRevision
-            val terminalTypeface = TerminalFontLoader.resolve(this, mPreferences.getTerminalFont())
+            // The whole file manager UI mirrors the terminal font. Keyed on revision + font id
+            // so only a real font change (or resume bump) reloads the Typeface from disk.
+            val fontId = mPreferences.getTerminalFont()
+            val terminalTypeface = remember(mFontRevision, fontId) {
+                TerminalFontLoader.resolve(this@FileManagerComposeActivity, fontId)
+            }
             TermuxExpressiveTheme(terminalTypeface = terminalTypeface) {
                 FileManagerScreen(
                     viewModel = mViewModel,
