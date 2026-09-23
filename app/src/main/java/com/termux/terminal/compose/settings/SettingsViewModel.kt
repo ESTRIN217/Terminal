@@ -50,6 +50,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 terminalFontLigatures = p.isTerminalFontLigaturesEnabled(),
                 useCustomColorScheme = p.shouldUseCustomColorScheme(),
                 nativeComposeRenderer = p.isNativeComposeRendererEnabled(),
+                terminalHyperlinks = p.isTerminalHyperlinksEnabled(),
                 force60Hz = p.shouldForce60Hz(),
                 logLevel = p.getLogLevel(),
                 terminalViewKeyLogging = p.isTerminalViewKeyLoggingEnabled(),
@@ -119,6 +120,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setNativeComposeRenderer(value: Boolean) {
         prefs?.setNativeComposeRendererEnabled(value)
         _uiState.update { it.copy(nativeComposeRenderer = value) }
+    }
+
+    fun setTerminalHyperlinks(value: Boolean) {
+        prefs?.setTerminalHyperlinksEnabled(value)
+        _uiState.update { it.copy(terminalHyperlinks = value) }
     }
 
     fun setForce60Hz(value: Boolean) {

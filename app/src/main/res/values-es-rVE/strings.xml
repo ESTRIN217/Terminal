@@ -333,6 +333,8 @@
     <string name="use_custom_color_scheme_desc">Aplica la paleta de ~/.termux/colors.properties (soporta colores 24-bit)</string>
     <string name="native_compose_renderer">Renderizado Compose nativo [Experimental]</string>
     <string name="native_compose_renderer_desc">Pinta la terminal con un prototipo Canvas de Compose. La vista clásica sigue como respaldo</string>
+    <string name="terminal_hyperlinks">Hipervínculos de terminal [Experimental]</string>
+    <string name="terminal_hyperlinks_desc">Subraya los enlaces OSC 8 y ábrelos al tocarlos</string>
     <string name="force_60hz">Forzar 60 Hz (batería)</string>
     <string name="force_60hz_desc">Limita la pantalla a 60 Hz en lugar de la tasa de refresco máxima</string>
     <string name="toggle_keyboard">Alternar teclado</string>

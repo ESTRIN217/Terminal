@@ -185,6 +185,14 @@ public final class TermuxPreferenceConstants {
 
 
         /**
+         * Defines the key for whether OSC 8 hyperlinks (underlined cells that open on tap)
+         * are enabled. Default on; acts as an experimental kill-switch.
+         */
+        public static final String KEY_TERMINAL_HYPERLINKS = "terminal_hyperlinks";
+        public static final boolean DEFAULT_VALUE_TERMINAL_HYPERLINKS = true;
+
+
+        /**
          * Defines the key for whether the display is locked to 60 Hz (battery saving)
          * instead of being switched to the maximum supported refresh rate at the
          * current resolution.

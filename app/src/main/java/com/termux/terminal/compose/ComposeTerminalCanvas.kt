@@ -113,6 +113,7 @@ import kotlinx.coroutines.delay
  * `mClient.onLongPress(event)`: when it returns true the canvas does not start a text
  * selection
  * @param onFontSizeStep Callback with a signed font-size step in pixels for pinch-zoom
+ * @param hyperlinksEnabled Whether OSC 8 hyperlinks underline and open on tap
  * @param modifier Modifier to apply to the canvas
  */
 @Composable
@@ -129,6 +130,7 @@ internal fun ComposeTerminalCanvas(
     onLongPressConsumed: () -> Boolean = { false },
     onFontSizeStep: (Float) -> Unit = {},
     onClientTap: (() -> Unit)? = null,
+    hyperlinksEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     // Repaint tick bumped on every emulator screen update (see ComposeTerminalSessionClient).
@@ -542,6 +544,20 @@ internal fun ComposeTerminalCanvas(
                                 state.selection = null
                             }
                         } else {
+                            // OSC 8: open the hyperlink under the finger before the normal
+                            // tap path (parity with TerminalView.onSingleTapUp). Mouse-tracking
+                            // apps keep the click; selection is handled above.
+                            val emulator = session.emulator
+                            if (hyperlinksEnabled && emulator != null &&
+                                !emulator.isMouseTrackingActive
+                            ) {
+                                val (linkCol, linkRow) = gridColumnAndRow(offset.x, offset.y)
+                                val uri = emulator.getHyperlinkUriAt(linkRow, linkCol)
+                                if (TerminalEmulator.isAllowedHyperlinkUri(uri)) {
+                                    ShareUtils.openUrl(context, uri)
+                                    return@detectTapGestures
+                                }
+                            }
                             activateSession()
                             // Legacy onSingleTapUp contract: notify the client so any tap
                             // side effects (soft keyboard, etc.) still run. The canvas also
@@ -549,7 +565,6 @@ internal fun ComposeTerminalCanvas(
                             onClientTap?.invoke()
                             // Legacy onUp quick-tap parity: when mouse tracking is active a
                             // quick touch tap reports the left button press/release to the app.
-                            val emulator = session.emulator
                             if (emulator?.isMouseTrackingActive == true && !fingerScrolled) {
                                 val (column, row) = columnAndRow(offset.x, offset.y)
                                 emulator.sendMouseEvent(
@@ -645,7 +660,7 @@ internal fun ComposeTerminalCanvas(
         drawIntoCanvas { drawCanvas ->
             renderComposeFrame(
                 drawCanvas.nativeCanvas, emulator, topRow, paint, metrics, palette, enableLigatures,
-                cursorVisibleOverride, state.selection
+                cursorVisibleOverride, state.selection, hyperlinksEnabled
             )
         }
         // Vertical scrollbar (legacy setVerticalScrollBarEnabled + computeVerticalScroll*):
@@ -732,6 +747,7 @@ internal fun measureCanvasMetrics(paint: Paint, typeface: Typeface, fontSize: Fl
  * the cursor here only
  * @param selection The active text selection in external row coordinates, or null. Selected
  * cells paint with swapped colors exactly like the legacy renderer.
+ * @param hyperlinksEnabled When false, OSC 8 hyperlink runs do not force an underline
  */
 private fun renderComposeFrame(
     canvas: android.graphics.Canvas,
@@ -742,7 +758,8 @@ private fun renderComposeFrame(
     palette: TerminalPalette,
     enableLigatures: Boolean,
     cursorVisibleOverride: Boolean? = null,
-    selection: ComposeTerminalFrame.TextSelection? = null
+    selection: ComposeTerminalFrame.TextSelection? = null,
+    hyperlinksEnabled: Boolean = true
 ) {
     val colors = emulator.mColors.mCurrentColors
     val reverseVideo = emulator.isReverseVideo
@@ -778,7 +795,7 @@ private fun renderComposeFrame(
         for (run in runs) {
             drawComposeRun(
                 canvas, line.mText, run, colors, defaultBackground, reverseVideo,
-                cursorStyle, heightOffset, paint, metrics
+                cursorStyle, heightOffset, paint, metrics, hyperlinksEnabled
             )
         }
     }
@@ -789,6 +806,9 @@ private fun renderComposeFrame(
  *
  * The run text slice is scaled onto its grid columns when its measured width mismatches
  * wcwidth (non-monospace glyphs), exactly like the legacy renderer scales mismatched runs.
+ *
+ * @param hyperlinksEnabled When the run carries an OSC 8 hyperlink and this is true, force
+ * an underline (legacy [com.termux.view.TerminalRenderer.drawTextRun] parity)
  */
 private fun drawComposeRun(
     canvas: android.graphics.Canvas,
@@ -800,7 +820,8 @@ private fun drawComposeRun(
     cursorStyle: Int,
     y: Float,
     paint: Paint,
-    metrics: CanvasFontMetrics
+    metrics: CanvasFontMetrics,
+    hyperlinksEnabled: Boolean = true
 ) {
     val resolved = ComposeTerminalFrame.resolveRunColors(
         run.style, paletteColors, defaultBackground, emulatorReverseVideo,
@@ -850,7 +871,9 @@ private fun drawComposeRun(
         val effect = resolved.effect
         paint.isFakeBoldText = effect and
             (TextStyle.CHARACTER_ATTRIBUTE_BOLD or TextStyle.CHARACTER_ATTRIBUTE_BLINK) != 0
-        paint.isUnderlineText = effect and TextStyle.CHARACTER_ATTRIBUTE_UNDERLINE != 0
+        val isHyperlink = hyperlinksEnabled && run.hyperlinkIndex != 0
+        paint.isUnderlineText =
+            effect and TextStyle.CHARACTER_ATTRIBUTE_UNDERLINE != 0 || isHyperlink
         paint.textSkewX = if (effect and TextStyle.CHARACTER_ATTRIBUTE_ITALIC != 0) -0.35f else 0f
         paint.isStrikeThruText = effect and TextStyle.CHARACTER_ATTRIBUTE_STRIKETHROUGH != 0
         paint.color = resolved.foreColor

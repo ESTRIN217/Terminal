@@ -298,13 +298,17 @@ public final class TerminalBuffer {
 
                 int currentOldCol = 0;
                 long styleAtCol = 0;
+                int hyperlinkAtCol = 0;
                 for (int i = 0; i < lastNonSpaceIndex; i++) {
                     // Note that looping over java character, not cells.
                     char c = oldLine.mText[i];
                     int codePoint = (Character.isHighSurrogate(c)) ? Character.toCodePoint(c, oldLine.mText[++i]) : c;
                     int displayWidth = WcWidth.width(codePoint);
                     // Use the last style if this is a zero-width character:
-                    if (displayWidth > 0) styleAtCol = oldLine.getStyle(currentOldCol);
+                    if (displayWidth > 0) {
+                        styleAtCol = oldLine.getStyle(currentOldCol);
+                        hyperlinkAtCol = oldLine.getHyperlink(currentOldCol);
+                    }
 
                     // Line wrap as necessary:
                     if (currentOutputExternalColumn + displayWidth > mColumns) {
@@ -321,6 +325,9 @@ public final class TerminalBuffer {
                     int offsetDueToCombiningChar = ((displayWidth <= 0 && currentOutputExternalColumn > 0) ? 1 : 0);
                     int outputColumn = currentOutputExternalColumn - offsetDueToCombiningChar;
                     setChar(outputColumn, currentOutputExternalRow, codePoint, styleAtCol);
+                    setHyperlink(outputColumn, currentOutputExternalRow, hyperlinkAtCol);
+                    if (displayWidth == 2 && outputColumn + 1 < mColumns)
+                        setHyperlink(outputColumn + 1, currentOutputExternalRow, hyperlinkAtCol);
 
                     if (displayWidth > 0) {
                         if (oldCursorRow == externalOldRow && oldCursorColumn == currentOldCol) {
@@ -455,8 +462,34 @@ public final class TerminalBuffer {
         allocateFullLineIfNecessary(row).setChar(column, codePoint, style);
     }
 
+    /**
+     * Set (or clear with 0) the OSC 8 hyperlink index on a cell of the visible screen.
+     *
+     * @param column      screen column (0-based)
+     * @param row         external (transcript-aware) row
+     * @param hyperlinkId URI registry index, or {@code 0} to clear
+     */
+    public void setHyperlink(int column, int row, int hyperlinkId) {
+        if (row < 0 || row >= mScreenRows || column < 0 || column >= mColumns)
+            throw new IllegalArgumentException("TerminalBuffer.setHyperlink(): row=" + row + ", column=" + column + ", mScreenRows=" + mScreenRows + ", mColumns=" + mColumns);
+        allocateFullLineIfNecessary(externalToInternalRow(row)).setHyperlink(column, hyperlinkId);
+    }
+
     public long getStyleAt(int externalRow, int column) {
         return allocateFullLineIfNecessary(externalToInternalRow(externalRow)).getStyle(column);
+    }
+
+    /**
+     * OSC 8 hyperlink URI registry index at a cell.
+     *
+     * @param externalRow external (transcript-aware) row
+     * @param column      screen column (0-based)
+     * @return the URI index, or {@code 0} when the cell is not a hyperlink
+     */
+    public int getHyperlinkAt(int externalRow, int column) {
+        TerminalRow row = mLines[externalToInternalRow(externalRow)];
+        if (row == null || column < 0 || column >= mColumns) return 0;
+        return row.getHyperlink(column);
     }
 
     /** Support for http://vt100.net/docs/vt510-rm/DECCARA and http://vt100.net/docs/vt510-rm/DECCARA */

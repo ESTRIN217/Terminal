@@ -230,6 +230,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         mViewModel.setExtraKeysVisible(mPreferences.shouldShowTerminalToolbar())
         mViewModel.setFontSize(mPreferences.getFontSize().toFloat())
         mViewModel.setNativeRenderer(mPreferences.isNativeComposeRendererEnabled())
+        mViewModel.setHyperlinksEnabled(mPreferences.isTerminalHyperlinksEnabled())
 
         val serviceIntent = Intent(this, TermuxService::class.java)
         startService(serviceIntent)
@@ -328,6 +329,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         mViewModel.setExtraKeysVisible(mPreferences.shouldShowTerminalToolbar())
         mViewModel.setFontSize(mPreferences.getFontSize().toFloat())
         mViewModel.setNativeRenderer(mPreferences.isNativeComposeRendererEnabled())
+        mViewModel.setHyperlinksEnabled(mPreferences.isTerminalHyperlinksEnabled())
         // Recompute the terminal palette (custom color scheme may have changed in Settings).
         mPaletteRevision++
         // Reload the terminal font and ligature setting (may have changed in Settings).

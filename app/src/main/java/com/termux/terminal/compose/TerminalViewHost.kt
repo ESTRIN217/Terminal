@@ -40,6 +40,7 @@ import com.termux.view.TerminalViewClient
  * the session emulator becomes available later (see [TerminalViewRegistry.reapplyPendingPalette])
  * @param isActivePane Whether this view belongs to the focused (active) pane of a split view
  * @param onActivatePane Callback when the view gains focus while it is not the active pane
+ * @param hyperlinksEnabled Whether OSC 8 hyperlinks underline and open on tap
  * @param modifier Modifier to apply to the composable
  */
 @Composable
@@ -52,6 +53,7 @@ fun TerminalViewHost(
     palette: TerminalPalette,
     isActivePane: Boolean = true,
     onActivatePane: (() -> Unit)? = null,
+    hyperlinksEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
@@ -59,6 +61,7 @@ fun TerminalViewHost(
     var appliedFontSize by remember { mutableFloatStateOf(0f) }
     var appliedTypeface by remember { mutableStateOf<Typeface?>(null) }
     var appliedLigatures by remember { mutableStateOf(true) }
+    var appliedHyperlinks by remember { mutableStateOf(true) }
     var appliedPalette by remember { mutableStateOf<TerminalPalette?>(null) }
 
     val focusListener = remember(session, isActivePane, onActivatePane) {
@@ -92,6 +95,8 @@ fun TerminalViewHost(
                 appliedTypeface = resolvedTypeface
                 setLigaturesEnabled(enableLigatures)
                 appliedLigatures = enableLigatures
+                setHyperlinksEnabled(hyperlinksEnabled)
+                appliedHyperlinks = hyperlinksEnabled
                 attachSession(session)
                 appliedSession = session
                 // The emulator is usually not created until the view gets its size from
@@ -136,6 +141,10 @@ fun TerminalViewHost(
             if (appliedLigatures != enableLigatures) {
                 view.setLigaturesEnabled(enableLigatures)
                 appliedLigatures = enableLigatures
+            }
+            if (appliedHyperlinks != hyperlinksEnabled) {
+                view.setHyperlinksEnabled(hyperlinksEnabled)
+                appliedHyperlinks = hyperlinksEnabled
             }
             if (appliedPalette != palette) {
                 if (TerminalViewRegistry.applyPalette(view, session, palette)) {

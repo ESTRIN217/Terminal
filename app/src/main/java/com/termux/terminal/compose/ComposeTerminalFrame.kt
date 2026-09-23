@@ -28,7 +28,8 @@ object ComposeTerminalFrame {
     private const val LOG_TAG = "ComposeTerminalFrame"
 
     /**
-     * A maximal run of cells sharing style, cursor and selection membership.
+     * A maximal run of cells sharing style, cursor, selection membership and OSC 8
+     * hyperlink.
      *
      * @param startColumn First grid column of the run
      * @param columnWidth Width of the run in grid columns (wide code points count 2)
@@ -38,6 +39,7 @@ object ComposeTerminalFrame {
      * @param style The [TextStyle]-encoded style shared by the run
      * @param inCursor Whether the run holds the visible cursor cell
      * @param inSelection Whether the run is inside the text selection
+     * @param hyperlinkIndex OSC 8 URI registry index for the run (0 = not a hyperlink)
      */
     data class TextRun(
         val startColumn: Int,
@@ -46,7 +48,8 @@ object ComposeTerminalFrame {
         val charCount: Int,
         val style: Long,
         val inCursor: Boolean,
-        val inSelection: Boolean
+        val inSelection: Boolean,
+        val hyperlinkIndex: Int = 0
     )
 
     /**
@@ -316,6 +319,7 @@ object ComposeTerminalFrame {
         var lastStyle = 0L
         var lastInCursor = false
         var lastInSelection = false
+        var lastHyperlink = 0
         var lastMismatch = false
         var runStartColumn = 0
         var runStartCharIndex = 0
@@ -336,29 +340,33 @@ object ComposeTerminalFrame {
             val inCursor = cursorX == column || (codePointWcWidth == 2 && cursorX == column + 1)
             val inSelection = column >= selectionX1 && column <= selectionX2
             val style = line.getStyle(column)
+            val hyperlink = line.getHyperlink(column)
             val mismatch = hasWidthMismatch(codePoint)
 
             if (!hasRun) {
                 lastStyle = style
                 lastInCursor = inCursor
                 lastInSelection = inSelection
+                lastHyperlink = hyperlink
                 lastMismatch = mismatch
                 runStartColumn = column
                 runStartCharIndex = charIndex
                 hasRun = true
             } else if (style != lastStyle || inCursor != lastInCursor ||
-                inSelection != lastInSelection || mismatch || lastMismatch || !enableLigatures
+                inSelection != lastInSelection || hyperlink != lastHyperlink ||
+                mismatch || lastMismatch || !enableLigatures
             ) {
                 runs.add(
                     TextRun(
                         runStartColumn, column - runStartColumn,
                         runStartCharIndex, charIndex - runStartCharIndex,
-                        lastStyle, lastInCursor, lastInSelection
+                        lastStyle, lastInCursor, lastInSelection, lastHyperlink
                     )
                 )
                 lastStyle = style
                 lastInCursor = inCursor
                 lastInSelection = inSelection
+                lastHyperlink = hyperlink
                 lastMismatch = mismatch
                 runStartColumn = column
                 runStartCharIndex = charIndex
@@ -379,7 +387,7 @@ object ComposeTerminalFrame {
                 TextRun(
                     runStartColumn, columns - runStartColumn,
                     runStartCharIndex, charIndex - runStartCharIndex,
-                    lastStyle, lastInCursor, lastInSelection
+                    lastStyle, lastInCursor, lastInSelection, lastHyperlink
                 )
             )
         }

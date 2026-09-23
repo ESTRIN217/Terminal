@@ -3,11 +3,14 @@ package com.termux.view;
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -53,6 +56,8 @@ public final class TerminalView extends View {
     public TerminalEmulator mEmulator;
 
     public TerminalRenderer mRenderer;
+    /** Whether OSC 8 hyperlink tap-to-open and underlines are enabled. */
+    private boolean mHyperlinksEnabled = true;
 
     /** Whether OpenType ligature shaping is enabled in the terminal renderer. */
     public boolean mEnableLigatures = true;
@@ -161,6 +166,13 @@ public final class TerminalView extends View {
 
                 if (isSelectingText()) {
                     stopTextSelectionMode();
+                    return true;
+                }
+                // OSC 8: open the hyperlink under the finger before the normal tap path.
+                // Mouse-tracking apps keep the click (TUIs own button 1 themselves).
+                if (mHyperlinksEnabled && !mEmulator.isMouseTrackingActive()
+                    && openHyperlinkAt(event)) {
+                    requestFocus();
                     return true;
                 }
                 requestFocus();
@@ -528,11 +540,13 @@ public final class TerminalView extends View {
      */
     public void setTextSize(int textSize) {
         mRenderer = new TerminalRenderer(textSize, mRenderer == null ? Typeface.MONOSPACE : mRenderer.mTypeface, mEnableLigatures);
+        mRenderer.setHyperlinksEnabled(mHyperlinksEnabled);
         updateSize();
     }
 
     public void setTypeface(Typeface newTypeface) {
         mRenderer = new TerminalRenderer(mRenderer.mTextSize, newTypeface, mEnableLigatures);
+        mRenderer.setHyperlinksEnabled(mHyperlinksEnabled);
         updateSize();
         invalidate();
     }
@@ -547,8 +561,42 @@ public final class TerminalView extends View {
         if (mEnableLigatures == enableLigatures) return;
         mEnableLigatures = enableLigatures;
         mRenderer = new TerminalRenderer(mRenderer.mTextSize, mRenderer.mTypeface, mEnableLigatures);
+        mRenderer.setHyperlinksEnabled(mHyperlinksEnabled);
         updateSize();
         invalidate();
+    }
+
+    /**
+     * Enable or disable OSC 8 hyperlink underlines and tap-to-open.
+     *
+     * @param enabled whether hyperlinks are interactive
+     */
+    public void setHyperlinksEnabled(boolean enabled) {
+        if (mHyperlinksEnabled == enabled) return;
+        mHyperlinksEnabled = enabled;
+        if (mRenderer != null) {
+            mRenderer.setHyperlinksEnabled(enabled);
+            invalidate();
+        }
+    }
+
+    /**
+     * Look up an OSC 8 hyperlink under the tap and open it with {@code ACTION_VIEW}.
+     *
+     * @param event the tap event (relative to this view)
+     * @return {@code true} when a hyperlink was opened (the tap is consumed)
+     */
+    private boolean openHyperlinkAt(MotionEvent event) {
+        if (mEmulator == null || mRenderer == null) return false;
+        int[] columnAndRow = getColumnAndRow(event, true);
+        String uri = mEmulator.getHyperlinkUriAt(columnAndRow[1], columnAndRow[0]);
+        if (!TerminalEmulator.isAllowedHyperlinkUri(uri)) return false;
+        try {
+            getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(uri)));
+            return true;
+        } catch (ActivityNotFoundException | SecurityException e) {
+            return false;
+        }
     }
 
     @Override

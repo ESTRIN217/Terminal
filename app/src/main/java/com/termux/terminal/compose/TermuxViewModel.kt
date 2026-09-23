@@ -299,6 +299,19 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
+     * Enable or disable OSC 8 hyperlink underlines and tap-to-open.
+     *
+     * @param enabled Whether hyperlinks are interactive
+     */
+    fun setHyperlinksEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.update { state ->
+                state.copy(hyperlinksEnabled = enabled)
+            }
+        }
+    }
+
+    /**
      * Update the title for a session.
      *
      * @param session The session whose title changed

@@ -75,6 +75,26 @@ public class ComposeTerminalFrameTest {
     }
 
     @Test
+    public void testHyperlinkChange_splitsRuns() {
+        TerminalRow row = asciiRow(6, "abcd  ", TextStyle.NORMAL);
+        // Same style everywhere; only the OSC 8 side-band differs on the middle two cells.
+        row.setHyperlink(1, 1);
+        row.setHyperlink(2, 1);
+
+        List<ComposeTerminalFrame.TextRun> runs =
+            ComposeTerminalFrame.buildLineRuns(row, 6, -1, -1, -1, true, codePoint -> false);
+
+        Assert.assertEquals(3, runs.size());
+        Assert.assertEquals(0, runs.get(0).getHyperlinkIndex());
+        Assert.assertEquals(1, runs.get(1).getHyperlinkIndex());
+        Assert.assertEquals(0, runs.get(2).getHyperlinkIndex());
+        Assert.assertEquals(0, runs.get(0).getStartColumn());
+        Assert.assertEquals(1, runs.get(1).getStartColumn());
+        Assert.assertEquals(2, runs.get(1).getColumnWidth());
+        Assert.assertEquals(3, runs.get(2).getStartColumn());
+    }
+
+    @Test
     public void testCursorCell_splitsIntoThreeRuns() {
         TerminalRow row = asciiRow(5, "abcde", TextStyle.NORMAL);
 

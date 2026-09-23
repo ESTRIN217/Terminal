@@ -296,6 +296,21 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
 
 
     /**
+     * Whether OSC 8 hyperlinks (underlined cells that open on tap) are enabled.
+     *
+     * @return {@code true} if hyperlinks should be underlined and open on tap.
+     */
+    public boolean isTerminalHyperlinksEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_HYPERLINKS, TERMUX_APP.DEFAULT_VALUE_TERMINAL_HYPERLINKS);
+    }
+
+    public void setTerminalHyperlinksEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_HYPERLINKS, value, false);
+    }
+
+
+
+    /**
      * Whether the display is locked to 60 Hz instead of being switched to the maximum
      * supported refresh rate at the current resolution.
      *

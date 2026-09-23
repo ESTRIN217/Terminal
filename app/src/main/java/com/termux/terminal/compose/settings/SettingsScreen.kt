@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
@@ -170,6 +171,13 @@ fun SettingsScreen(
                     icon = Icons.Default.Terminal,
                     checked = state.nativeComposeRenderer,
                     onCheckedChange = viewModel::setNativeComposeRenderer
+                )
+                SettingsSwitchTile(
+                    title = stringResource(R.string.terminal_hyperlinks),
+                    subtitle = stringResource(R.string.terminal_hyperlinks_desc),
+                    icon = Icons.Default.Link,
+                    checked = state.terminalHyperlinks,
+                    onCheckedChange = viewModel::setTerminalHyperlinks
                 )
                 SettingsSwitchTile(
                     title = stringResource(R.string.force_60hz),

@@ -29,6 +29,10 @@ data class TermuxUiState(
     val isSoftKeyboardVisible: Boolean = false,
     val fontSize: Float = 14f,
     val useNativeRenderer: Boolean = false,
+    /**
+     * Whether OSC 8 hyperlinks underline and open on tap (experimental).
+     */
+    val hyperlinksEnabled: Boolean = true,
     val extraKeysConfig: ExtraKeysConfig = ExtraKeysConfig(pages = emptyList()),
     val debianInstaller: DebianInstallerUiState = DebianInstallerUiState()
 ) {

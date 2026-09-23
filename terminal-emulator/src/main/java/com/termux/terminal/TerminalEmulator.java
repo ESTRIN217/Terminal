@@ -3,6 +3,7 @@ package com.termux.terminal;
 import android.util.Base64;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Objects;
@@ -133,6 +134,14 @@ public final class TerminalEmulator {
 
     private String mTitle;
     private final Stack<String> mTitleStack = new Stack<>();
+
+    /**
+     * Session-scoped OSC 8 hyperlink URI registry. Index 0 is unused ("no link");
+     * cell-side arrays store indices into this list so rows stay small.
+     */
+    private final ArrayList<String> mHyperlinkUris = new ArrayList<>();
+    /** URI registry index of the currently open OSC 8 link, or 0 when closed. */
+    private int mCurrentHyperlinkUriIndex;
 
     /** The cursor position. Between (0,0) and (mRows-1, mColumns-1). */
     private int mCursorRow, mCursorCol;
@@ -2113,6 +2122,19 @@ public final class TerminalEmulator {
                     Logger.logError(mClient, LOG_TAG, "OSC Manipulate selection, invalid string '" + textParameter + "");
                 }
                 break;
+            case 8: {
+                // OSC 8 ; params ; URI — open (non-empty URI) or close (empty URI) a hyperlink.
+                // textParameter is "params;URI"; the URI is everything after the first ';'.
+                // Params such as id=... are accepted and ignored (v1: single open link).
+                int sep = textParameter.indexOf(';');
+                String uri = (sep >= 0) ? textParameter.substring(sep + 1) : "";
+                if (uri.isEmpty()) {
+                    mCurrentHyperlinkUriIndex = 0;
+                } else {
+                    mCurrentHyperlinkUriIndex = registerHyperlinkUri(uri);
+                }
+                break;
+            }
             case 104:
                 // "104;$c" → Reset Color Number $c. It is reset to the color specified by the corresponding X
                 // resource. Any number of c parameters may be given. These parameters correspond to the ANSI colors 0-7,
@@ -2488,6 +2510,10 @@ public final class TerminalEmulator {
         // TODO: Check if there are thread synchronization issues with mCursorCol and mCursorRow, possibly causing others bugs too.
         if (column < 0) column = 0;
         mScreen.setChar(column, mCursorRow, codePoint, getStyle());
+        // Stamp OSC 8 hyperlink (0 clears: setChar already dropped any previous id).
+        mScreen.setHyperlink(column, mCursorRow, mCurrentHyperlinkUriIndex);
+        if (displayWidth == 2 && column + 1 < mColumns)
+            mScreen.setHyperlink(column + 1, mCursorRow, mCurrentHyperlinkUriIndex);
 
         if (autoWrap && displayWidth > 0)
             mAboutToAutoWrap = (mCursorCol == mRightMargin - displayWidth);
@@ -2562,9 +2588,59 @@ public final class TerminalEmulator {
 
         // XXX: Should we set terminal driver back to IUTF8 with termios?
         mUtf8Index = mUtf8ToFollow = 0;
+        mCurrentHyperlinkUriIndex = 0;
 
         mColors.reset();
         mSession.onColorsChanged();
+    }
+
+    /**
+     * Register an OSC 8 hyperlink URI, reusing an existing index when the same URI
+     * is already in the session table. Indices are 1-based so 0 keeps meaning "no link".
+     *
+     * @param uri the absolute URI from the OSC 8 sequence
+     * @return a non-zero registry index for the URI
+     */
+    private int registerHyperlinkUri(String uri) {
+        for (int i = 0; i < mHyperlinkUris.size(); i++) {
+            if (uri.equals(mHyperlinkUris.get(i))) return i + 1;
+        }
+        mHyperlinkUris.add(uri);
+        return mHyperlinkUris.size();
+    }
+
+    /**
+     * Resolve the OSC 8 hyperlink URI at a screen cell, if any.
+     *
+     * @param row    external (transcript-aware) row
+     * @param column screen column (0-based)
+     * @return the URI string, or {@code null} when the cell is not a hyperlink
+     */
+    public String getHyperlinkUriAt(int row, int column) {
+        int id = mScreen.getHyperlinkAt(row, column);
+        if (id <= 0 || id > mHyperlinkUris.size()) return null;
+        return mHyperlinkUris.get(id - 1);
+    }
+
+    /** Whether an OSC 8 hyperlink is currently open for subsequent printed cells. */
+    public boolean isHyperlinkActive() {
+        return mCurrentHyperlinkUriIndex != 0;
+    }
+
+    /**
+     * Whether a URI from an OSC 8 sequence may be opened by a tap. Allowlist of
+     * schemes only — rejects {@code javascript:} and other exotic handlers.
+     *
+     * @param uri the hyperlink URI
+     * @return {@code true} when the scheme is safe to hand to {@code ACTION_VIEW}
+     */
+    public static boolean isAllowedHyperlinkUri(String uri) {
+        if (uri == null || uri.isEmpty()) return false;
+        int colon = uri.indexOf(':');
+        if (colon <= 0) return false;
+        String scheme = uri.substring(0, colon).toLowerCase(Locale.US);
+        return scheme.equals("http") || scheme.equals("https") || scheme.equals("ftp")
+            || scheme.equals("file") || scheme.equals("gemini") || scheme.equals("mailto");
     }
 
     public String getSelectedText(int x1, int y1, int x2, int y2) {
