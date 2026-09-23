@@ -2,7 +2,6 @@ package com.termux.terminal.compose
 
 import android.graphics.Typeface
 import android.view.View
-import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -29,7 +28,7 @@ import com.termux.view.TerminalViewClient
  *
  * When [isActivePane] is false (secondary pane of a split view) the view is registered in
  * [TerminalViewRegistry] but does not take focus, so keyboard input, extra keys and the
- * context menu keep targeting the focused pane. Gaining Android focus while the pane is not
+ * more menu keep targeting the focused pane. Gaining Android focus while the pane is not
  * active triggers [onActivatePane] so the pane can be promoted to the focused one.
  *
  * @param session The terminal session to attach to the view
@@ -79,10 +78,6 @@ fun TerminalViewHost(
                 // legacy activity_termux.xml root view; without it the view can never take
                 // focus in touch mode, so neither key events nor the soft keyboard reach it.
                 isFocusableInTouchMode = true
-                // Register with the activity so that the "More" menu of the text selection
-                // toolbar ("MORE" action in TextSelectionCursorController) shows a context
-                // menu handled by TermuxComposeActivity.
-                (context as? ComponentActivity)?.registerForContextMenu(this)
                 setTerminalViewClient(viewClient)
                 // Honor terminal-cursor-blink-rate on the legacy path too: without an explicit
                 // rate the blinker stays inert at the default 0 even when setTerminalCursorBlinkerState

@@ -99,6 +99,7 @@
     <string name="action_toggle_keep_screen_on">Manter tela ligada</string>
     <string name="action_open_help">Ajuda</string>
     <string name="action_open_settings">Configurações</string>
+    <string name="action_more_menu">Mais</string>
 
     <string name="action_report_issue">Relatar problema</string>
     <string name="msg_generating_report">Gerando relatório</string>

@@ -21,7 +21,8 @@ import com.termux.view.TerminalViewClient
 class ComposeTerminalViewClient(
     private val mViewModel: TermuxViewModel,
     private val mProperties: TermuxAppSharedProperties,
-    private val mOnRemoveSession: (TerminalSession) -> Unit
+    private val mOnRemoveSession: (TerminalSession) -> Unit,
+    private val mOnShowMoreMenu: () -> Unit
 ) : TerminalViewClient {
 
     companion object {
@@ -110,6 +111,11 @@ class ComposeTerminalViewClient(
     override fun onLongPress(event: MotionEvent?): Boolean {
         // Let TerminalView start its default text selection mode
         return false
+    }
+
+    override fun onShowMoreMenu() {
+        // Legacy selection-toolbar MORE / mouse right-click: open the Compose more-menu sheet.
+        mOnShowMoreMenu()
     }
 
     override fun readControlKey(): Boolean {

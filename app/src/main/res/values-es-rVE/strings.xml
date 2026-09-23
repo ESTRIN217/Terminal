@@ -100,6 +100,7 @@
     <string name="action_toggle_keep_screen_on_desc">Para que nunca se apague la pantalla durante una sesión.</string>
     <string name="action_open_help">Ayuda</string>
     <string name="action_open_settings">Configuración</string>
+    <string name="action_more_menu">Más</string>
         <string name="action_open_file_manager">Archivos</string>
         <string name="title_activity_file_manager">Gestor de archivos</string>
     <string name="action_report_issue">Reportar problema</string>

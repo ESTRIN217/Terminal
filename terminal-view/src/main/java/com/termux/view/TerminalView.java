@@ -21,7 +21,6 @@ import android.view.HapticFeedbackConstants;
 import android.view.InputDevice;
 import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
-import android.view.Menu;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -501,11 +500,24 @@ public final class TerminalView extends View {
         if (mAccessibilityEnabled) setContentDescription(getText());
     }
 
-    /** This must be called by the hosting activity in {@link Activity#onContextMenuClosed(Menu)}
-     * when context menu for the {@link TerminalView} is started by
-     * {@link TextSelectionCursorController#ACTION_MORE} is closed. */
-    public void onContextMenuClosed(Menu menu) {
-        // Unset the stored text since it shouldn't be used anymore and should be cleared from memory
+    /**
+     * Request the "More" menu for this view (selection-toolbar MORE and mouse right-click).
+     * Forwards to {@link TerminalViewClient#onShowMoreMenu()} so the client can show its own
+     * menu surface; falls back to the legacy Android context menu when no client is set.
+     */
+    public void requestMoreMenu() {
+        if (mClient != null) {
+            mClient.onShowMoreMenu();
+        } else {
+            showContextMenu();
+        }
+    }
+
+    /**
+     * Clear the selected text stored before the "More" menu was shown.
+     * Called by the hosting activity when its more-menu surface is dismissed.
+     */
+    public void clearMoreMenuSelection() {
         unsetStoredSelectedText();
     }
 
@@ -630,7 +642,7 @@ public final class TerminalView extends View {
             return true;
         } else if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
             if (event.isButtonPressed(MotionEvent.BUTTON_SECONDARY)) {
-                if (action == MotionEvent.ACTION_DOWN) showContextMenu();
+                if (action == MotionEvent.ACTION_DOWN) requestMoreMenu();
                 return true;
             } else if (event.isButtonPressed(MotionEvent.BUTTON_TERTIARY)) {
                 ClipboardManager clipboardManager = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);

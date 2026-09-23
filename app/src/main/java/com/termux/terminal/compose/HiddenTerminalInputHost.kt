@@ -3,7 +3,6 @@ package com.termux.terminal.compose
 import android.graphics.Typeface
 import android.view.KeyEvent
 import android.view.View
-import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -28,7 +27,7 @@ import com.termux.view.TerminalViewClient
  * real geometry), takes focus and owns the IME/key pipeline, but never paints.
  *
  * It registers in [TerminalViewRegistry] exactly like [TerminalViewHost], so the active view,
- * clipboard, context menu, `onTextChanged → onScreenUpdated` and `showSoftKeyboard` keep
+ * clipboard, more menu, `onTextChanged → onScreenUpdated` and `showSoftKeyboard` keep
  * working unchanged. Scroll ownership (`mTopRow`) also stays in the view; the canvas reads
  * it back per frame. Taps on the canvas forward focus plus the soft keyboard here.
  *
@@ -87,7 +86,6 @@ fun HiddenTerminalInputHost(
                 setWillNotDraw(true)
                 alpha = 0f
                 isFocusableInTouchMode = true
-                (context as? ComponentActivity)?.registerForContextMenu(this)
                 setTerminalViewClient(viewClient)
                 setTextSize(fontSize.toInt())
                 appliedFontSize = fontSize

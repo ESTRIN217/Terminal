@@ -11,12 +11,8 @@ import android.content.res.Configuration
 import android.os.Bundle
 import android.os.Environment
 import android.os.IBinder
-import android.view.ContextMenu
 import android.view.InputDevice
 import android.view.KeyEvent
-import android.view.Menu
-import android.view.MenuItem
-import android.view.View
 import android.view.WindowManager
 import android.widget.ListView
 import android.widget.Toast
@@ -71,6 +67,8 @@ import com.termux.terminal.compose.TerminalColorSchemeLoader
 import com.termux.terminal.compose.TerminalFontCatalog
 import com.termux.terminal.compose.TerminalFontImporter
 import com.termux.terminal.compose.TerminalFontLoader
+import com.termux.terminal.compose.TerminalMoreAction
+import com.termux.terminal.compose.TerminalMoreMenuUiState
 import com.termux.terminal.compose.TerminalPalette
 import com.termux.terminal.compose.TermuxExpressiveTheme
 import com.termux.terminal.compose.TermuxMainScreen
@@ -96,19 +94,6 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
     companion object {
         private const val LOG_TAG = "TermuxComposeActivity"
         private const val MAX_SESSIONS = 8
-
-        private const val CONTEXT_MENU_SELECT_URL_ID = 0
-        private const val CONTEXT_MENU_SHARE_TRANSCRIPT_ID = 1
-        private const val CONTEXT_MENU_SHARE_SELECTED_TEXT = 10
-        private const val CONTEXT_MENU_AUTOFILL_USERNAME = 11
-        private const val CONTEXT_MENU_AUTOFILL_PASSWORD = 2
-        private const val CONTEXT_MENU_RESET_TERMINAL_ID = 3
-        private const val CONTEXT_MENU_KILL_PROCESS_ID = 4
-        private const val CONTEXT_MENU_STYLING_ID = 5
-        private const val CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON = 6
-        private const val CONTEXT_MENU_HELP_ID = 7
-        private const val CONTEXT_MENU_SETTINGS_ID = 8
-        private const val CONTEXT_MENU_REPORT_ID = 9
 
         /**
          * Build a launch intent for the Compose activity.
@@ -154,6 +139,12 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
 
     /** Compose state mirror of the keep-screen-on preference so the menu checkmark updates. */
     private var mIsKeepScreenOnEnabled by mutableStateOf(false)
+
+    /**
+     * Non-null while the terminal "More" bottom sheet is open. Built by [showMoreMenu] with
+     * the item visibility/labels (parity with the legacy `onCreateContextMenu` conditions).
+     */
+    private var mMoreMenuState by mutableStateOf<TerminalMoreMenuUiState?>(null)
 
     /**
      * Incremented on every resume. Reading it from composition makes the terminal palette
@@ -217,7 +208,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         mPreferences = TermuxAppSharedPreferences.build(this, true)
         mViewModel = ViewModelProvider(this)[TermuxViewModel::class.java]
         mTerminalSessionClient = ComposeTerminalSessionClient(mViewModel, ::removeSession)
-        mTerminalViewClient = ComposeTerminalViewClient(mViewModel, mProperties, ::removeSession)
+        mTerminalViewClient = ComposeTerminalViewClient(mViewModel, mProperties, ::removeSession, ::showMoreMenu)
 
         // Apply keep screen on flag if previously enabled via the more options menu
         mIsKeepScreenOnEnabled = mPreferences.shouldKeepScreenOn()
@@ -292,7 +283,11 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                                 this@TermuxComposeActivity,
                                 Intent(this@TermuxComposeActivity, SettingsComposeActivity::class.java)
                             )
-                        }
+                        },
+                        moreMenuState = mMoreMenuState,
+                        onShowMoreMenu = { showMoreMenu() },
+                        onMoreMenuAction = { action -> onMoreMenuAction(action) },
+                        onDismissMoreMenu = { dismissMoreMenu() }
                     )
                     }
                 }
@@ -962,10 +957,15 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         }
     }
 
-    /** Build the "More" context menu of the text selection toolbar. */
-    override fun onCreateContextMenu(menu: ContextMenu, v: View, menuInfo: ContextMenu.ContextMenuInfo?) {
-        val currentSession = getCurrentSession()
-        if (currentSession == null) return
+    /**
+     * Open the terminal "More" bottom sheet.
+     *
+     * Computes the item visibility/labels once (parity with the conditions previously built
+     * in `onCreateContextMenu`): stored selection text, autofill availability, kill-process
+     * label/enabled for the active session.
+     */
+    private fun showMoreMenu() {
+        val currentSession = getCurrentSession() ?: return
 
         val terminalView = TerminalViewRegistry.activeView
         val autoFillEnabled = terminalView?.isAutoFillEnabled == true
@@ -973,89 +973,59 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         // view keeps no selection); fall back to the view field for the legacy selection.
         val storedText = TerminalViewRegistry.storedSelectedText ?: terminalView?.storedSelectedText
 
-        menu.add(Menu.NONE, CONTEXT_MENU_SELECT_URL_ID, Menu.NONE, R.string.action_select_url)
-        menu.add(Menu.NONE, CONTEXT_MENU_SHARE_TRANSCRIPT_ID, Menu.NONE, R.string.action_share_transcript)
-        if (!DataUtils.isNullOrEmpty(storedText))
-            menu.add(Menu.NONE, CONTEXT_MENU_SHARE_SELECTED_TEXT, Menu.NONE, R.string.action_share_selected_text)
-        if (autoFillEnabled)
-            menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_USERNAME, Menu.NONE, R.string.action_autofill_username)
-        if (autoFillEnabled)
-            menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_PASSWORD, Menu.NONE, R.string.action_autofill_password)
-        menu.add(Menu.NONE, CONTEXT_MENU_RESET_TERMINAL_ID, Menu.NONE, R.string.action_reset_terminal)
-        menu.add(Menu.NONE, CONTEXT_MENU_KILL_PROCESS_ID, Menu.NONE,
-            getResources().getString(R.string.action_kill_process, currentSession.getPid()))
-            .setEnabled(currentSession.isRunning())
-        menu.add(Menu.NONE, CONTEXT_MENU_STYLING_ID, Menu.NONE, R.string.action_style_terminal)
-        menu.add(Menu.NONE, CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, Menu.NONE, R.string.action_toggle_keep_screen_on)
-            .setCheckable(true).setChecked(mPreferences.shouldKeepScreenOn())
-        menu.add(Menu.NONE, CONTEXT_MENU_HELP_ID, Menu.NONE, R.string.action_open_help)
-        menu.add(Menu.NONE, CONTEXT_MENU_SETTINGS_ID, Menu.NONE, R.string.action_open_settings)
-        menu.add(Menu.NONE, CONTEXT_MENU_REPORT_ID, Menu.NONE, R.string.action_report_issue)
+        mMoreMenuState = TerminalMoreMenuUiState(
+            showShareSelectedText = !DataUtils.isNullOrEmpty(storedText),
+            showAutofill = autoFillEnabled,
+            killProcessLabel = getString(R.string.action_kill_process, currentSession.getPid()),
+            killProcessEnabled = currentSession.isRunning()
+        )
     }
 
-    /** Handle items of the "More" context menu of the text selection toolbar. */
-    override fun onContextItemSelected(item: MenuItem): Boolean {
-        val session = getCurrentSession()
-
-        return when (item.itemId) {
-            CONTEXT_MENU_SELECT_URL_ID -> {
-                showUrlSelection()
-                true
-            }
-            CONTEXT_MENU_SHARE_TRANSCRIPT_ID -> {
-                shareSessionTranscript()
-                true
-            }
-            CONTEXT_MENU_SHARE_SELECTED_TEXT -> {
-                shareSelectedText()
-                true
-            }
-            CONTEXT_MENU_AUTOFILL_USERNAME -> {
-                TerminalViewRegistry.activeView?.requestAutoFillUsername()
-                true
-            }
-            CONTEXT_MENU_AUTOFILL_PASSWORD -> {
-                TerminalViewRegistry.activeView?.requestAutoFillPassword()
-                true
-            }
-            CONTEXT_MENU_RESET_TERMINAL_ID -> {
-                onResetTerminalSession(session)
-                true
-            }
-            CONTEXT_MENU_KILL_PROCESS_ID -> {
-                showKillSessionDialog(session)
-                true
-            }
-            CONTEXT_MENU_STYLING_ID -> {
-                showTerminalFontDialog()
-                true
-            }
-            CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON -> {
-                setKeepScreenOn(!mIsKeepScreenOnEnabled)
-                true
-            }
-            CONTEXT_MENU_HELP_ID -> {
-                ActivityUtils.startActivity(this, Intent(this, HelpActivity::class.java))
-                true
-            }
-            CONTEXT_MENU_SETTINGS_ID -> {
-                ActivityUtils.startActivity(this, Intent(this, SettingsComposeActivity::class.java))
-                true
-            }
-            CONTEXT_MENU_REPORT_ID -> {
-                reportIssueFromTranscript()
-                true
-            }
-            else -> super.onContextItemSelected(item)
-        }
-    }
-
-    override fun onContextMenuClosed(menu: Menu) {
-        super.onContextMenuClosed(menu)
-        // onContextMenuClosed() is triggered twice if back button is pressed to dismiss instead
-        // of tap for some reason
-        TerminalViewRegistry.activeView?.onContextMenuClosed(menu)
+    /**
+     * Dismiss the terminal "More" sheet and clear the stored selection text
+     * (parity with the legacy `onContextMenuClosed` cleanup).
+     *
+     * Note: callers that need the stored selection (share selected text) must capture it
+     * before invoking this.
+     */
+    private fun dismissMoreMenu() {
+        mMoreMenuState = null
+        TerminalViewRegistry.activeView?.clearMoreMenuSelection()
         TerminalViewRegistry.setStoredSelectedText(null)
+    }
+
+    /**
+     * Dispatch a selected "More" menu action to the same handlers previously wired in
+     * `onContextItemSelected`.
+     *
+     * @param action The [TerminalMoreAction] chosen in the sheet
+     */
+    private fun onMoreMenuAction(action: TerminalMoreAction) {
+        val session = getCurrentSession()
+        // Capture before dismiss: closing the sheet clears the stored selection text.
+        val selectedText = TerminalViewRegistry.storedSelectedText
+            ?: TerminalViewRegistry.activeView?.storedSelectedText
+        // Close first so dialogs/share intents are not stacked under the sheet.
+        dismissMoreMenu()
+
+        when (action) {
+            TerminalMoreAction.SELECT_URL -> showUrlSelection()
+            TerminalMoreAction.SHARE_TRANSCRIPT -> shareSessionTranscript()
+            TerminalMoreAction.SHARE_SELECTED_TEXT -> shareSelectedText(selectedText)
+            TerminalMoreAction.AUTOFILL_USERNAME ->
+                TerminalViewRegistry.activeView?.requestAutoFillUsername()
+            TerminalMoreAction.AUTOFILL_PASSWORD ->
+                TerminalViewRegistry.activeView?.requestAutoFillPassword()
+            TerminalMoreAction.RESET_TERMINAL -> onResetTerminalSession(session)
+            TerminalMoreAction.KILL_PROCESS -> showKillSessionDialog(session)
+            TerminalMoreAction.STYLE -> showTerminalFontDialog()
+            TerminalMoreAction.TOGGLE_KEEP_SCREEN_ON -> setKeepScreenOn(!mIsKeepScreenOnEnabled)
+            TerminalMoreAction.HELP ->
+                ActivityUtils.startActivity(this, Intent(this, HelpActivity::class.java))
+            TerminalMoreAction.SETTINGS ->
+                ActivityUtils.startActivity(this, Intent(this, SettingsComposeActivity::class.java))
+            TerminalMoreAction.REPORT -> reportIssueFromTranscript()
+        }
     }
 
     private fun showKillSessionDialog(session: TerminalSession?) {
@@ -1127,10 +1097,12 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             transcriptText, getString(R.string.title_share_transcript_with))
     }
 
-    private fun shareSelectedText() {
-        // Prefer the Compose overlay's stored text (registry), then the legacy view field.
-        val selectedText = TerminalViewRegistry.storedSelectedText
-            ?: TerminalViewRegistry.activeView?.storedSelectedText
+    /**
+     * Share the text stored by the selection toolbar "More…" button.
+     *
+     * @param selectedText Text captured before the more menu dismissed, or null when empty
+     */
+    private fun shareSelectedText(selectedText: String?) {
         if (DataUtils.isNullOrEmpty(selectedText)) return
         ShareUtils.shareText(this, getString(R.string.title_share_selected_text),
             selectedText, getString(R.string.title_share_selected_text_with))

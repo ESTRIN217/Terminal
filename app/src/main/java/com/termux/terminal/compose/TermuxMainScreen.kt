@@ -79,7 +79,12 @@ private const val MaxTerminalFontSizePx = 32f
  * @param onRemoveSession Callback to remove a terminal session
  * @param onToggleKeyboard Callback to toggle the soft keyboard
  * @param onOpenFileManager Callback to open the file manager
+ * @param onOpenInTerminal Callback to open a terminal in a directory (file manager panes)
  * @param onOpenSettings Callback to open settings
+ * @param moreMenuState Non-null while the terminal "More" sheet is open (item flags/labels)
+ * @param onShowMoreMenu Callback to open the terminal "More" sheet (top bar / selection toolbar)
+ * @param onMoreMenuAction Callback with the [TerminalMoreAction] selected in the sheet
+ * @param onDismissMoreMenu Callback to dismiss the "More" sheet and clear stored selection
  * @param modifier Modifier to apply
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -99,6 +104,10 @@ fun TermuxMainScreen(
     onOpenFileManager: () -> Unit,
     onOpenInTerminal: (String) -> Unit,
     onOpenSettings: () -> Unit,
+    moreMenuState: TerminalMoreMenuUiState?,
+    onShowMoreMenu: () -> Unit,
+    onMoreMenuAction: (TerminalMoreAction) -> Unit,
+    onDismissMoreMenu: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -211,6 +220,18 @@ fun TermuxMainScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
+                            // Terminal "More" menu (MD3 Expressive bottom sheet). Hidden
+                            // while a non-terminal tab is focused (parity with the legacy
+                            // context menu, which needed an active TerminalSession).
+                            if (uiState.activeSessionModel is TermuxSessionUiModel.Terminal) {
+                                IconButton(onClick = onShowMoreMenu) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = stringResource(R.string.action_more_menu),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -254,6 +275,7 @@ fun TermuxMainScreen(
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
+                                    onShowMoreMenu = onShowMoreMenu,
                                     onFontSizeStep = viewModel::setFontSize,
                                     modifier = Modifier
                                         .weight(1f)
@@ -277,6 +299,7 @@ fun TermuxMainScreen(
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
+                                    onShowMoreMenu = onShowMoreMenu,
                                     onFontSizeStep = viewModel::setFontSize,
                                     modifier = Modifier
                                         .weight(1f)
@@ -297,6 +320,7 @@ fun TermuxMainScreen(
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
+                                    onShowMoreMenu = onShowMoreMenu,
                                     onFontSizeStep = viewModel::setFontSize,
                                     modifier = Modifier.fillMaxSize()
                                 )
@@ -305,6 +329,16 @@ fun TermuxMainScreen(
                     }
                 }
             }
+        }
+        // Terminal "More" sheet (MD3 Expressive); open from the top-bar overflow, the
+        // selection toolbar "More…", mouse right-click or the legacy ActionMode MORE.
+        moreMenuState?.let { moreMenuStateValue ->
+            TerminalMoreMenu(
+                state = moreMenuStateValue,
+                keepScreenOnChecked = isKeepScreenOnEnabled,
+                onAction = onMoreMenuAction,
+                onDismiss = onDismissMoreMenu
+            )
         }
         // Extra keys bar: outside the drawer so it is never dimmed by the drawer
         // scrim, and inside the imePadding column so it rides above the keyboard.
@@ -406,6 +440,7 @@ private fun sendKeyToSession(
  * @param onPaneFocused Callback with the session id when the pane requests focus
  * @param onRemoveSession Callback to remove the session
  * @param onOpenInTerminal Callback to open a terminal in a directory (file manager panes)
+ * @param onShowMoreMenu Callback to open the terminal "More" sheet (selection toolbar)
  * @param onFontSizeStep Callback with a font size in pixels (pinch-zoom target, already clamped)
  * @param modifier Modifier to apply to the pane
  */
@@ -422,6 +457,7 @@ private fun SessionPane(
     onPaneFocused: (String) -> Unit,
     onRemoveSession: (TermuxSessionUiModel) -> Unit,
     onOpenInTerminal: (String) -> Unit,
+    onShowMoreMenu: () -> Unit,
     onFontSizeStep: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -518,8 +554,9 @@ private fun SessionPane(
                     state = paneState,
                     metrics = paneMetrics,
                     onMore = {
-                        // Legacy "More…" stops the toolbar, stores the selection and shows the
-                        // context menu, which reads it back through TerminalViewRegistry.
+                        // "More…" stops the toolbar, stores the selection and opens the
+                        // Compose more-menu sheet, which reads the text back through
+                        // TerminalViewRegistry (parity with the legacy context menu).
                         val selection = paneState.selection
                         if (selection != null) {
                             TerminalViewRegistry.setStoredSelectedText(
@@ -529,7 +566,7 @@ private fun SessionPane(
                             )
                         }
                         paneState.selection = null
-                        TerminalViewRegistry.getViewForSession(model.session)?.showContextMenu()
+                        onShowMoreMenu()
                     },
                     modifier = Modifier.fillMaxSize()
                 )

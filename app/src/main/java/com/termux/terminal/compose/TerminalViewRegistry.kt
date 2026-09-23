@@ -38,8 +38,8 @@ object TerminalViewRegistry {
      * `mStoredSelectedText` of
      * {@link com.termux.view.textselection.TextSelectionCursorController}. The Compose
      * selection overlay stores the text here (the hidden input view has no selection of its
-     * own), and the app context menu / share-selected-text reads it as a fallback. Cleared
-     * when the context menu closes.
+     * own), and the app more-menu / share-selected-text reads it as a fallback. Cleared
+     * when the more menu closes (see `TermuxComposeActivity.dismissMoreMenu`).
      */
     @Volatile
     var storedSelectedText: String? = null

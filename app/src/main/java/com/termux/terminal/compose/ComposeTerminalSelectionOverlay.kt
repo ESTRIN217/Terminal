@@ -73,7 +73,7 @@ import kotlin.math.roundToInt
  * @param state The pane scroll/selection state shared with the canvas
  * @param metrics The glyph metrics snapshot shared with the canvas
  * @param onMore Invoked when "More…" is pressed: the app stores the selected text, stops the
- * selection and shows the legacy context menu (reads [TerminalViewRegistry.storedSelectedText])
+ * selection and shows the more-menu sheet (reads [TerminalViewRegistry.storedSelectedText])
  * @param modifier Modifier to apply to the overlay
  */
 @Composable
