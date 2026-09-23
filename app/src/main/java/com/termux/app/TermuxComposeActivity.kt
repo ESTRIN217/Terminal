@@ -55,6 +55,7 @@ import com.termux.shared.termux.data.TermuxUrlUtils
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties
 import com.termux.shared.termux.settings.properties.TermuxPropertyConstants
+import com.termux.shared.termux.shell.command.environment.ProotShellEnvironment
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession
 import com.termux.shared.termux.theme.TermuxThemeUtils
 import com.termux.shared.view.KeyboardUtils
@@ -278,6 +279,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                             }
                         },
                         onOpenInTerminal = { openTerminalIn(it) },
+                        onEditFile = { openFileInEditor(it) },
                         onOpenSettings = {
                             ActivityUtils.startActivity(
                                 this@TermuxComposeActivity,
@@ -737,6 +739,93 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         val name = "Session ${service.getTermuxSessionsSize()}"
 
         mViewModel.addSession(terminalSession, name)
+    }
+
+    /**
+     * Open a file from the file manager in a Debian rootfs editor (nano, vim, …).
+     *
+     * The editor runs as `bash --login -c "<editor> '<guest>'; exec bash"` inside proot so the
+     * tab stays as an interactive shell after leaving the editor. Does **not** use
+     * RUN_COMMAND/`ACTION_SERVICE_EXECUTE` (those validate a host executable and disable the
+     * proot branch for plugin commands).
+     *
+     * @param hostPath Absolute host path of the file to edit
+     */
+    private fun openFileInEditor(hostPath: String) {
+        val service = mTermuxService ?: return
+
+        if (mViewModel.uiState.value.sessions.size >= MAX_SESSIONS) {
+            Toast.makeText(this, R.string.title_max_terminals_reached, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!DebianInstaller.isInstalled()) {
+            Logger.logError(LOG_TAG, "Edit in terminal: Debian rootfs not installed")
+            Toast.makeText(this, R.string.debian_installer_title, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val file = File(hostPath)
+        if (!file.isFile) {
+            Logger.logError(LOG_TAG, "Edit in terminal: not a file: $hostPath")
+            return
+        }
+        // hostPathToGuestPath falls back to /root for unmappable paths; open the wrong
+        // guest path silently, so reject before mapping.
+        if (!ProotShellEnvironment.isHostPathMappable(hostPath)) {
+            Logger.logError(LOG_TAG, "Edit in terminal: unmappable path: $hostPath")
+            Toast.makeText(
+                this, com.estrin217.filemanager.R.string.filemanager_unmappable_path,
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+
+        val editors = TermuxConstants.DEBIAN_EDITOR_CANDIDATES
+            .map { name -> File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/usr/bin/" + name) }
+            .filter { it.canExecute() }
+            .map { it.name }
+
+        when (editors.size) {
+            0 -> {
+                AlertDialog.Builder(this)
+                    .setMessage(com.estrin217.filemanager.R.string.filemanager_no_editor)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+            1 -> launchEditorSession(editors[0], file)
+            else -> {
+                AlertDialog.Builder(this)
+                    .setTitle(com.estrin217.filemanager.R.string.filemanager_choose_editor)
+                    .setItems(editors.toTypedArray()) { _, which ->
+                        launchEditorSession(editors[which], file)
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
+        }
+    }
+
+    /**
+     * Spawn a proot session that runs [editor] on [file] and drops back to a login shell.
+     *
+     * @param editor Editor binary name found under the rootfs `usr/bin`
+     * @param file Host file to open (must already be path-mapped and exist)
+     */
+    private fun launchEditorSession(editor: String, file: File) {
+        val service = mTermuxService ?: return
+        val guestPath = ProotShellEnvironment.hostPathToGuestPath(file.absolutePath)
+        val escapedGuest = guestPath.replace("'", "'\\''")
+        val script = "$editor '$escapedGuest'; exec bash"
+        val parentDir = file.parent ?: TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH
+
+        val termuxSession = service.createTermuxSession(
+            null, arrayOf("-c", script), null, parentDir, false, null
+        ) ?: return
+
+        mViewModel.addSession(
+            termuxSession.getTerminalSession(),
+            "$editor: ${file.name}"
+        )
     }
 
     /**

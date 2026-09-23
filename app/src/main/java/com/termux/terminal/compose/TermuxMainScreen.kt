@@ -80,6 +80,7 @@ private const val MaxTerminalFontSizePx = 32f
  * @param onToggleKeyboard Callback to toggle the soft keyboard
  * @param onOpenFileManager Callback to open the file manager
  * @param onOpenInTerminal Callback to open a terminal in a directory (file manager panes)
+ * @param onEditFile Callback to open a file in a rootfs editor (file manager panes)
  * @param onOpenSettings Callback to open settings
  * @param moreMenuState Non-null while the terminal "More" sheet is open (item flags/labels)
  * @param onShowMoreMenu Callback to open the terminal "More" sheet (top bar / selection toolbar)
@@ -103,6 +104,7 @@ fun TermuxMainScreen(
     onToggleKeyboard: () -> Unit,
     onOpenFileManager: () -> Unit,
     onOpenInTerminal: (String) -> Unit,
+    onEditFile: (String) -> Unit,
     onOpenSettings: () -> Unit,
     moreMenuState: TerminalMoreMenuUiState?,
     onShowMoreMenu: () -> Unit,
@@ -275,6 +277,7 @@ fun TermuxMainScreen(
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
+                                    onEditFile = onEditFile,
                                     onShowMoreMenu = onShowMoreMenu,
                                     onFontSizeStep = viewModel::setFontSize,
                                     modifier = Modifier
@@ -299,6 +302,7 @@ fun TermuxMainScreen(
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
+                                    onEditFile = onEditFile,
                                     onShowMoreMenu = onShowMoreMenu,
                                     onFontSizeStep = viewModel::setFontSize,
                                     modifier = Modifier
@@ -320,6 +324,7 @@ fun TermuxMainScreen(
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
+                                    onEditFile = onEditFile,
                                     onShowMoreMenu = onShowMoreMenu,
                                     onFontSizeStep = viewModel::setFontSize,
                                     modifier = Modifier.fillMaxSize()
@@ -440,6 +445,7 @@ private fun sendKeyToSession(
  * @param onPaneFocused Callback with the session id when the pane requests focus
  * @param onRemoveSession Callback to remove the session
  * @param onOpenInTerminal Callback to open a terminal in a directory (file manager panes)
+ * @param onEditFile Callback to open a file in a rootfs editor (file manager panes)
  * @param onShowMoreMenu Callback to open the terminal "More" sheet (selection toolbar)
  * @param onFontSizeStep Callback with a font size in pixels (pinch-zoom target, already clamped)
  * @param modifier Modifier to apply to the pane
@@ -457,6 +463,7 @@ private fun SessionPane(
     onPaneFocused: (String) -> Unit,
     onRemoveSession: (TermuxSessionUiModel) -> Unit,
     onOpenInTerminal: (String) -> Unit,
+    onEditFile: (String) -> Unit,
     onShowMoreMenu: () -> Unit,
     onFontSizeStep: (Float) -> Unit,
     modifier: Modifier = Modifier
@@ -588,6 +595,7 @@ private fun SessionPane(
             sessionId = model.id,
             onCloseSession = { onRemoveSession(model) },
             onOpenInTerminal = onOpenInTerminal,
+            onEditFile = onEditFile,
             isActivePane = isActivePane,
             onActivatePane = { onPaneFocused(model.id) },
             modifier = modifier

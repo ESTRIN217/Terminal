@@ -583,6 +583,15 @@ public final class TermuxConstants {
     /** Guest path of the link(2)-emulation shim inside the Debian rootfs. */
     public static final String LINKFIX_GUEST_SO_PATH = "/usr/libexec/termux-linkfix.so";
 
+    /**
+     * Editor candidates probed under {@code DEBIAN_ROOTFS_DIR_PATH/usr/bin} for the file
+     * manager "Edit" action (first match wins when several are installed).
+     * The minbase rootfs ships none of them; users install one via {@code apt install nano}.
+     */
+    public static final String[] DEBIAN_EDITOR_CANDIDATES = {
+        "nano", "vim", "vi", "vim.tiny", "mcedit", "ed"
+    };
+
     /** Guest-relative path of the login welcome-message profile script inside the Debian rootfs. */
     public static final String DEBIAN_WELCOME_PROFILE_RELATIVE_PATH = "etc/profile.d/00-termux-welcome.sh";
     /** Login welcome-message shell script written into the Debian rootfs, echoed by bash on every {@code --login} shell. */

@@ -90,6 +90,31 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
     }
 
     /**
+     * Whether {@code hostPath} has a real guest equivalent (rootfs, {@code /sdcard} or
+     * {@code /storage} bind).
+     *
+     * <p>{@link #hostPathToGuestPath(String)} silently falls back to {@link #GUEST_HOME}
+     * for unmappable paths (fine as a proot working directory, wrong as a file to open in a
+     * guest editor). Callers that need a true mapping must check this first.</p>
+     *
+     * @param hostPath The Android (host) path to test.
+     * @return Returns {@code true} when the path maps into the guest filesystem.
+     */
+    public static boolean isHostPathMappable(@NonNull String hostPath) {
+        return hasPathPrefix(hostPath, TermuxConstants.DEBIAN_ROOTFS_DIR_PATH)
+            || hasPathPrefix(hostPath, "/sdcard")
+            || hasPathPrefix(hostPath, "/storage");
+    }
+
+    /**
+     * Whether {@code path} equals {@code prefix} or starts with {@code prefix + "/"}.
+     * Avoids false positives like {@code /sdcardfoo} for {@code /sdcard}.
+     */
+    private static boolean hasPathPrefix(@NonNull String path, @NonNull String prefix) {
+        return path.equals(prefix) || path.startsWith(prefix + "/");
+    }
+
+    /**
      * Host directory the native pty process chdirs into before exec'ing proot.
      *
      * <p>proot re-establishes the real guest working directory via {@code -w}, so

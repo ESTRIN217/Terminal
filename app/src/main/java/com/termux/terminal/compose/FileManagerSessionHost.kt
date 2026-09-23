@@ -45,6 +45,8 @@ import java.io.File
  * focused pane registers the extra-keys handler and the back handler
  * @param onActivatePane Callback when the pane requests focus while it is not the active pane
  * @param onCloseSession Callback when the tab should be closed (back at root / X button)
+ * @param onOpenInTerminal Callback with the directory host path to open a terminal in
+ * @param onEditFile Callback with the file host path to open in a rootfs editor
  * @param modifier Modifier to apply
  */
 @Composable
@@ -52,6 +54,7 @@ fun FileManagerSessionHost(
     sessionId: String,
     onCloseSession: () -> Unit,
     onOpenInTerminal: (String) -> Unit,
+    onEditFile: (String) -> Unit,
     isActivePane: Boolean = true,
     onActivatePane: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -180,6 +183,7 @@ fun FileManagerSessionHost(
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         onOpenInTerminal = { dir -> onOpenInTerminal(dir.absolutePath) },
+        onEditFile = { file -> onEditFile(file.absolutePath) },
         // A secondary file manager pane promotes itself on focus, mirroring the terminal
         // panes: focusable() catches taps on empty areas, and onFocusChanged also fires when
         // a descendant (a list item row) takes focus. Only wired while the pane is secondary.

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.Terminal
@@ -113,7 +114,8 @@ fun FileManagerScreen(
     onEnsureStorageAccess: (File, () -> Unit) -> Unit,
     modifier: Modifier = Modifier,
     contentWindowInsets: WindowInsets = ScaffoldDefaults.contentWindowInsets,
-    onOpenInTerminal: ((File) -> Unit)? = null
+    onOpenInTerminal: ((File) -> Unit)? = null,
+    onEditFile: ((File) -> Unit)? = null
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -288,6 +290,17 @@ fun FileManagerScreen(
                     }
                     IconButton(onClick = { onShareFiles(viewModel.selectedFiles()) }, enabled = !state.busy) {
                         Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
+                    }
+                    // Edit: single selected file only (one editor tab per invocation).
+                    if (onEditFile != null) {
+                        val editSelection = viewModel.selectedFiles()
+                        if (editSelection.size == 1 && !editSelection[0].isDirectory) {
+                            IconButton(onClick = {
+                                onEditFile(viewModel.resolveForOpen(editSelection[0]))
+                            }, enabled = !state.busy) {
+                                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.action_edit))
+                            }
+                        }
                     }
                     IconButton(onClick = {
                         dialogFile = null
@@ -630,6 +643,13 @@ fun FileManagerScreen(
                                 nameInput = f.name
                                 dialog = DialogKind.RENAME
                             }) { Text(stringResource(R.string.action_rename)) }
+                            if (onEditFile != null && !f.isDirectory) {
+                                TextButton(onClick = {
+                                    val target = viewModel.resolveForOpen(f)
+                                    dialog = DialogKind.NONE
+                                    onEditFile(target)
+                                }) { Text(stringResource(R.string.action_edit)) }
+                            }
                             TextButton(onClick = { dialog = DialogKind.NONE }) { Text(stringResource(R.string.filemanager_close)) }
                         }
                     }

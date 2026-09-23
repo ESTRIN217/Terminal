@@ -16,6 +16,7 @@
     <string name="action_cut">Cortar</string>
     <string name="action_paste">Colar</string>
     <string name="action_share">Compartilhar</string>
+    <string name="action_edit">Editar</string>
     <string name="action_details">Detalhes</string>
     <string name="action_select_all">Selecionar tudo</string>
     <string name="action_undo">Desfazer</string>
@@ -25,6 +26,9 @@
     <string name="action_cancel">Cancelar</string>
     <string name="title_rename">Renomear</string>
     <string name="filemanager_calculating">Calculando…</string>
+    <string name="filemanager_no_editor">Nenhum editor encontrado no rootfs do Debian.\nInstale um com: apt install nano</string>
+    <string name="filemanager_choose_editor">Escolher editor</string>
+    <string name="filemanager_unmappable_path">Este caminho não pode ser aberto no terminal Debian</string>
 
     <!-- File Manager Messages -->
     <string name="msg_paste_success">%1$d item(ns) colado(s)</string>
