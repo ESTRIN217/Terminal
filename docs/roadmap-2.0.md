@@ -91,23 +91,49 @@ Auditoría `TerminalView` (legacy) vs `ComposeTerminalCanvas` + hosts (nativa). 
 - Accesibilidad/TalkBack (semantics del canvas vs `contentDescription` en la view alpha-0), contrato `onLongPress(event)` con el `MotionEvent` real.
 - Tests: branching `useNativeRenderer` sin cobertura de UI; extraer más lógica de composables a `ComposeTerminalFrame` para unit tests. La lógica de abort/pin de selección ya tiene tests (`ComposeTerminalFrameTest`).
 
-### Fase 3.7 — Auditoría de rendimiento Compose (análisis, no bloquea 2.0)
+### Fase 3.7 — Auditoría de rendimiento Compose (análisis, no bloquea 2.0) ✅
 
-Análisis metodológico del renderer nativo y de la UI Compose; entrega = informe en este roadmap con hallazgos priorizados (P0 crash/jank → P2 micro-opt). Solo fixes de crash/jank severo bloquean; el resto post-2.0.
+Análisis metodológico del renderer nativo y de la UI Compose; entrega = este informe con hallazgos priorizados (P0 crash/jank → P2 micro-opt). Solo los P0 de jank severo se arreglan en esta fase; P1/P2 quedan post-2.0.
 
-**16. Render thread / GPU (evitar asignaciones CPU→GPU, capas, overdraw, clipping)**
-- **Asignaciones por frame en el draw path** (confirmado en código): `ComposeTerminalFrame.buildLineRuns()` asigna `ArrayList<TextRun>` + un `TextRun` **por row, por frame**; `resolveRunColors()` asigna `ResolvedRunColors` **por run, por frame**; `selectionBoundsForRow()` devuelve un `Pair` por row; el path de scrollbar crea un `Paint()` **nuevo cada frame** (`ComposeTerminalCanvas.kt` ~línea 668). Plan: object pools/reutilización, `remember`/prealloc del Paint de scrollbar, evitar `Pair` (devolver longs/índices).
-- **Capas de hardware (`GraphicsLayer`)**: cero uso de `GraphicsLayer`/`drawWithCache`/`rememberGraphicsLayer` en todo el repo. Evaluar `rememberGraphicsLayer` + `drawLayer` para capas estáticas (scrollbar, contenido cuando no hay output nuevo, cursor block fijo).
-- **Overdraw**: medir con Debug GPU overdraw; reducir repintado de fondo del canvas (el canvas pinta fondo + texto; evitar doble fondo con el Surface padre).
-- **Clipping por hardware**: usar `clipRect`/`clipPath` nativos del `Canvas` en vez de masks software donde aplique (selección, scrollbar, márgenes).
-- Path legacy (`TerminalView`/`TerminalRenderer`): ya reutiliza `mTextPaint` + cache `asciiMeasures[127]`, asignaciones bajas — no priorizar.
+**P0 — Fixed (jank severo)**
 
-**17. CPU / RAM / disco / GPU / red (recomposiciones y datos)**
-- **CPU — cálculos pesados en recomposiciones**: extraer a `remember`/`derivedStateOf` o fuera de composición todo cálculo en bodies de composable que no dependa de estado de frame (p.ej. geometría de split, formateo de rutas del file manager).
-- **RAM — listas infinitas**: el file manager debe manejar listas grandes con `LazyColumn` + `key` estable (verificar `FileManagerScreen`); no cargar directorios completos en memoria de golpe.
-- **Disco → RAM**: cachear lecturas de metadatos/direcciones (ya parcial en file manager); evitar relecturas de `crash_log.md`/preferencias en hot paths.
-- **GPU/pantalla — lambdas y estado**: preferir modifiers que capturan solo estado skippable; evitar lambdas inestables que rompan skippability (`Modifier.clickable` con lambdas no remembered, etc.); pasar estado de dibujo por parámetro estable.
-- **Red/imágenes**: Ktor ya en el stack; añadir cache de respuestas si hay fetch (releases/issues); decodificar imágenes fuera del main thread si se añaden previews (no aplica hoy: no hay imágenes en UI).
+1. **I/O de disco en `setContent` sin `remember`** — `TerminalFontLoader.resolve` + `TerminalColorSchemeLoader.load()` se re-ejecutaban en cada recomposición del scope raíz (gatillada por `mFontRevision`/`mPaletteRevision` en `onResume` y por estado leído en ese scope, p.ej. `mMoreMenuState`). Fix: `remember(mFontRevision, fontId)` / `remember(mPaletteRevision, useCustomColorScheme)` en `TermuxComposeActivity`, `SettingsComposeActivity` y `FileManagerComposeActivity`. El bump de revisión sigue forzando recarga tras Ajustes; recomposiciones ajenas no re-leen assets ni `colors.properties`.
+2. **Sort + symlink scan en `Dispatchers.Main`** — `FileManagerViewModel.refresh()` filtraba, ordenaba (`FileSortOption.getComparator` → stats por comparación) y escaneaba `readSymlinkTargetRaw`/`isBrokenSymlink` dentro de `withContext(Main)` tras `listFiles`. Fix: pipeline completo (filter → sort → scan → publish) en `Dispatchers.IO` vía `applyListing()`; en Main solo `_uiState.update`.
+3. **`setSearchQuery` re-listeaba el directorio por tecla** — cada keystroke llamaba `refresh()` → `listFiles` completo. Fix: cache `lastListed: Array<File>?`/`lastListedDir`; `setSearchQuery`/`toggleSort`/`toggleHidden` usan `reapplyCachedListing()` (re-filtro en memoria sobre IO, sin enumerar). El cache se invalida al iniciar un `refresh()` full (mutaciones de archivo, navegación) para no servir listings previos a una mutación; si no hay cache válida se cae a `refresh()`. Sin debounce (el filter en IO por tecla es barato).
+
+**P1 — Pendiente (post-2.0)**
+
+4. **Stats en bodies de composable (filemanager)** — `file.length()`/`file.isDirectory` en filas del `LazyColumn` (`FileManagerScreen.kt` ~477/456), `bookmarkDirs()` re-alloca lista+Pairs por recomposición del diálogo (~706), DETAILS `f.length()` en composition (~600). Mover a state ya resuelto en el ViewModel o `remember`.
+5. **`object : ExtraKeysCallback` nuevo por recomposición** — `TermuxMainScreen.kt` ~358: identidad anónima nueva cada recomposición → el slot de `ExtraKeysBar` nunca es skippable. Extraer a `remember`/`rememberUpdatedState`.
+6. **Sin `@Stable`/`@Immutable` ni `derivedStateOf`** — `TermuxUiState`/`List`/`TerminalSession`/`ExtraKeysConfig` inestables; cero `derivedStateOf` en todo el repo. Strong skipping está ON por default (Kotlin/Compose Compiler 2.4.x, sin bloque `composeCompiler` explícito); fui huecos puntuales (puntos 4–5, state monolítico).
+7. **UI state monolítico del filemanager** — un solo `FileManagerUiState.collectAsState` recompose la pantalla entera ante cualquier cambio (`busy`, `focusedIndex`, status…). Considerar selectors o estado particionado.
+8. **`licenses()` reconstruido 3×** — `LicensesScreen.kt` ~108/116 rehace la lista en el mismo loop. `remember`/`val` único.
+9. **`crash_log.md`/prefs en `onResume`** — `TermuxCrashUtils.notifyAppCrashFromCrashLogFile` en cada resume (lifecycle, no frame; ya en background thread con pref cached). Baja prioridad; no es hot path de dibujo.
+10. **Ktor** — declarado en `gradle/libs.versions.toml` pero **sin** `implementation` en ningún `*.kts` ni imports: catálogo muerto. No hay fetch de releases/issues → no hay cache HTTP que añadir hoy. Si se cablea Ktor, diseñar cache desde el inicio. *(Errata del item 17 original: "Ktor ya en el stack" era incorrecto.)*
+11. **Imágenes** — el item 17 decía "no hay imágenes en UI": **falso**. `AboutScreen` usa Coil 3 `AsyncImage` (`coil-compose` + okhttp). Coil ya cachea en memoria/disco y decodifica off-main; riesgo residual bajo. *(Errata corregida.)*
+
+**P2 — Pendiente (post-2.0, draw path / micro-opt)**
+
+12. **Asignaciones por frame en el draw path** (confirmado; escala rows×runs×fps):
+    - `ComposeTerminalFrame.buildLineRuns()` — `ArrayList<TextRun>` + un `TextRun` por run, por row, por frame (`ComposeTerminalFrame.kt` ~312/352/378).
+    - `resolveRunColors()` — `ResolvedRunColors` por run, por frame (~560).
+    - `selectionBoundsForRow()` — `Pair<Int,Int>` por row (~102–106), consumido en `ComposeTerminalCanvas.kt` ~767.
+    - Scrollbar — `Paint()` nuevo cada frame (`ComposeTerminalCanvas.kt` ~668).
+    - Lambda `hasWidthMismatch` + `String(Character.toChars(...))` por code point non-ASCII, por row (~768–777).
+    - Plan: pools/reutilización de `TextRun`, prealloc del Paint de scrollbar, devolver longs/índices en vez de `Pair`, lambda fuera del loop de rows.
+13. **Cero `GraphicsLayer`/`drawWithCache`/`rememberGraphicsLayer`/`clipRect`/`clipPath`** — evaluar capas estáticas (scrollbar, cursor fijo) y clipping hardware para selección/scrollbar.
+14. **Overdraw posible** — canvas hace `drawColor` full-frame de fondo (~749) encima del `Box.background` del Surface padre (`TermuxMainScreen.kt` ~518). Medir con Debug GPU overdraw.
+15. **Path legacy** (`TerminalView`/`TerminalRenderer`): reutiliza `mTextPaint` + cache `asciiMeasures[127]` — no priorizar.
+16. **`CanvasFontMetrics`** es `data class` con `FloatArray` → equals estructural deficiente; puede romper skip si se re-mide. Marcar `@Immutable` o igualdad manual.
+
+**Correcciones a los ítems 16–17 originales**
+- Item 17 "LazyColumn + key": **verificado OK** — `FileManagerScreen.kt` ~416 ya usa `key = { _, file -> file.absolutePath }`. El punto real de RAM es el `List<File>` completo de `FileManagerUiState.files` (listado de dir entero en memoria; la UI solo virtualiza el render). Cap artificial de listas ya **descartado** en Fase 2.5 (ítem 14).
+- Item 17 "Ktor en el stack": **errata** — solo en version catalog (ver P1.10).
+- Item 17 "no hay imágenes": **errata** — Coil en About (ver P1.11).
+- Geometría de split: barata (`roundToPx` + comparaciones); `SessionSplitPicker` ya usa `remember(sessions, …)`. No es candidato P0/P1.
+
+**Verificado como ya correcto (no priorizar)**
+- Strong skipping default-on (Kotlin 2.4.x); `key` en LazyColumn del filemanager y del split picker; `remember` del Paint principal/métricas/blink en el canvas; `blinkRate` leído una vez con `remember`; `folderSizes` cacheado; prefs solo en init/ops; crash_log solo en resume/broadcast; `rememberUpdatedState` en gestures del overlay; path legacy de asignaciones bajas; tests de runs/colores (`ComposeTerminalFrameTest` + Java) sólidos.
 
 ### Fase 4 — Release 2.0
 
@@ -130,5 +156,5 @@ Análisis metodológico del renderer nativo y de la UI Compose; entrega = inform
 | Fase 2 — UI Compose | Completada (ítems 4–5, 11 menú "Más" terminal y 12 editar en filemanager) |
 | Fase 2.5 — Rendimiento de plataforma | Completada (13–15) |
 | Fase 3 — Rendering | Completada (canvas Compose nativo tras el flag; paridad principal cerrada — ver Fase 3.6 para brechas restantes) |
-| Fase 3.7 — Auditoría perf Compose | Pendiente (análisis 16–17) |
+| Fase 3.7 — Auditoría perf Compose | Completada (informe 16–17 + fixes P0: remember font/palette, IO filemanager, cache de listado) |
 | Fase 4 — Release 2.0 | Pendiente (incluye 18 clave release, 19 docs) |
