@@ -1,7 +1,7 @@
 package com.termux.shared.termux.settings.preferences;
 
 /*
- * Version: v0.16.0
+ * Version: v0.17.0
  *
  * Changelog
  *
@@ -69,6 +69,10 @@ package com.termux.shared.termux.settings.preferences;
  * - 0.16.0 (2022-06-11)
  *      - Added following to `TERMUX_APP`:
  *          `KEY_APP_SHELL_NUMBER_SINCE_BOOT` and `KEY_TERMINAL_SESSION_NUMBER_SINCE_BOOT`.
+ *
+ * - 0.17.0 (2026-09-23)
+ *      - Added following to `TERMUX_APP`:
+ *          `KEY_FORCE_60HZ` and `DEFAULT_VALUE_FORCE_60HZ`.
  */
 
 import com.termux.shared.shell.command.ExecutionCommand;
@@ -173,6 +177,15 @@ public final class TermuxPreferenceConstants {
          */
         public static final String KEY_NATIVE_COMPOSE_RENDERER = "native_compose_renderer";
         public static final boolean DEFAULT_VALUE_NATIVE_COMPOSE_RENDERER = false;
+
+
+        /**
+         * Defines the key for whether the display is locked to 60 Hz (battery saving)
+         * instead of being switched to the maximum supported refresh rate at the
+         * current resolution.
+         */
+        public static final String KEY_FORCE_60HZ = "force_60hz";
+        public static final boolean DEFAULT_VALUE_FORCE_60HZ = false;
 
 
         /**

@@ -342,6 +342,8 @@
     <string name="use_custom_color_scheme_desc">Apply the colors.properties palette from ~/.termux (supports 24-bit colors)</string>
     <string name="native_compose_renderer">Native Compose renderer [Experimental]</string>
     <string name="native_compose_renderer_desc">Paint the terminal with a Compose Canvas spike. Legacy view stays as fallback</string>
+    <string name="force_60hz">Force 60 Hz (battery)</string>
+    <string name="force_60hz_desc">Limit the display to 60 Hz instead of the maximum refresh rate</string>
     <string name="save_to_a_files">Save to a files</string>
 
     <!-- About Screen -->

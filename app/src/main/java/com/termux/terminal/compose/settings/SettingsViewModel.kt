@@ -50,6 +50,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 terminalFontLigatures = p.isTerminalFontLigaturesEnabled(),
                 useCustomColorScheme = p.shouldUseCustomColorScheme(),
                 nativeComposeRenderer = p.isNativeComposeRendererEnabled(),
+                force60Hz = p.shouldForce60Hz(),
                 logLevel = p.getLogLevel(),
                 terminalViewKeyLogging = p.isTerminalViewKeyLoggingEnabled(),
                 pluginErrorNotifications = p.arePluginErrorNotificationsEnabled(false),
@@ -118,6 +119,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setNativeComposeRenderer(value: Boolean) {
         prefs?.setNativeComposeRendererEnabled(value)
         _uiState.update { it.copy(nativeComposeRenderer = value) }
+    }
+
+    fun setForce60Hz(value: Boolean) {
+        prefs?.setForce60Hz(value)
+        _uiState.update { it.copy(force60Hz = value) }
     }
 
     fun setLogLevel(value: Int) {

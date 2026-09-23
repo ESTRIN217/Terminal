@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Terminal
@@ -169,6 +170,13 @@ fun SettingsScreen(
                     icon = Icons.Default.Terminal,
                     checked = state.nativeComposeRenderer,
                     onCheckedChange = viewModel::setNativeComposeRenderer
+                )
+                SettingsSwitchTile(
+                    title = stringResource(R.string.force_60hz),
+                    subtitle = stringResource(R.string.force_60hz_desc),
+                    icon = Icons.Default.Refresh,
+                    checked = state.force60Hz,
+                    onCheckedChange = viewModel::setForce60Hz
                 )
             }
 

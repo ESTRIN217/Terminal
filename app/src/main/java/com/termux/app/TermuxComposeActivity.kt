@@ -78,6 +78,7 @@ import com.termux.terminal.compose.TermuxViewModel
 import com.termux.terminal.compose.TerminalViewRegistry
 import androidx.activity.enableEdgeToEdge
 import java.io.File
+import kotlin.math.abs
 
 /**
  * A terminal emulator activity using Jetpack Compose.
@@ -95,6 +96,9 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
     companion object {
         private const val LOG_TAG = "TermuxComposeActivity"
         private const val MAX_SESSIONS = 8
+
+        /** Refresh rate targeted by the "force 60 Hz" battery preference, in Hz. */
+        private const val FORCE_60HZ_TARGET_REFRESH_RATE = 60f
 
         /**
          * Build a launch intent for the Compose activity.
@@ -217,6 +221,9 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
 
+        // Switch to the maximum refresh rate at the current resolution (or 60 Hz if forced)
+        applyPreferredRefreshRate()
+
         // Load configurations from preferences into the ViewModel
         loadExtraKeysConfig()
         mViewModel.setExtraKeysVisible(mPreferences.shouldShowTerminalToolbar())
@@ -321,6 +328,8 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         mPaletteRevision++
         // Reload the terminal font and ligature setting (may have changed in Settings).
         mFontRevision++
+        // Re-apply the display refresh rate (the 60 Hz preference may have changed in Settings).
+        applyPreferredRefreshRate()
 
         // Check if a crash happened on last run of the app or if a plugin crashed and show a
         // notification with the crash details if it did
@@ -890,6 +899,51 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    /**
+     * Apply the display mode with the highest refresh rate among the supported modes that
+     * match the current resolution, or the mode closest to [FORCE_60HZ_TARGET_REFRESH_RATE]
+     * when [TermuxAppSharedPreferences.shouldForce60Hz] is set. Keeps text sharp by never
+     * changing the panel resolution. Any failure falls back silently to the default mode.
+     */
+    @Suppress("DEPRECATION")
+    private fun applyPreferredRefreshRate() {
+        try {
+            val display = windowManager.defaultDisplay
+            val currentMode = display.mode
+            val sameResolutionModes = display.supportedModes.filter {
+                it.physicalWidth == currentMode.physicalWidth &&
+                    it.physicalHeight == currentMode.physicalHeight
+            }
+            if (sameResolutionModes.isEmpty()) return
+
+            val force60Hz = mPreferences.shouldForce60Hz()
+            val targetMode = if (force60Hz) {
+                sameResolutionModes.minByOrNull { abs(it.refreshRate - FORCE_60HZ_TARGET_REFRESH_RATE) }
+            } else {
+                sameResolutionModes.maxByOrNull { it.refreshRate }
+            } ?: return
+
+            val shouldApply = if (force60Hz) {
+                targetMode.refreshRate < currentMode.refreshRate
+            } else {
+                targetMode.refreshRate > currentMode.refreshRate
+            }
+            if (!shouldApply) return
+
+            val attributes = window.attributes
+            attributes.preferredDisplayModeId = targetMode.modeId
+            attributes.preferredRefreshRate = targetMode.refreshRate
+            window.attributes = attributes
+            Logger.logDebug(
+                LOG_TAG,
+                "Applied display mode ${targetMode.modeId} at ${targetMode.refreshRate} Hz"
+            )
+        } catch (e: Exception) {
+            // Optional optimization: display mode selection must never crash startup.
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to apply preferred refresh rate", e)
         }
     }
 

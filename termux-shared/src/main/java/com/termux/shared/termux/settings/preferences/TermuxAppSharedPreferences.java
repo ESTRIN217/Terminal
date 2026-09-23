@@ -295,6 +295,22 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
 
 
 
+    /**
+     * Whether the display is locked to 60 Hz instead of being switched to the maximum
+     * supported refresh rate at the current resolution.
+     *
+     * @return {@code true} to force the 60 Hz display mode (battery saving).
+     */
+    public boolean shouldForce60Hz() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_FORCE_60HZ, TERMUX_APP.DEFAULT_VALUE_FORCE_60HZ);
+    }
+
+    public void setForce60Hz(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_FORCE_60HZ, value, false);
+    }
+
+
+
     public boolean arePluginErrorNotificationsEnabled(boolean readFromFile) {
         if (readFromFile)
             return SharedPreferenceUtils.getBoolean(mMultiProcessSharedPreferences, TERMUX_APP.KEY_PLUGIN_ERROR_NOTIFICATIONS_ENABLED, TERMUX_APP.DEFAULT_VALUE_PLUGIN_ERROR_NOTIFICATIONS_ENABLED);
