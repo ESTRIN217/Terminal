@@ -87,4 +87,16 @@ public class DebianInstallerTest {
         Assert.assertTrue(TermuxConstants.DEBIAN_WELCOME_SHELL_SCRIPT.contains("apt update && apt upgrade"));
         Assert.assertFalse(DebianInstaller.isWelcomeMessageInstalled());
     }
+
+    @Test
+    public void testPs1Constants_pathAndScript_consistent() {
+        Assert.assertEquals("etc/profile.d/10-termux-ps1.sh",
+            TermuxConstants.DEBIAN_PS1_PROFILE_RELATIVE_PATH);
+        Assert.assertTrue(TermuxConstants.DEBIAN_PS1_SHELL_SCRIPT.startsWith("PS1='"));
+        Assert.assertTrue(TermuxConstants.DEBIAN_PS1_SHELL_SCRIPT.contains("\\u@\\h"));
+        Assert.assertTrue(TermuxConstants.DEBIAN_PS1_SHELL_SCRIPT.contains("\\w"));
+        Assert.assertTrue(TermuxConstants.DEBIAN_PS1_SHELL_SCRIPT.contains("\\$ "));
+        Assert.assertTrue(TermuxConstants.DEBIAN_PS1_SHELL_SCRIPT.contains("\\[\\e[38;5;"));
+        Assert.assertFalse(DebianInstaller.isPs1ConfigInstalled());
+    }
 }

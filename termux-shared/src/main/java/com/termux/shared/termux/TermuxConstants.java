@@ -589,6 +589,26 @@ public final class TermuxConstants {
     public static final String DEBIAN_WELCOME_SHELL_SCRIPT =
         "echo \"-> \u00a1Bienvenido a Debian Linux en la terminal!\n\nTrabajo con paquetes:\n\n - Buscar:     apt search <consulta>\n - Instalar:   apt install <paquete>\n - Desinstalar: apt remove <paquete>\n - Actualizar:  apt update && apt upgrade\"";
 
+    /**
+     * Guest-relative path of the login PS1 profile script inside the Debian rootfs.
+     *
+     * <p>Sourced after {@link #DEBIAN_WELCOME_PROFILE_RELATIVE_PATH} (lexicographic order in
+     * {@code /etc/profile.d/}) so the colored prompt overrides the plain non-color prompt set
+     * earlier by {@code /etc/bash.bashrc} via {@code /etc/profile}.</p>
+     */
+    public static final String DEBIAN_PS1_PROFILE_RELATIVE_PATH = "etc/profile.d/10-termux-ps1.sh";
+    /**
+     * Login PS1 shell script written into the Debian rootfs, sourced by bash on every
+     * {@code --login} shell. Sets a colored prompt using 256-color SGR sequences
+     * ({@code TERM=xterm-256color} is set by the shell environment).
+     *
+     * <p>The trailing dollar sign renders as {@code #} for root (always the case under proot)
+     * and as {@code $} otherwise; bracket escapes mark non-printing sequences so bash
+     * computes the prompt width correctly.</p>
+     */
+    public static final String DEBIAN_PS1_SHELL_SCRIPT =
+        "PS1='\\[\\e[38;5;118m\\]\\u@\\h\\[\\e[0m\\]:\\[\\e[38;5;39m\\]\\w\\[\\e[0m\\]\\$ '";
+
     /** Debian rootfs tarball download URL (official Debian OCI layer, debuerreotype, trixie arm64). */
     public static final String DEBIAN_ROOTFS_TARBALL_URL = "https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/f73bd086e8d0e5e1c8b838ccc442bf24eb3ea205/stable/oci/blobs/rootfs.tar.gz";
     /** SHA-256 of the Debian rootfs tarball (OCI layer digest, self-verifying). */
