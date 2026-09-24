@@ -41,6 +41,7 @@ import com.termux.view.TerminalViewClient
  * @param isActivePane Whether this view belongs to the focused (active) pane of a split view
  * @param onActivatePane Callback when the view gains focus while it is not the active pane
  * @param hyperlinksEnabled Whether OSC 8 hyperlinks underline and open on tap
+ * @param imagesEnabled Whether inline terminal images are painted
  * @param modifier Modifier to apply to the composable
  */
 @Composable
@@ -54,6 +55,7 @@ fun TerminalViewHost(
     isActivePane: Boolean = true,
     onActivatePane: (() -> Unit)? = null,
     hyperlinksEnabled: Boolean = true,
+    imagesEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
@@ -62,6 +64,7 @@ fun TerminalViewHost(
     var appliedTypeface by remember { mutableStateOf<Typeface?>(null) }
     var appliedLigatures by remember { mutableStateOf(true) }
     var appliedHyperlinks by remember { mutableStateOf(true) }
+    var appliedImages by remember { mutableStateOf(true) }
     var appliedPalette by remember { mutableStateOf<TerminalPalette?>(null) }
 
     val focusListener = remember(session, isActivePane, onActivatePane) {
@@ -97,6 +100,8 @@ fun TerminalViewHost(
                 appliedLigatures = enableLigatures
                 setHyperlinksEnabled(hyperlinksEnabled)
                 appliedHyperlinks = hyperlinksEnabled
+                setImagesEnabled(imagesEnabled)
+                appliedImages = imagesEnabled
                 attachSession(session)
                 appliedSession = session
                 // The emulator is usually not created until the view gets its size from
@@ -145,6 +150,10 @@ fun TerminalViewHost(
             if (appliedHyperlinks != hyperlinksEnabled) {
                 view.setHyperlinksEnabled(hyperlinksEnabled)
                 appliedHyperlinks = hyperlinksEnabled
+            }
+            if (appliedImages != imagesEnabled) {
+                view.setImagesEnabled(imagesEnabled)
+                appliedImages = imagesEnabled
             }
             if (appliedPalette != palette) {
                 if (TerminalViewRegistry.applyPalette(view, session, palette)) {

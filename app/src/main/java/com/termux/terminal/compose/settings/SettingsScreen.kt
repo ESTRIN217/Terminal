@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Link
@@ -178,6 +179,13 @@ fun SettingsScreen(
                     icon = Icons.Default.Link,
                     checked = state.terminalHyperlinks,
                     onCheckedChange = viewModel::setTerminalHyperlinks
+                )
+                SettingsSwitchTile(
+                    title = stringResource(R.string.terminal_images),
+                    subtitle = stringResource(R.string.terminal_images_desc),
+                    icon = Icons.Default.Image,
+                    checked = state.terminalImages,
+                    onCheckedChange = viewModel::setTerminalImages
                 )
                 SettingsSwitchTile(
                     title = stringResource(R.string.force_60hz),

@@ -114,6 +114,7 @@ import kotlinx.coroutines.delay
  * selection
  * @param onFontSizeStep Callback with a signed font-size step in pixels for pinch-zoom
  * @param hyperlinksEnabled Whether OSC 8 hyperlinks underline and open on tap
+ * @param imagesEnabled Whether inline terminal images (OSC 1337 / kitty) are painted
  * @param modifier Modifier to apply to the canvas
  */
 @Composable
@@ -131,6 +132,7 @@ internal fun ComposeTerminalCanvas(
     onFontSizeStep: (Float) -> Unit = {},
     onClientTap: (() -> Unit)? = null,
     hyperlinksEnabled: Boolean = true,
+    imagesEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     // Repaint tick bumped on every emulator screen update (see ComposeTerminalSessionClient).
@@ -660,7 +662,7 @@ internal fun ComposeTerminalCanvas(
         drawIntoCanvas { drawCanvas ->
             renderComposeFrame(
                 drawCanvas.nativeCanvas, emulator, topRow, paint, metrics, palette, enableLigatures,
-                cursorVisibleOverride, state.selection, hyperlinksEnabled
+                cursorVisibleOverride, state.selection, hyperlinksEnabled, imagesEnabled
             )
         }
         // Vertical scrollbar (legacy setVerticalScrollBarEnabled + computeVerticalScroll*):
@@ -748,6 +750,7 @@ internal fun measureCanvasMetrics(paint: Paint, typeface: Typeface, fontSize: Fl
  * @param selection The active text selection in external row coordinates, or null. Selected
  * cells paint with swapped colors exactly like the legacy renderer.
  * @param hyperlinksEnabled When false, OSC 8 hyperlink runs do not force an underline
+ * @param imagesEnabled When false, inline image placements are not painted
  */
 private fun renderComposeFrame(
     canvas: android.graphics.Canvas,
@@ -759,7 +762,8 @@ private fun renderComposeFrame(
     enableLigatures: Boolean,
     cursorVisibleOverride: Boolean? = null,
     selection: ComposeTerminalFrame.TextSelection? = null,
-    hyperlinksEnabled: Boolean = true
+    hyperlinksEnabled: Boolean = true,
+    imagesEnabled: Boolean = true
 ) {
     val colors = emulator.mColors.mCurrentColors
     val reverseVideo = emulator.isReverseVideo
@@ -776,6 +780,8 @@ private fun renderComposeFrame(
     val defaultBackground = colors[TextStyle.COLOR_INDEX_BACKGROUND]
 
     var heightOffset = metrics.lineSpacingAndAscent.toFloat()
+    // Per-row inheritance state for unicode-placeholder cells (reset per logical line).
+    val placeholderState = com.termux.terminal.KittyPlaceholderDecoder.RowState()
     for (row in 0 until rows) {
         heightOffset += metrics.lineSpacing
         val externalRow = topRow + row
@@ -798,7 +804,182 @@ private fun renderComposeFrame(
                 cursorStyle, heightOffset, paint, metrics, hyperlinksEnabled
             )
         }
+        // Images paint after text so previews sit above leftover cell glyphs.
+        if (imagesEnabled) {
+            drawComposeImages(canvas, emulator, screen, externalRow, heightOffset, metrics)
+            // Unicode placeholders (kitty U+10EEEE): decode + paint after text so the
+            // image covers the placeholder glyph; inheritance spans wrapped lines.
+            if (!(externalRow > topRow && screen.getLineWrap(externalRow - 1))) placeholderState.reset()
+            com.termux.terminal.KittyPlaceholderDecoder.collectRow(line, columns, placeholderState) { column, target ->
+                drawComposePlaceholderCell(canvas, emulator, column, target, heightOffset, metrics)
+            }
+        }
     }
+}
+
+/**
+ * Paint one unicode-placeholder cell as its grid slice of the virtual placement.
+ * Silently skips cells whose id or grid position does not resolve — the plain
+ * placeholder glyph drawn by the text run stays visible as fallback.
+ *
+ * @param canvas target canvas
+ * @param emulator the emulator (virtual placements + image registry)
+ * @param column screen column of the cell
+ * @param target decoded image id + grid position
+ * @param yBottom bottom of the row (baseline convention shared with text runs)
+ * @param metrics font metrics for cell geometry
+ */
+private fun drawComposePlaceholderCell(
+    canvas: android.graphics.Canvas,
+    emulator: TerminalEmulator,
+    column: Int,
+    target: com.termux.terminal.KittyPlaceholderDecoder.Target,
+    yBottom: Float,
+    metrics: CanvasFontMetrics
+) {
+    val vp = emulator.resolveVirtualPlacement(target.imageId) ?: return
+    if (target.gridRow < 0 || target.gridRow >= vp.rows ||
+        target.gridCol < 0 || target.gridCol >= vp.cols
+    ) return
+    val data = emulator.getImageData(vp.registryId) ?: return
+    val bitmap = composeBitmapFor(data) ?: return
+    val bmpW = bitmap.width
+    val bmpH = bitmap.height
+    val top = yBottom - metrics.lineSpacing
+    val bottom = yBottom
+    val srcTop = target.gridRow.toLong() * bmpH / vp.rows
+    val srcBottom = (target.gridRow + 1).toLong() * bmpH / vp.rows
+    val srcLeft = target.gridCol.toLong() * bmpW / vp.cols
+    val srcRight = (target.gridCol + 1).toLong() * bmpW / vp.cols
+    val left = column * metrics.fontWidth
+    val right = left + metrics.fontWidth
+    val src = android.graphics.Rect(
+        minOf(srcLeft.toInt(), bmpW - 1), minOf(srcTop.toInt(), bmpH - 1),
+        maxOf(srcLeft.toInt() + 1, minOf(srcRight.toInt(), bmpW)),
+        maxOf(srcTop.toInt() + 1, minOf(srcBottom.toInt(), bmpH))
+    )
+    val dst = android.graphics.RectF(left, top, right, bottom)
+    canvas.drawBitmap(bitmap, src, dst, null)
+}
+
+/**
+ * Paint every inline image placement intersecting [externalRow], mirroring the legacy
+ * [com.termux.view.TerminalRenderer] image strip logic.
+ *
+ * @param canvas target canvas
+ * @param emulator the emulator holding the image registry
+ * @param screen the buffer being drawn
+ * @param externalRow external (transcript-aware) row
+ * @param yBottom bottom of the row (same baseline convention as text runs)
+ * @param metrics font metrics for cell geometry
+ */
+private fun drawComposeImages(
+    canvas: android.graphics.Canvas,
+    emulator: TerminalEmulator,
+    screen: com.termux.terminal.TerminalBuffer,
+    externalRow: Int,
+    yBottom: Float,
+    metrics: CanvasFontMetrics
+) {
+    val top = yBottom - metrics.lineSpacing
+    val bottom = yBottom
+    var col = 0
+    val columns = emulator.mColumns
+    while (col < columns) {
+        val imageId = screen.getImageAt(externalRow, col)
+        if (imageId == 0) {
+            col++
+            continue
+        }
+        var spanEnd = col + 1
+        while (spanEnd < columns && screen.getImageAt(externalRow, spanEnd) == imageId) spanEnd++
+        val data = emulator.getImageData(imageId)
+        if (data != null && data.intersectsRow(externalRow)) {
+            drawComposeImageStrip(canvas, data, externalRow, col, spanEnd - col, top, bottom, metrics)
+        }
+        col = spanEnd
+    }
+}
+
+/**
+ * Cached decode bound to the [com.termux.terminal.TerminalImageData] instance it was
+ * decoded from: the registry can re-transmit under the same id (payload replaced with a
+ * new object) — the identity check makes the stale bitmap miss instead of showing old pixels.
+ */
+private class ComposeCachedImageBitmap(
+    val source: com.termux.terminal.TerminalImageData,
+    val bitmap: android.graphics.Bitmap
+)
+
+private val composeImageBitmaps = android.util.LruCache<Int, ComposeCachedImageBitmap>(16)
+
+private fun drawComposeImageStrip(
+    canvas: android.graphics.Canvas,
+    data: com.termux.terminal.TerminalImageData,
+    externalRow: Int,
+    startColumn: Int,
+    widthCells: Int,
+    top: Float,
+    bottom: Float,
+    metrics: CanvasFontMetrics
+) {
+    val bitmap = composeBitmapFor(data) ?: return
+    val bmpW = bitmap.width
+    val bmpH = bitmap.height
+    val localRow = externalRow - data.startRow
+    if (localRow < 0 || localRow >= data.cellsH) return
+    val srcTop = (localRow.toLong() * bmpH / data.cellsH).toInt()
+    val srcBottom = ((localRow + 1).toLong() * bmpH / data.cellsH).toInt()
+    val srcH = maxOf(1, srcBottom - srcTop)
+    val localCol = maxOf(0, startColumn - data.startCol)
+    val srcLeft = (localCol.toLong() * bmpW / data.cellsW).toInt()
+    val srcRight = ((localCol + widthCells).toLong() * bmpW / data.cellsW).toInt()
+    val left = startColumn * metrics.fontWidth
+    val right = left + widthCells * metrics.fontWidth
+    val src = android.graphics.Rect(
+        minOf(srcLeft, bmpW - 1), srcTop,
+        maxOf(srcLeft + 1, minOf(srcRight, bmpW)), minOf(bmpH, srcTop + srcH)
+    )
+    val dst = android.graphics.RectF(left, top, right, bottom)
+    canvas.drawBitmap(bitmap, src, dst, null)
+}
+
+/**
+ * Decode (or fetch from the identity-checked cache) the bitmap backing [data].
+ * Shared by the strip painter and the unicode-placeholder painter.
+ *
+ * @param data the registry image entry
+ * @return the bitmap, or null when the payload is empty or decoding failed
+ */
+private fun composeBitmapFor(
+    data: com.termux.terminal.TerminalImageData
+): android.graphics.Bitmap? {
+    val encoded = data.encoded
+    if (encoded == null || encoded.isEmpty()) return null
+    var bitmap = composeImageBitmaps.get(data.id)
+        ?.takeIf { it.source === data && !it.bitmap.isRecycled }
+        ?.bitmap
+    if (bitmap == null || bitmap.isRecycled) {
+        bitmap = try {
+            when (data.pixelFormat) {
+                com.termux.terminal.TerminalImageData.FORMAT_RGB_24,
+                com.termux.terminal.TerminalImageData.FORMAT_RGBA_32 -> {
+                    val argb = data.decodeRawArgb()
+                    if (argb == null || data.pixelWidth <= 0 || data.pixelHeight <= 0) null
+                    else android.graphics.Bitmap.createBitmap(
+                        argb, data.pixelWidth, data.pixelHeight, android.graphics.Bitmap.Config.ARGB_8888
+                    )
+                }
+                else -> android.graphics.BitmapFactory.decodeByteArray(encoded, 0, encoded.size)
+            }
+        } catch (e: OutOfMemoryError) {
+            null
+        } catch (e: IllegalArgumentException) {
+            null
+        } ?: return null
+        composeImageBitmaps.put(data.id, ComposeCachedImageBitmap(data, bitmap))
+    }
+    return bitmap
 }
 
 /**

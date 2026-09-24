@@ -58,6 +58,8 @@ public final class TerminalView extends View {
     public TerminalRenderer mRenderer;
     /** Whether OSC 8 hyperlink tap-to-open and underlines are enabled. */
     private boolean mHyperlinksEnabled = true;
+    /** Whether inline images (OSC 1337 / kitty) are painted. */
+    private boolean mImagesEnabled = true;
 
     /** Whether OpenType ligature shaping is enabled in the terminal renderer. */
     public boolean mEnableLigatures = true;
@@ -541,12 +543,14 @@ public final class TerminalView extends View {
     public void setTextSize(int textSize) {
         mRenderer = new TerminalRenderer(textSize, mRenderer == null ? Typeface.MONOSPACE : mRenderer.mTypeface, mEnableLigatures);
         mRenderer.setHyperlinksEnabled(mHyperlinksEnabled);
+        mRenderer.setImagesEnabled(mImagesEnabled);
         updateSize();
     }
 
     public void setTypeface(Typeface newTypeface) {
         mRenderer = new TerminalRenderer(mRenderer.mTextSize, newTypeface, mEnableLigatures);
         mRenderer.setHyperlinksEnabled(mHyperlinksEnabled);
+        mRenderer.setImagesEnabled(mImagesEnabled);
         updateSize();
         invalidate();
     }
@@ -562,6 +566,7 @@ public final class TerminalView extends View {
         mEnableLigatures = enableLigatures;
         mRenderer = new TerminalRenderer(mRenderer.mTextSize, mRenderer.mTypeface, mEnableLigatures);
         mRenderer.setHyperlinksEnabled(mHyperlinksEnabled);
+        mRenderer.setImagesEnabled(mImagesEnabled);
         updateSize();
         invalidate();
     }
@@ -574,8 +579,24 @@ public final class TerminalView extends View {
     public void setHyperlinksEnabled(boolean enabled) {
         if (mHyperlinksEnabled == enabled) return;
         mHyperlinksEnabled = enabled;
+        if (mEmulator != null) mEmulator.setHyperlinksEnabled(enabled);
         if (mRenderer != null) {
             mRenderer.setHyperlinksEnabled(enabled);
+            invalidate();
+        }
+    }
+
+    /**
+     * Enable or disable inline image painting (and the emulator's parse gate).
+     *
+     * @param enabled whether inline images are shown
+     */
+    public void setImagesEnabled(boolean enabled) {
+        if (mImagesEnabled == enabled) return;
+        mImagesEnabled = enabled;
+        if (mEmulator != null) mEmulator.setTerminalImagesEnabled(enabled);
+        if (mRenderer != null) {
+            mRenderer.setImagesEnabled(enabled);
             invalidate();
         }
     }
@@ -1070,6 +1091,10 @@ public final class TerminalView extends View {
         if (mEmulator == null || (newColumns != mEmulator.mColumns || newRows != mEmulator.mRows)) {
             mTermSession.updateSize(newColumns, newRows, (int) mRenderer.getFontWidth(), mRenderer.getFontLineSpacing());
             mEmulator = mTermSession.getEmulator();
+            if (mEmulator != null) {
+                mEmulator.setTerminalImagesEnabled(mImagesEnabled);
+                mEmulator.setHyperlinksEnabled(mHyperlinksEnabled);
+            }
             mClient.onEmulatorSet();
 
             // Update mTerminalCursorBlinkerRunnable inner class mEmulator on session change

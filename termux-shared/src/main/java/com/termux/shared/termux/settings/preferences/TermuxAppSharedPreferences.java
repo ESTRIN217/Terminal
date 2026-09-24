@@ -308,6 +308,24 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_HYPERLINKS, value, false);
     }
 
+    /**
+     * Whether inline terminal images (OSC 1337 / kitty) are painted.
+     *
+     * @return true when images are enabled (default true)
+     */
+    public boolean isTerminalImagesEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_IMAGES, TERMUX_APP.DEFAULT_VALUE_TERMINAL_IMAGES);
+    }
+
+    /**
+     * Persist the terminal images kill-switch.
+     *
+     * @param value whether inline images should be shown
+     */
+    public void setTerminalImagesEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_IMAGES, value, false);
+    }
+
 
 
     /**

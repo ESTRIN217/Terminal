@@ -1,12 +1,18 @@
 package com.termux.view;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.Typeface;
+import android.util.LruCache;
 
+import com.termux.terminal.KittyPlaceholderDecoder;
+import com.termux.terminal.KittyVirtualPlacement;
 import com.termux.terminal.TerminalBuffer;
 import com.termux.terminal.TerminalEmulator;
+import com.termux.terminal.TerminalImageData;
 import com.termux.terminal.TerminalRow;
 import com.termux.terminal.TextStyle;
 import com.termux.terminal.WcWidth;
@@ -24,7 +30,44 @@ public final class TerminalRenderer {
     final boolean mEnableLigatures;
     /** Whether OSC 8 hyperlinks paint with an underline (tap-to-open lives in the view/client). */
     private boolean mHyperlinksEnabled = true;
+    /** Whether inline images (OSC 1337 / kitty) are painted. */
+    private boolean mImagesEnabled = true;
+    /** Decoded bitmap cache keyed by registry id; entries dropped when the registry evicts. */
+    private final LruCache<Integer, CachedImageBitmap> mImageBitmaps = new LruCache<>(16);
     private final Paint mTextPaint = new Paint();
+
+    /** Per-row inheritance state for unicode-placeholder cells (reset per logical line). */
+    private final KittyPlaceholderDecoder.RowState mPlaceholderState = new KittyPlaceholderDecoder.RowState();
+    /** Scratch draw context for {@link #mPlaceholderVisitor} (avoids per-frame allocations). */
+    private Canvas mPlaceholderCanvas;
+    private TerminalEmulator mPlaceholderEmulator;
+    private float mPlaceholderTop;
+    private float mPlaceholderBottom;
+    /** Paints decoded placeholder cells; runs after text so opaque images cover the glyph. */
+    private final KittyPlaceholderDecoder.CellVisitor mPlaceholderVisitor =
+        new KittyPlaceholderDecoder.CellVisitor() {
+            @Override
+            public void visit(int column, KittyPlaceholderDecoder.Target target) {
+                drawPlaceholderCell(mPlaceholderCanvas, mPlaceholderEmulator, column, target,
+                    mPlaceholderTop, mPlaceholderBottom);
+            }
+        };
+
+    /**
+     * Cached decode bound to the {@link TerminalImageData} instance it was decoded
+     * from. The registry can re-transmit under the same id (payload replaced with a
+     * new object); identity check makes the stale bitmap miss instead of showing
+     * the old pixels.
+     */
+    private static final class CachedImageBitmap {
+        final TerminalImageData source;
+        final Bitmap bitmap;
+
+        CachedImageBitmap(TerminalImageData source, Bitmap bitmap) {
+            this.source = source;
+            this.bitmap = bitmap;
+        }
+    }
 
     /** The width of a single mono spaced character obtained by {@link Paint#measureText(String)} on a single 'X'. */
     final float mFontWidth;
@@ -66,6 +109,17 @@ public final class TerminalRenderer {
      */
     public void setHyperlinksEnabled(boolean enabled) {
         mHyperlinksEnabled = enabled;
+    }
+
+    /**
+     * Enable or disable inline image painting. Call when the
+     * {@code terminal_images} preference changes; also drops the bitmap cache.
+     *
+     * @param enabled whether inline images should be drawn
+     */
+    public void setImagesEnabled(boolean enabled) {
+        mImagesEnabled = enabled;
+        if (!enabled) mImageBitmaps.evictAll();
     }
 
     /** Render the terminal to a canvas with at a specified row scroll, and an optional rectangular selection. */
@@ -178,7 +232,154 @@ public final class TerminalRenderer {
             drawTextRun(canvas, line, palette, heightOffset, lastRunStartColumn, columnWidthSinceLastRun, lastRunStartIndex, charsSinceLastRun,
                 measuredWidthForRun, cursorColor, cursorShape, lastRunStyle, reverseVideo || invertCursorTextColor || lastRunInsideSelection,
                 lastRunHyperlink != 0 && mHyperlinksEnabled);
+            // Inline images paint after text so previews sit above leftover cell glyphs;
+            // the cursor was already painted inside the run above and stays on top of
+            // the image only when it falls outside the image rect (acceptable v1).
+            drawImagesForRow(mEmulator, screen, canvas, row, heightOffset);
+            // Unicode placeholders (kitty U+10EEEE): decode + paint after text so the
+            // image covers the placeholder glyph; inheritance spans wrapped lines.
+            if (mImagesEnabled) {
+                if (!(row > topRow && screen.getLineWrap(row - 1))) mPlaceholderState.reset();
+                mPlaceholderCanvas = canvas;
+                mPlaceholderEmulator = mEmulator;
+                mPlaceholderTop = heightOffset - mFontLineSpacing;
+                mPlaceholderBottom = heightOffset;
+                KittyPlaceholderDecoder.collectRow(lineObject, columns, mPlaceholderState, mPlaceholderVisitor);
+            }
         }
+    }
+
+    /**
+     * Paint one unicode-placeholder cell as its grid slice of the virtual placement.
+     * Silently skips cells whose id or grid position does not resolve — the plain
+     * placeholder glyph drawn by the text run stays visible as fallback.
+     *
+     * @param canvas   target
+     * @param emulator the emulator (virtual placements + image registry)
+     * @param column   screen column of the cell
+     * @param target   decoded image id + grid position
+     * @param top      cell top in canvas Y
+     * @param bottom   cell bottom (baseline convention shared with text runs)
+     */
+    private void drawPlaceholderCell(Canvas canvas, TerminalEmulator emulator, int column,
+                                     KittyPlaceholderDecoder.Target target, float top, float bottom) {
+        final KittyVirtualPlacement vp = emulator.resolveVirtualPlacement(target.imageId);
+        if (vp == null) return;
+        if (target.gridRow < 0 || target.gridRow >= vp.rows
+            || target.gridCol < 0 || target.gridCol >= vp.cols) return;
+        final TerminalImageData data = emulator.getImageData(vp.registryId);
+        final Bitmap bitmap = bitmapFor(data);
+        if (bitmap == null || bitmap.isRecycled()) return;
+        final int bmpW = bitmap.getWidth();
+        final int bmpH = bitmap.getHeight();
+        final int srcTop = (int) ((long) target.gridRow * bmpH / vp.rows);
+        final int srcBottom = (int) ((long) (target.gridRow + 1) * bmpH / vp.rows);
+        final int srcLeft = (int) ((long) target.gridCol * bmpW / vp.cols);
+        final int srcRight = (int) ((long) (target.gridCol + 1) * bmpW / vp.cols);
+        final float left = column * mFontWidth;
+        final float right = left + mFontWidth;
+        final android.graphics.Rect src = new android.graphics.Rect(
+            Math.min(srcLeft, bmpW - 1), Math.min(srcTop, bmpH - 1),
+            Math.max(srcLeft + 1, Math.min(srcRight, bmpW)),
+            Math.max(srcTop + 1, Math.min(srcBottom, bmpH)));
+        final android.graphics.RectF dst = new android.graphics.RectF(left, top, right, bottom);
+        canvas.drawBitmap(bitmap, src, dst, null);
+    }
+
+    /**
+     * Paint every inline image whose placement intersects {@code externalRow}.
+     * Each contiguous run of the same image id on the row draws once, with the
+     * source band taken from the matching columns of the bitmap.
+     *
+     * @param emulator     the emulator (image registry)
+     * @param screen       the buffer being drawn
+     * @param canvas       target canvas
+     * @param externalRow  external (transcript-aware) row
+     * @param yBottom      bottom of the row (same baseline convention as text runs)
+     */
+    private void drawImagesForRow(TerminalEmulator emulator, TerminalBuffer screen, Canvas canvas,
+                                  int externalRow, float yBottom) {
+        if (!mImagesEnabled) return;
+        final int columns = emulator.mColumns;
+        final float top = yBottom - mFontLineSpacing;
+        final float bottom = yBottom;
+        int col = 0;
+        while (col < columns) {
+            final int imageId = screen.getImageAt(externalRow, col);
+            if (imageId == 0) {
+                col++;
+                continue;
+            }
+            int spanEnd = col + 1;
+            while (spanEnd < columns && screen.getImageAt(externalRow, spanEnd) == imageId) spanEnd++;
+            final TerminalImageData data = emulator.getImageData(imageId);
+            if (data != null && data.intersectsRow(externalRow)) {
+                drawImageStrip(canvas, data, externalRow, col, spanEnd - col, top, bottom);
+            }
+            col = spanEnd;
+        }
+    }
+
+    /**
+     * Draw one horizontal strip of an image placement.
+     *
+     * @param canvas      target
+     * @param data        registry entry
+     * @param externalRow the row being painted
+     * @param startColumn first screen column of the strip
+     * @param widthCells  strip width in cells
+     * @param top         strip top in canvas Y
+     * @param bottom      strip bottom in canvas Y
+     */
+    private void drawImageStrip(Canvas canvas, TerminalImageData data, int externalRow,
+                                int startColumn, int widthCells, float top, float bottom) {
+        final Bitmap bitmap = bitmapFor(data);
+        if (bitmap == null || bitmap.isRecycled()) return;
+        final int bmpW = bitmap.getWidth();
+        final int bmpH = bitmap.getHeight();
+        final int localRow = externalRow - data.startRow;
+        if (localRow < 0 || localRow >= data.cellsH) return;
+        final int srcTop = (int) ((long) localRow * bmpH / data.cellsH);
+        final int srcBottom = (int) ((long) (localRow + 1) * bmpH / data.cellsH);
+        final int srcH = Math.max(1, srcBottom - srcTop);
+        // Horizontal source slice matches which columns of the placement remain.
+        final int localCol = Math.max(0, startColumn - data.startCol);
+        final int srcLeft = (int) ((long) localCol * bmpW / data.cellsW);
+        final int srcRight = (int) ((long) (localCol + widthCells) * bmpW / data.cellsW);
+        final float left = startColumn * mFontWidth;
+        final float right = left + widthCells * mFontWidth;
+        final android.graphics.Rect src = new android.graphics.Rect(
+            Math.min(srcLeft, bmpW - 1), srcTop,
+            Math.max(srcLeft + 1, Math.min(srcRight, bmpW)), Math.min(bmpH, srcTop + srcH));
+        final android.graphics.RectF dst = new android.graphics.RectF(left, top, right, bottom);
+        canvas.drawBitmap(bitmap, src, dst, null);
+    }
+
+    /**
+     * Decode (once) and cache the bitmap for a registry entry.
+     *
+     * @param data the image entry
+     * @return the bitmap, or {@code null} when decode fails
+     */
+    private Bitmap bitmapFor(TerminalImageData data) {
+        if (data == null || data.encoded == null || data.encoded.length == 0) return null;
+        final CachedImageBitmap cached = mImageBitmaps.get(data.id);
+        if (cached != null && cached.source == data && !cached.bitmap.isRecycled()) return cached.bitmap;
+        Bitmap decoded = null;
+        try {
+            if (data.pixelFormat == TerminalImageData.FORMAT_RGB_24
+                || data.pixelFormat == TerminalImageData.FORMAT_RGBA_32) {
+                final int[] argb = data.decodeRawArgb();
+                if (argb != null && data.pixelWidth > 0 && data.pixelHeight > 0)
+                    decoded = Bitmap.createBitmap(argb, data.pixelWidth, data.pixelHeight, Bitmap.Config.ARGB_8888);
+            } else {
+                decoded = BitmapFactory.decodeByteArray(data.encoded, 0, data.encoded.length);
+            }
+        } catch (OutOfMemoryError | IllegalArgumentException e) {
+            return null;
+        }
+        if (decoded != null) mImageBitmaps.put(data.id, new CachedImageBitmap(data, decoded));
+        return decoded;
     }
 
     private void drawTextRun(Canvas canvas, char[] text, int[] palette, float y, int startColumn, int runWidthColumns,

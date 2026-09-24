@@ -53,6 +53,12 @@ public final class TerminalRow {
      * "no hyperlink" for a cell. Indices refer to {@link TerminalEmulator}'s URI table.
      */
     int[] mHyperlinkIds;
+    /**
+     * Inline image registry index per column, parallel to {@link #mStyle}.
+     * Lazily allocated (null until the row holds at least one image); {@code 0} means
+     * "no image" for a cell. Indices refer to {@link TerminalEmulator}'s image table.
+     */
+    int[] mImageIds;
     /** If this row might contain chars with width != 1, used for deactivating fast path */
     boolean mHasNonOneWidthOrSurrogateChars;
 
@@ -88,8 +94,10 @@ public final class TerminalRow {
             }
             final long styleAtSource = line.getStyle(sourceX1);
             final int hyperlinkAtSource = line.getHyperlink(sourceX1);
+            final int imageAtSource = line.getImage(sourceX1);
             setChar(destinationX, codePoint, styleAtSource);
             setHyperlink(destinationX, hyperlinkAtSource);
+            setImage(destinationX, imageAtSource);
         }
     }
 
@@ -154,6 +162,7 @@ public final class TerminalRow {
         Arrays.fill(mText, ' ');
         Arrays.fill(mStyle, style);
         if (mHyperlinkIds != null) Arrays.fill(mHyperlinkIds, 0);
+        if (mImageIds != null) Arrays.fill(mImageIds, 0);
         mSpaceUsed = (short) mColumns;
         mHasNonOneWidthOrSurrogateChars = false;
     }
@@ -164,8 +173,10 @@ public final class TerminalRow {
             throw new IllegalArgumentException("TerminalRow.setChar(): columnToSet=" + columnToSet + ", codePoint=" + codePoint + ", style=" + style);
 
         mStyle[columnToSet] = style;
-        // Overwriting a cell drops any OSC 8 hyperlink; the emulator re-stamps after emit.
+        // Overwriting a cell drops any OSC 8 hyperlink or inline image; the emulator
+        // re-stamps hyperlinks after emit (images are only stamped by their handler).
         if (mHyperlinkIds != null) mHyperlinkIds[columnToSet] = 0;
+        if (mImageIds != null) mImageIds[columnToSet] = 0;
 
         final int newCodePointDisplayWidth = WcWidth.width(codePoint);
 
@@ -318,6 +329,34 @@ public final class TerminalRow {
         }
         if (mHyperlinkIds == null) mHyperlinkIds = new int[mColumns];
         mHyperlinkIds[column] = hyperlinkId;
+    }
+
+    /**
+     * Inline image registry index for a column.
+     *
+     * @param column the cell column
+     * @return the image index, or {@code 0} when the cell has no image
+     */
+    public final int getImage(int column) {
+        return (mImageIds == null) ? 0 : mImageIds[column];
+    }
+
+    /**
+     * Set (or clear with 0) the inline image index for a column. Allocates the
+     * side-band array on first non-zero write.
+     *
+     * @param column  the cell column
+     * @param imageId image registry index, or {@code 0} to clear
+     */
+    public final void setImage(int column, int imageId) {
+        if (column < 0 || column >= mColumns)
+            throw new IllegalArgumentException("TerminalRow.setImage(): column=" + column + ", imageId=" + imageId);
+        if (imageId == 0) {
+            if (mImageIds != null) mImageIds[column] = 0;
+            return;
+        }
+        if (mImageIds == null) mImageIds = new int[mColumns];
+        mImageIds[column] = imageId;
     }
 
 }

@@ -344,6 +344,8 @@
     <string name="native_compose_renderer_desc">Paint the terminal with a Compose Canvas spike. Legacy view stays as fallback</string>
     <string name="terminal_hyperlinks">Terminal hyperlinks [Experimental]</string>
     <string name="terminal_hyperlinks_desc">Underline OSC 8 links and open them on tap</string>
+    <string name="terminal_images">Terminal images [Experimental]</string>
+    <string name="terminal_images_desc">Show inline images (OSC 1337 / kitty graphics)</string>
     <string name="force_60hz">Force 60 Hz (battery)</string>
     <string name="force_60hz_desc">Limit the display to 60 Hz instead of the maximum refresh rate</string>
     <string name="save_to_a_files">Save to a files</string>

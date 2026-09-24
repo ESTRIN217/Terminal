@@ -299,6 +299,7 @@ public final class TerminalBuffer {
                 int currentOldCol = 0;
                 long styleAtCol = 0;
                 int hyperlinkAtCol = 0;
+                int imageAtCol = 0;
                 for (int i = 0; i < lastNonSpaceIndex; i++) {
                     // Note that looping over java character, not cells.
                     char c = oldLine.mText[i];
@@ -308,6 +309,7 @@ public final class TerminalBuffer {
                     if (displayWidth > 0) {
                         styleAtCol = oldLine.getStyle(currentOldCol);
                         hyperlinkAtCol = oldLine.getHyperlink(currentOldCol);
+                        imageAtCol = oldLine.getImage(currentOldCol);
                     }
 
                     // Line wrap as necessary:
@@ -328,6 +330,9 @@ public final class TerminalBuffer {
                     setHyperlink(outputColumn, currentOutputExternalRow, hyperlinkAtCol);
                     if (displayWidth == 2 && outputColumn + 1 < mColumns)
                         setHyperlink(outputColumn + 1, currentOutputExternalRow, hyperlinkAtCol);
+                    setImage(outputColumn, currentOutputExternalRow, imageAtCol);
+                    if (displayWidth == 2 && outputColumn + 1 < mColumns)
+                        setImage(outputColumn + 1, currentOutputExternalRow, imageAtCol);
 
                     if (displayWidth > 0) {
                         if (oldCursorRow == externalOldRow && oldCursorColumn == currentOldCol) {
@@ -490,6 +495,32 @@ public final class TerminalBuffer {
         TerminalRow row = mLines[externalToInternalRow(externalRow)];
         if (row == null || column < 0 || column >= mColumns) return 0;
         return row.getHyperlink(column);
+    }
+
+    /**
+     * Set (or clear with 0) the inline image index on a cell of the visible screen.
+     *
+     * @param column  screen column (0-based)
+     * @param row     external (transcript-aware) row
+     * @param imageId image registry index, or {@code 0} to clear
+     */
+    public void setImage(int column, int row, int imageId) {
+        if (row < 0 || row >= mScreenRows || column < 0 || column >= mColumns)
+            throw new IllegalArgumentException("TerminalBuffer.setImage(): row=" + row + ", column=" + column + ", mScreenRows=" + mScreenRows + ", mColumns=" + mColumns);
+        allocateFullLineIfNecessary(externalToInternalRow(row)).setImage(column, imageId);
+    }
+
+    /**
+     * Inline image registry index at a cell.
+     *
+     * @param externalRow external (transcript-aware) row
+     * @param column      screen column (0-based)
+     * @return the image index, or {@code 0} when the cell has no image
+     */
+    public int getImageAt(int externalRow, int column) {
+        TerminalRow row = mLines[externalToInternalRow(externalRow)];
+        if (row == null || column < 0 || column >= mColumns) return 0;
+        return row.getImage(column);
     }
 
     /** Support for http://vt100.net/docs/vt510-rm/DECCARA and http://vt100.net/docs/vt510-rm/DECCARA */

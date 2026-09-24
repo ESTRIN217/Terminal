@@ -2,6 +2,9 @@ package com.termux.terminal;
 
 import android.util.Base64;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -95,6 +98,26 @@ public final class TerminalEmulator {
     /** Needs to be large enough to contain reasonable OSC 52 pastes. */
     private static final int MAX_OSC_STRING_LENGTH = 8192;
 
+    /**
+     * Raised cap for OSC 1337 / kitty graphics payloads (base64 image data).
+     * ~4 MiB of base64 ≈ 3 MiB decoded — enough for typical inline previews
+     * without letting a hostile stream allocate unbounded buffers.
+     */
+    private static final int MAX_IMAGE_STRING_LENGTH = 4 * 1024 * 1024;
+
+    /** Max encoded bytes retained per registered inline image. */
+    private static final int MAX_IMAGE_ENCODED_BYTES = 3 * 1024 * 1024;
+
+    /** Max total encoded bytes across the session image registry (LRU-evicted). */
+    private static final int MAX_IMAGE_REGISTRY_BYTES = 24 * 1024 * 1024;
+
+    /**
+     * Uniform kitty file-media failure reply (spec): every read failure — missing,
+     * unreadable, non-regular, sensitive path, truncated vs claimed size — must
+     * answer identically so a remote client cannot probe the local filesystem.
+     */
+    private static final String KITTY_MEDIA_ERROR = "EBADF:Failed to read image file";
+
     /** DECSET 1 - application cursor keys. */
     private static final int DECSET_BIT_APPLICATION_CURSOR_KEYS = 1;
     private static final int DECSET_BIT_REVERSE_VIDEO = 1 << 1;
@@ -142,6 +165,52 @@ public final class TerminalEmulator {
     private final ArrayList<String> mHyperlinkUris = new ArrayList<>();
     /** URI registry index of the currently open OSC 8 link, or 0 when closed. */
     private int mCurrentHyperlinkUriIndex;
+
+    /**
+     * Session-scoped inline image registry (OSC 1337 / kitty). Index 0 is unused
+     * ("no image"); side-band cell arrays store 1-based indices into this list.
+     * Entries are never removed in place (indices must stay stable); overflow
+     * evicts the oldest by clearing its payload so lookups return null.
+     */
+    private final ArrayList<TerminalImageData> mImageDataList = new ArrayList<>();
+    /** Sum of {@link TerminalImageData#encoded} lengths currently retained. */
+    private int mImageDataBytesTotal;
+    /**
+     * Kill-switch for inline images ({@code terminal_images} pref). When false,
+     * new sequences are ignored (no bytes retained) and renderers skip drawing.
+     */
+    private boolean mTerminalImagesEnabled = true;
+    /**
+     * Kill-switch for OSC 8 hyperlinks ({@code terminal_hyperlinks} pref).
+     * When false, new OSC 8 sequences are ignored and Feature Reporting omits {@code H}.
+     */
+    private boolean mHyperlinksEnabled = true;
+    /** Accumulated Base64 for a multi-chunk kitty transmit ({@code m=1}…{@code m=0}), or null. */
+    private StringBuilder mKittyChunkB64;
+    /** Control data from the first chunk of an in-flight multi-chunk transmit. */
+    private String mKittyChunkControl;
+    /** Kitty protocol image id ({@code i=}) → registry index in {@link #mImageDataList}. */
+    private final java.util.HashMap<Integer, Integer> mKittyImageIds = new java.util.HashMap<>();
+    /**
+     * Client image id → unicode-placeholder virtual placement ({@code U=1}).
+     * Keyed by the client {@code i=} because that is the id the placeholder
+     * foreground color encodes.
+     */
+    private final java.util.HashMap<Integer, KittyVirtualPlacement> mKittyVirtualPlacements = new java.util.HashMap<>();
+    /** Host roots for kitty file media ({@code t=f/t=t/t=s}), or null when unconfigured. */
+    private String mImageMediaRootfs;
+    private String mImageMediaShm;
+    private String mImageMediaSdcard;
+    private String mImageMediaStorage;
+    /** Canonicalized roots for the post-symlink allowlist (null when unconfigured). */
+    private String mImageMediaRootfsCanonical;
+    private String mImageMediaShmCanonical;
+    private String mImageMediaSdcardCanonical;
+    private String mImageMediaStorageCanonical;
+    /** Terminal name reported by XTVERSION ({@code CSI > 0 q}). */
+    private static final String XT_VERSION_NAME = "Terminal";
+    /** Version string for XTVERSION; overridable via {@link #setXtVersion}. */
+    private String mXtVersion = "2.0.0";
 
     /** The cursor position. Between (0,0) and (mRows-1, mColumns-1). */
     private int mCursorRow, mCursorCol;
@@ -196,6 +265,12 @@ public final class TerminalEmulator {
 
     /** Holds OSC and device control arguments, which can be strings. */
     private final StringBuilder mOSCOrDeviceControlArgs = new StringBuilder();
+    /**
+     * Set when an OSC payload exceeded its buffer cap: remaining bytes are
+     * swallowed until the terminator and the sequence is discarded (so a
+     * hostile multi-megabyte image never dumps onto the screen).
+     */
+    private boolean mOscOverflow;
 
     /**
      * True if the current escape sequence should continue, false if the current escape sequence should be terminated.
@@ -1047,27 +1122,741 @@ public final class TerminalEmulator {
     }
 
     /**
-     * When in {@link #ESC_APC} (APC, Application Program Command) sequence.
+     * Accumulate APC payload (kitty graphics uses {@code ESC _ G ... ESC \}).
+     * Overflow is absorbed silently so the terminator still lands.
      */
     private void doApc(int b) {
         if (b == 27) {
             continueSequence(ESC_APC_ESCAPE);
+            return;
         }
-        // Eat APC sequences silently for now.
+        if (mOSCOrDeviceControlArgs.length() < MAX_IMAGE_STRING_LENGTH) {
+            mOSCOrDeviceControlArgs.appendCodePoint(b);
+        }
     }
 
     /**
-     * When in {@link #ESC_APC} (APC, Application Program Command) sequence.
+     * When in {@link #ESC_APC_ESCAPE} (APC, Application Program Command) sequence.
      */
     private void doApcEscape(int b) {
         if (b == '\\') {
             // A String Terminator (ST), ending the APC escape sequence.
+            final String payload = mOSCOrDeviceControlArgs.toString();
+            mOSCOrDeviceControlArgs.setLength(0);
+            handleKittyGraphics(payload);
             finishSequence();
         } else {
             // The Escape character was not the start of a String Terminator (ST),
             // but instead just data inside of the APC escape sequence.
+            if (mOSCOrDeviceControlArgs.length() < MAX_IMAGE_STRING_LENGTH) {
+                mOSCOrDeviceControlArgs.appendCodePoint(27).appendCodePoint(b);
+            }
             continueSequence(ESC_APC);
         }
+    }
+
+    /**
+     * Kitty graphics protocol: query, transmit ({@code a=t}/{@code a=T}), place
+     * ({@code a=p}), delete ({@code a=d}), multi-chunk Base64 ({@code m=0/1}),
+     * PNG/JPEG and raw RGB/RGBA ({@code f=}), response suppression ({@code q=}).
+     * Virtual placements and animation stay out of scope.
+     *
+     * @param payload everything between {@code ESC _} and {@code ESC \}
+     */
+    private void handleKittyGraphics(String payload) {
+        if (payload.isEmpty() || payload.charAt(0) != 'G') return;
+
+        String control = payload.substring(1);
+        String data = null;
+        final int semicolon = control.indexOf(';');
+        if (semicolon >= 0) {
+            data = control.substring(semicolon + 1);
+            control = control.substring(0, semicolon);
+        }
+
+        // Spec: a delete command cancels an in-flight multi-chunk transfer (the pending
+        // payload is dropped and the delete is dispatched normally below).
+        if (mKittyChunkB64 != null && kittyControlIsDelete(control)) {
+            mKittyChunkB64 = null;
+            mKittyChunkControl = null;
+        }
+
+        // Continuation of an in-flight multi-chunk transfer: metadata lives on the first chunk.
+        if (mKittyChunkB64 != null) {
+            if (data != null && !data.isEmpty()) mKittyChunkB64.append(data);
+            int more = 0;
+            for (String part : control.split(",")) {
+                if (part.startsWith("m=")) more = parseKittyInt(part.substring(2), 0);
+            }
+            if (more == 0) {
+                final String fullB64 = mKittyChunkB64.toString();
+                final String firstControl = mKittyChunkControl;
+                mKittyChunkB64 = null;
+                mKittyChunkControl = null;
+                processKittyCommand(firstControl, fullB64);
+            }
+            return;
+        }
+
+        String action = null;
+        int moreChunks = 0;
+        int suppress = -1; // -1 = default (reply), else q=
+        for (String part : control.split(",")) {
+            final int eq = part.indexOf('=');
+            if (eq <= 0) continue;
+            final String key = part.substring(0, eq);
+            final String value = part.substring(eq + 1);
+            if (key.equals("a")) action = value;
+            else if (key.equals("m")) moreChunks = parseKittyInt(value, 0);
+            else if (key.equals("q")) suppress = parseKittyInt(value, -1);
+        }
+
+        // Start (or continue joining) a multi-chunk transfer. First chunk carries full metadata.
+        if (moreChunks == 1) {
+            if (!mTerminalImagesEnabled) {
+                // Still swallow chunks so the stream stays aligned; reply only if allowed.
+                mKittyChunkB64 = new StringBuilder();
+                mKittyChunkControl = control;
+                return;
+            }
+            mKittyChunkB64 = new StringBuilder(data == null ? "" : data);
+            mKittyChunkControl = control;
+            return;
+        }
+
+        processKittyCommand(control, data);
+    }
+
+    /**
+     * Whether a graphics control list declares a delete action ({@code a=d}/{@code A=D}).
+     *
+     * @param control comma-separated {@code key=value} list (no leading {@code G})
+     * @return true when the command is a delete
+     */
+    private static boolean kittyControlIsDelete(String control) {
+        for (String part : control.split(",")) {
+            final int eq = part.indexOf('=');
+            if (eq != 1) continue;
+            final char key = part.charAt(0);
+            if (key != 'a' && key != 'A') continue;
+            final String value = part.substring(2);
+            if (value.equals("d") || value.equals("D")) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Execute one fully-assembled kitty graphics command (single chunk or the
+     * last of a multi-chunk transfer).
+     *
+     * @param control comma-separated {@code key=value} list (no leading {@code G})
+     * @param data    Base64 payload after {@code ;}, or null
+     */
+    private void processKittyCommand(String control, String data) {
+        String action = null;
+        int widthCells = -1;
+        int heightCells = -1;
+        int pixelWidth = 0;
+        int pixelHeight = 0;
+        int imageId = 0;       // protocol i=
+        int placementId = 0;   // protocol p= (accepted, single placement in v1)
+        int responseMode = 0;  // q= : 0 always, 1 errors only, 2 never
+        int virtualPlacement = 0; // U= : 1 = unicode-placeholder virtual placement
+        String format = null;
+        String deleteMode = null;
+        String mediaType = "d"; // t= : d direct, f file, t temp file, s shared memory
+        int fileOffset = 0;     // O= : byte offset into the file
+        int fileSize = 0;       // S= : bytes to read (0 = until EOF)
+        int deleteX = -1, deleteY = -1;
+        for (String part : control.split(",")) {
+            if (part.isEmpty()) continue;
+            final int eq = part.indexOf('=');
+            if (eq <= 0) continue;
+            final String key = part.substring(0, eq);
+            final String value = part.substring(eq + 1);
+            switch (key) {
+                case "a":
+                case "A": action = value; break;
+                case "w": widthCells = parseKittyInt(value, -1); break;
+                case "h": heightCells = parseKittyInt(value, -1); break;
+                case "c": if (widthCells < 0) widthCells = parseKittyInt(value, -1); break;
+                case "r": if (heightCells < 0) heightCells = parseKittyInt(value, -1); break;
+                case "s": pixelWidth = parseKittyInt(value, 0); break;
+                case "v": pixelHeight = parseKittyInt(value, 0); break;
+                case "i":
+                case "I": imageId = parseKittyInt(value, 0); break;
+                case "p": placementId = parseKittyInt(value, 0); break;
+                case "U": virtualPlacement = parseKittyInt(value, 0); break;
+                case "f": format = value; break;
+                case "q": responseMode = parseKittyInt(value, 0); break;
+                case "d": deleteMode = value; break;
+                case "t": mediaType = value; break;
+                case "O": fileOffset = Math.max(0, parseKittyInt(value, 0)); break;
+                case "S": fileSize = Math.max(0, parseKittyInt(value, 0)); break;
+                case "x": deleteX = parseKittyInt(value, -1); break;
+                case "y": deleteY = parseKittyInt(value, -1); break;
+                default: break;
+            }
+        }
+        final boolean virtual = (virtualPlacement == 1);
+
+        // Spec: only the four documented media may be requested.
+        final boolean knownMedium = "d".equals(mediaType) || "f".equals(mediaType)
+            || "t".equals(mediaType) || "s".equals(mediaType);
+        if (!knownMedium) {
+            replyKitty(imageId, placementId, "INVALID", responseMode);
+            return;
+        }
+
+        if ("q".equals(action)) {
+            // Probe support: never paint (ApcTest). Independent of kill-switch.
+            // Spec: reply only when the client specified an image id; q=1 hides OK.
+            if (!"d".equals(mediaType)) {
+                // File/shm probe (yazi kgp_shm): try to load without storing or
+                // unlinking; never touch the filesystem while images are disabled.
+                if (!mTerminalImagesEnabled) {
+                    replyKitty(imageId, placementId, "INVALID", responseMode);
+                    return;
+                }
+                final byte[] probe = readImageFileMedium(mediaType, data, fileOffset, fileSize);
+                replyKitty(imageId, placementId,
+                    probe != null ? "OK" : KITTY_MEDIA_ERROR, responseMode);
+                return;
+            }
+            replyKitty(imageId, placementId, "OK", responseMode);
+            return;
+        }
+        // Spec: an absent or unrecognized action (animation, compose, malformed keys)
+        // has no effect and fails with EINVAL.
+        final boolean knownAction = "t".equals(action) || "T".equals(action)
+            || "p".equals(action) || "P".equals(action)
+            || "d".equals(action) || "D".equals(action);
+        if (!knownAction) {
+            replyKitty(imageId, placementId, "EINVAL", responseMode);
+            return;
+        }
+        if (!mTerminalImagesEnabled) {
+            if ("t".equals(action) || "T".equals(action) || "p".equals(action)) {
+                replyKitty(imageId, placementId, "INVALID", responseMode);
+            }
+            return;
+        }
+
+        if ("t".equals(action) || "T".equals(action)) {
+            handleKittyTransmit(control, data, "T".equals(action), imageId, format,
+                mediaType, fileOffset, fileSize,
+                widthCells, heightCells, pixelWidth, pixelHeight, placementId, responseMode, virtual);
+            return;
+        }
+        if ("p".equals(action) || "P".equals(action)) {
+            handleKittyPlace(imageId, widthCells, heightCells, placementId, responseMode, virtual);
+            return;
+        }
+        if ("d".equals(action) || "D".equals(action)) {
+            handleKittyDelete(deleteMode, imageId, deleteX, deleteY, responseMode);
+            return;
+        }
+    }
+
+    /**
+     * Send a kitty graphics response {@code ESC _ G i=<id>[,p=<pid>];<message> ESC \}.
+     *
+     * <p>Spec semantics: replies are emitted only when the client specified an image
+     * id ({@code i=0} stays silent), {@code q=1} suppresses {@code OK} replies and
+     * {@code q=2} suppresses failure replies. A client {@code p=} placement id is
+     * echoed in the acknowledgement; no other keys are added.</p>
+     *
+     * @param imageId      client {@code i=} value; {@code 0} sends nothing
+     * @param placementId  client {@code p=} value; {@code 0} omits the {@code p=} field
+     * @param message      {@code OK} or a printable-ASCII error message
+     * @param responseMode client {@code q=} value ({@code 0/1/2})
+     */
+    private void replyKitty(int imageId, int placementId, String message, int responseMode) {
+        if (imageId == 0) return;
+        final boolean ok = "OK".equals(message);
+        if (ok ? responseMode >= 1 : responseMode >= 2) return;
+        final StringBuilder reply = new StringBuilder("\033_Gi=").append(imageId);
+        if (placementId != 0) reply.append(",p=").append(placementId);
+        reply.append(';').append(message).append("\033\\");
+        mSession.write(reply.toString());
+    }
+
+    /**
+     * Transmit image bytes; when {@code alsoDisplay}, stamp at the cursor too.
+     *
+     * @param control     full control list (kept for future keys)
+     * @param data        Base64 payload (image bytes for {@code t=d}, file path otherwise)
+     * @param alsoDisplay whether {@code a=T} (display) vs {@code a=t} (store only)
+     * @param protocolId  client {@code i=} (0 = auto)
+     * @param format      {@code f=} value
+     * @param mediaType   {@code t=} transmission medium ({@code d/f/t/s})
+     * @param fileOffset  {@code O=} byte offset into the medium
+     * @param fileSize    {@code S=} bytes to read (0 = until EOF)
+     * @param widthCells  requested width in cells, or -1
+     * @param heightCells requested height in cells, or -1
+     * @param pixelWidth  intrinsic px width, or 0
+     * @param pixelHeight intrinsic px height, or 0
+     * @param responseMode {@code q=} suppression
+     * @param virtual     {@code U=1}: create a unicode-placeholder virtual placement instead of stamping
+     */
+    private void handleKittyTransmit(String control, String data, boolean alsoDisplay,
+                                     int protocolId, String format, String mediaType,
+                                     int fileOffset, int fileSize,
+                                     int widthCells, int heightCells,
+                                     int pixelWidth, int pixelHeight,
+                                     int placementId, int responseMode, boolean virtual) {
+        final int fmt = parseKittyFormatCode(format);
+        if (fmt < 0) {
+            replyKitty(protocolId, placementId, "INVALID", responseMode);
+            return;
+        }
+        final byte[] bytes;
+        if ("d".equals(mediaType)) {
+            if (data == null || data.isEmpty()) {
+                replyKitty(protocolId, placementId, "INVALID", responseMode);
+                return;
+            }
+            bytes = ImageBase64.decode(data);
+            if (bytes == null) {
+                Logger.logWarn(mClient, LOG_TAG, "kitty graphics: invalid base64 payload");
+                replyKitty(protocolId, placementId, "ENCODED_DATA_ERR", responseMode);
+                return;
+            }
+        } else {
+            // f/t/s: the payload is a base64 file path or shm name; every read
+            // failure collapses into the single uniform spec error.
+            bytes = readImageFileMedium(mediaType, data, fileOffset, fileSize);
+            if (bytes == null) {
+                replyKitty(protocolId, placementId, KITTY_MEDIA_ERROR, responseMode);
+                return;
+            }
+        }
+
+        int pW = pixelWidth;
+        int pH = pixelHeight;
+        int pixelFormat = TerminalImageData.FORMAT_ENCODED;
+        if (fmt == TerminalImageData.FORMAT_RGB_24 || fmt == TerminalImageData.FORMAT_RGBA_32) {
+            pixelFormat = fmt;
+            final int bpp = (fmt == TerminalImageData.FORMAT_RGBA_32) ? 4 : 3;
+            if (pW > 0 && pH > 0 && bytes.length < pW * pH * bpp) {
+                replyKitty(protocolId, placementId, "INVALID", responseMode);
+                return;
+            }
+        } else {
+            // PNG/JPEG: sniff IHDR when the client omitted s=/v=.
+            final int[] sniffed = sniffPngSize(bytes);
+            if (sniffed != null) {
+                if (pW == 0) pW = sniffed[0];
+                if (pH == 0) pH = sniffed[1];
+            }
+        }
+
+        // Spec: re-transmitting an existing protocol id replaces the payload AND deletes
+        // every placement of the old image (stamps, coords, virtual placements).
+        final Integer existingReg = (protocolId != 0) ? mKittyImageIds.get(protocolId) : null;
+        int regId;
+        if (existingReg != null && getImageData(existingReg) != null) {
+            regId = existingReg;
+            final TerminalImageData old = getImageData(regId);
+            mImageDataBytesTotal -= (old.encoded != null) ? old.encoded.length : 0;
+            clearStampsFor(regId);
+            mKittyVirtualPlacements.values().removeIf(vp -> vp.registryId == regId);
+            mImageDataList.set(regId - 1, new TerminalImageData(regId, bytes, -1, -1,
+                0, 0, pW, pH, pixelFormat));
+            mImageDataBytesTotal += bytes.length;
+            evictImagesForBudget(0); // may evict others; keep this entry if possible
+        } else {
+            regId = registerImage(bytes, pW, pH, pixelFormat);
+            if (regId == 0) {
+                replyKitty(protocolId, placementId, "INVALID", responseMode);
+                return;
+            }
+            if (protocolId != 0) mKittyImageIds.put(protocolId, regId);
+        }
+
+        if (alsoDisplay) {
+            if (widthCells < 0 && heightCells < 0) {
+                if (pW > 0) widthCells = cellsFromPixels(pW, true);
+                if (pH > 0) heightCells = cellsFromPixels(pH, false);
+            }
+            if (widthCells < 0 && heightCells < 0) {
+                replyKitty(protocolId, placementId, "INVALID", responseMode);
+                return;
+            }
+            if (widthCells < 0) widthCells = deriveMissingCells(heightCells, pW, pH, true);
+            if (heightCells < 0) heightCells = deriveMissingCells(widthCells, pW, pH, false);
+            if (virtual) {
+                // U=1: fit-to-grid virtual placement; no cells stamped, cursor untouched.
+                createVirtualPlacement(protocolId, regId, widthCells, heightCells);
+            } else if (!stampImage(regId, mCursorRow, mCursorCol, widthCells, heightCells)) {
+                replyKitty(protocolId, placementId, "INVALID", responseMode);
+                return;
+            }
+        }
+
+        replyKitty(protocolId, placementId, "OK", responseMode);
+    }
+
+    /**
+     * Place a previously transmitted image at the cursor ({@code a=p}).
+     *
+     * @param protocolId   client {@code i=} mapping into {@link #mKittyImageIds}
+     * @param widthCells   override width in cells, or -1
+     * @param heightCells  override height in cells, or -1
+     * @param placementId  client {@code p=} value echoed in the ack
+     * @param responseMode {@code q=} suppression
+     * @param virtual      {@code U=1}: create a unicode-placeholder virtual placement instead of stamping
+     */
+    private void handleKittyPlace(int protocolId, int widthCells, int heightCells,
+                                  int placementId, int responseMode, boolean virtual) {
+        Integer regId = (protocolId != 0) ? mKittyImageIds.get(protocolId) : null;
+        final TerminalImageData data = (regId != null) ? getImageData(regId) : null;
+        if (data == null) {
+            replyKitty(protocolId, placementId, "ENOENT:Image not found", responseMode);
+            return;
+        }
+        int w = widthCells;
+        int h = heightCells;
+        if (w < 0 && h < 0) {
+            if (data.pixelWidth > 0) w = cellsFromPixels(data.pixelWidth, true);
+            if (data.pixelHeight > 0) h = cellsFromPixels(data.pixelHeight, false);
+        }
+        if (w < 0 && h < 0) {
+            replyKitty(protocolId, placementId, "INVALID", responseMode);
+            return;
+        }
+        if (w < 0) w = deriveMissingCells(h, data.pixelWidth, data.pixelHeight, true);
+        if (h < 0) h = deriveMissingCells(w, data.pixelWidth, data.pixelHeight, false);
+        if (virtual) {
+            // U=1: virtual placement only — invisible until the client emits
+            // U+10EEEE placeholder text; no cells stamped, cursor untouched.
+            createVirtualPlacement(protocolId, regId, w, h);
+            replyKitty(protocolId, placementId, "OK", responseMode);
+            return;
+        }
+        if (!stampImage(regId, mCursorRow, mCursorCol, w, h)) {
+            replyKitty(protocolId, placementId, "INVALID", responseMode);
+            return;
+        }
+        replyKitty(protocolId, placementId, "OK", responseMode);
+    }
+
+    /**
+     * Delete images/placements ({@code a=d}).
+     *
+     * @param deleteMode  {@code d=} value ({@code a}/{@code i}/{@code c}/{@code p}/…), or null
+     * @param protocolId  {@code i=} image id
+     * @param x           1-based cell column for {@code d=p}, or -1
+     * @param y           1-based cell row for {@code d=p}, or -1
+     * @param responseMode {@code q=} suppression
+     */
+    private void handleKittyDelete(String deleteMode, int protocolId, int x, int y, int responseMode) {
+        final String mode = (deleteMode == null || deleteMode.isEmpty()) ? "a" : deleteMode;
+        final char m = mode.charAt(0);
+        switch (m) {
+            case 'a':
+            case 'A':
+                clearAllImageStamps();
+                // Keep payloads so a=p can re-display; only wipe side-bands.
+                break;
+            case 'i':
+            case 'I': {
+                final Integer regId = mKittyImageIds.get(protocolId);
+                if (regId != null) removeImage(regId);
+                break;
+            }
+            case 'c':
+            case 'C':
+                clearImageStampsAt(mCursorRow, mCursorCol);
+                break;
+            case 'p':
+            case 'P':
+                if (x > 0 && y > 0) clearImageStampsAt(y - 1, x - 1);
+                break;
+            default:
+                // Spec: an unrecognized delete mode has no effect and fails with EINVAL.
+                replyKitty(protocolId, 0, "EINVAL", responseMode);
+                return;
+        }
+        replyKitty(protocolId, 0, "OK", responseMode);
+    }
+
+    /**
+     * Record (or replace) a unicode-placeholder virtual placement for a client id.
+     *
+     * <p>Spec: {@code a=p,U=1,i=<id>,c=<cols>,r=<rows>} fits the image into the
+     * given grid without touching the screen; the placeholder text emitted later
+     * resolves the grid through {@link #resolveVirtualPlacement(int)}. Silent
+     * no-op for {@code i=0}: placeholder ids are resolved from a non-zero
+     * foreground-encoded id.</p>
+     *
+     * @param protocolId client {@code i=}
+     * @param registryId registry index of the image data
+     * @param cols       grid width in cells (&gt;= 1)
+     * @param rows       grid height in cells (&gt;= 1)
+     */
+    private void createVirtualPlacement(int protocolId, int registryId, int cols, int rows) {
+        if (protocolId == 0 || registryId <= 0) return;
+        mKittyVirtualPlacements.put(protocolId,
+            new KittyVirtualPlacement(registryId, Math.max(1, cols), Math.max(1, rows)));
+    }
+
+    /**
+     * Configure the host roots used to resolve kitty graphics file media
+     * ({@code t=f}, {@code t=t}, {@code t=s}) from guest paths.
+     *
+     * <p>Called once per session by the host (mirrors the proot binds of
+     * {@code ProotShellEnvironment.buildProotCommand}: Debian rootfs, app shm dir
+     * behind guest {@code /dev/shm}, and the {@code /sdcard} + {@code /storage}
+     * mounts). Without configuration every file-medium command fails with the
+     * uniform {@link #KITTY_MEDIA_ERROR}.</p>
+     *
+     * @param rootfsDir  host path of the Debian rootfs (guest {@code /...})
+     * @param shmDir     host dir bound at guest {@code /dev/shm}
+     * @param sdcardDir  host dir bound at guest {@code /root/sdcard}
+     * @param storageDir host dir bound at guest {@code /root/storage}
+     */
+    public void configureImageMedia(String rootfsDir, String shmDir, String sdcardDir, String storageDir) {
+        mImageMediaRootfs = emptyToNull(rootfsDir);
+        mImageMediaShm = emptyToNull(shmDir);
+        mImageMediaSdcard = emptyToNull(sdcardDir);
+        mImageMediaStorage = emptyToNull(storageDir);
+        mImageMediaRootfsCanonical = canonicalizeRoot(mImageMediaRootfs);
+        mImageMediaShmCanonical = canonicalizeRoot(mImageMediaShm);
+        mImageMediaSdcardCanonical = canonicalizeRoot(mImageMediaSdcard);
+        mImageMediaStorageCanonical = canonicalizeRoot(mImageMediaStorage);
+    }
+
+    private static String emptyToNull(String path) {
+        return (path == null || path.isEmpty()) ? null : path;
+    }
+
+    private static String canonicalizeRoot(String path) {
+        if (path == null) return null;
+        try {
+            return new File(path).getCanonicalPath();
+        } catch (IOException e) {
+            return new File(path).getAbsolutePath();
+        }
+    }
+
+    /**
+     * Read kitty file media ({@code t=f}, {@code t=t}, {@code t=s}) following the
+     * spec's local-client rules.
+     *
+     * <p>The payload carries the base64 file path (or POSIX shm name). Guest paths
+     * map through the proot binds; the result is canonicalized (following symlinks,
+     * failing on loops) and must land inside one of the configured roots. Only
+     * regular files are read; sensitive guest prefixes are refused before any open.
+     * {@code t=s} unlinks after reading (spec); {@code t=t} unlinks only under a
+     * known temp dir when the full path contains {@code tty-graphics-protocol}.
+     * Every failure returns {@code null} so the caller answers the single uniform
+     * error without revealing which check failed.</p>
+     *
+     * @param mediaType {@code f}, {@code t} or {@code s}
+     * @param payload   base64 file path / shm name after {@code ;}
+     * @param offset    {@code O=} byte offset (0 = start)
+     * @param size      {@code S=} bytes to read (0 = until EOF)
+     * @return the bytes, or null on any failure
+     */
+    private byte[] readImageFileMedium(String mediaType, String payload, int offset, int size) {
+        final boolean shmMedium = "s".equals(mediaType);
+        final boolean tempMedium = "t".equals(mediaType);
+        if (!shmMedium && !tempMedium && !"f".equals(mediaType)) return null;
+        if (payload == null || payload.isEmpty()) return null;
+        final byte[] rawPath = ImageBase64.decode(payload);
+        if (rawPath == null || rawPath.length == 0) return null;
+        final String path = new String(rawPath, StandardCharsets.UTF_8);
+        final String hostPath;
+        if (shmMedium) {
+            // POSIX shm name: starts with '/', no other '/', bounded length (spec).
+            if (path.length() < 2 || path.length() > 255
+                || path.charAt(0) != '/' || path.indexOf('/', 1) >= 0) return null;
+            if (mImageMediaShm == null) return null;
+            hostPath = mImageMediaShm + "/" + path.substring(1);
+        } else {
+            hostPath = mapGuestMediaPath(path);
+            if (hostPath == null) return null;
+        }
+        try {
+            final File canonical = new File(hostPath).getCanonicalFile();
+            if (!canonical.isFile()) return null; // regular files only (spec)
+            if (!isMediaPathAllowed(canonical)) return null;
+            final byte[] bytes = readMediaSlice(canonical, offset, size);
+            if (bytes == null) return null;
+            if (shmMedium) {
+                if (!canonical.delete())
+                    Logger.logWarn(mClient, LOG_TAG, "kitty file media: failed to unlink shm object " + canonical);
+            } else if (tempMedium && isDeletableTempPath(canonical.getPath())) {
+                if (!canonical.delete())
+                    Logger.logWarn(mClient, LOG_TAG, "kitty file media: failed to delete temp file " + canonical);
+            }
+            return bytes;
+        } catch (IOException e) {
+            // Symlink loops, vanished files, permission errors: log locally only.
+            Logger.logWarn(mClient, LOG_TAG,
+                "kitty file media: " + mediaType + " read of \"" + path + "\" failed: " + e);
+            return null;
+        }
+    }
+
+    /**
+     * Map a guest file path to the host path behind the proot binds.
+     *
+     * <p>Order mirrors {@code ProotShellEnvironment.buildProotCommand}: guest
+     * {@code /dev/shm} → app shm dir, {@code /root/sdcard} → {@code /sdcard},
+     * {@code /root/storage} → {@code /storage}, everything else lands inside the
+     * rootfs. {@code /proc}, {@code /sys} and (beyond {@code /dev/shm}) {@code /dev}
+     * are refused on the path before any open, as the spec requires. Traversal
+     * ({@code ..}) is caught later by the canonical allowlist.</p>
+     *
+     * @param guestPath absolute path as sent by the client
+     * @return the host path, or null when the path is refused
+     */
+    private String mapGuestMediaPath(String guestPath) {
+        if (guestPath.isEmpty() || guestPath.charAt(0) != '/') return null;
+        if (isPathPrefix(guestPath, "/dev/shm")) {
+            if (mImageMediaShm == null) return null;
+            return mImageMediaShm + guestPath.substring("/dev/shm".length());
+        }
+        if (isPathPrefix(guestPath, "/proc") || isPathPrefix(guestPath, "/sys")
+            || isPathPrefix(guestPath, "/dev")) return null;
+        if (isPathPrefix(guestPath, "/root/sdcard")) {
+            if (mImageMediaSdcard == null) return null;
+            return mImageMediaSdcard + guestPath.substring("/root/sdcard".length());
+        }
+        if (isPathPrefix(guestPath, "/root/storage")) {
+            if (mImageMediaStorage == null) return null;
+            return mImageMediaStorage + guestPath.substring("/root/storage".length());
+        }
+        if (mImageMediaRootfs == null) return null;
+        return mImageMediaRootfs + guestPath;
+    }
+
+    /** Whether {@code path} equals {@code prefix} or starts with {@code prefix + "/"}. */
+    private static boolean isPathPrefix(String path, String prefix) {
+        return path.equals(prefix) || path.startsWith(prefix + "/");
+    }
+
+    /**
+     * Read {@code size} bytes (or to EOF) from {@code file} starting at {@code offset}.
+     * Fails when the file is smaller than the client claimed (spec) or larger than
+     * the retained-image budget.
+     *
+     * @param file   canonical regular file
+     * @param offset {@code O=} start byte (negative treated as 0)
+     * @param size   {@code S=} byte count, or 0 for the rest of the file
+     * @return the slice, or null on any failure
+     */
+    private static byte[] readMediaSlice(File file, int offset, int size) throws IOException {
+        final long length = file.length();
+        final long start = (offset > 0) ? offset : 0L;
+        if (start > length) return null;
+        final long count;
+        if (size > 0) {
+            if (start + size > length) return null; // smaller than the client claimed
+            count = size;
+        } else {
+            count = length - start;
+        }
+        if (count <= 0 || count > MAX_IMAGE_ENCODED_BYTES) return null;
+        final byte[] bytes = new byte[(int) count];
+        try (FileInputStream in = new FileInputStream(file)) {
+            long skipped = 0;
+            while (skipped < start) {
+                final long n = in.skip(start - skipped);
+                if (n <= 0) break;
+                skipped += n;
+            }
+            if (skipped < start) return null;
+            int read = 0;
+            while (read < bytes.length) {
+                final int n = in.read(bytes, read, bytes.length - read);
+                if (n < 0) break;
+                read += n;
+            }
+            if (read < bytes.length) return null; // truncated mid-read
+        }
+        return bytes;
+    }
+
+    /** Whether the canonical file sits inside one of the configured roots. */
+    private boolean isMediaPathAllowed(File canonical) {
+        final String path = canonical.getPath();
+        return isUnderRoot(path, mImageMediaRootfsCanonical)
+            || isUnderRoot(path, mImageMediaShmCanonical)
+            || isUnderRoot(path, mImageMediaSdcardCanonical)
+            || isUnderRoot(path, mImageMediaStorageCanonical);
+    }
+
+    private static boolean isUnderRoot(String path, String root) {
+        return root != null && (path.equals(root) || path.startsWith(root + "/"));
+    }
+
+    /**
+     * Spec rule for {@code t=t}: only delete under a known temp dir ( guest
+     * {@code /tmp} inside the rootfs, the shm dir, or {@code $TMPDIR}) AND only
+     * when the full path contains {@code tty-graphics-protocol}.
+     *
+     * @param path canonical host path of the read file
+     * @return true when the file may be unlinked after reading
+     */
+    private boolean isDeletableTempPath(String path) {
+        if (!path.contains("tty-graphics-protocol")) return false;
+        if (mImageMediaRootfsCanonical != null
+            && path.startsWith(mImageMediaRootfsCanonical + "/tmp/")) return true;
+        if (mImageMediaShmCanonical != null
+            && path.startsWith(mImageMediaShmCanonical + "/")) return true;
+        final String tmpdir = System.getenv("TMPDIR");
+        return tmpdir != null && !tmpdir.isEmpty() && path.startsWith(tmpdir + "/");
+    }
+
+    /** {@code f=} → {@link TerminalImageData} format code; -1 when unsupported. */
+    private static int parseKittyFormatCode(String format) {
+        if (format == null) return TerminalImageData.FORMAT_ENCODED;
+        switch (format) {
+            case "100":
+            case "98":
+                return TerminalImageData.FORMAT_ENCODED;
+            case "24":
+                return TerminalImageData.FORMAT_RGB_24;
+            case "32":
+                return TerminalImageData.FORMAT_RGBA_32;
+            default:
+                return -1;
+        }
+    }
+
+    /**
+     * Read width/height from a PNG IHDR chunk.
+     *
+     * @param bytes PNG file bytes
+     * @return {@code {width, height}} or {@code null} when not a PNG / too short
+     */
+    private static int[] sniffPngSize(byte[] bytes) {
+        if (bytes == null || bytes.length < 24) return null;
+        if ((bytes[0] & 0xFF) != 0x89 || bytes[1] != 'P' || bytes[2] != 'N' || bytes[3] != 'G') return null;
+        // Signature (8) + IHDR length (4) + "IHDR" (4) → width at offset 16.
+        final int w = ((bytes[16] & 0xFF) << 24) | ((bytes[17] & 0xFF) << 16)
+            | ((bytes[18] & 0xFF) << 8) | (bytes[19] & 0xFF);
+        final int h = ((bytes[20] & 0xFF) << 24) | ((bytes[21] & 0xFF) << 16)
+            | ((bytes[22] & 0xFF) << 8) | (bytes[23] & 0xFF);
+        if (w <= 0 || h <= 0) return null;
+        return new int[]{w, h};
+    }
+
+    private static int parseKittyInt(String value, int fallback) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private int cellsFromPixels(int pixels, boolean isWidth) {
+        final int cell = isWidth ? mCellWidthPixels : mCellHeightPixels;
+        if (cell <= 0) return 1;
+        return Math.max(1, (pixels + cell - 1) / cell);
     }
 
     private int nextTabStop(int numTabs) {
@@ -1278,8 +2067,15 @@ public final class TerminalEmulator {
                     // Check if buffer size needs to be updated:
                     if (resized) resizeScreen();
                     // Clear new screen if alt buffer:
-                    if (newScreen == mAltBuffer)
+                    if (newScreen == mAltBuffer) {
                         newScreen.blockSet(0, 0, mColumns, mRows, ' ', getStyle());
+                        // The alt buffer content was wiped: drop rects that belonged to it
+                        // (their side-band cells were cleared by blockSet above).
+                        for (int i = 0; i < mImageDataList.size(); i++) {
+                            final TerminalImageData d = mImageDataList.get(i);
+                            if (d != null && d.onAltScreen && d.isPlaced()) d.placeAt(-1, -1, 0, 0);
+                        }
+                    }
                 }
                 break;
             }
@@ -1306,6 +2102,13 @@ public final class TerminalEmulator {
                 // mouse report.
                 // The third number is a keyboard identifier not used nowadays.
                 mSession.write("\033[>41;320;0c");
+                break;
+            case 'q':
+                // XTVERSION (CSI > 0 q / CSI > q): DCS > | name(version) ST.
+                // Used by TUIs/scripts to identify the terminal over SSH without TERM_PROGRAM.
+                if (getArg0(0) == 0) {
+                    mSession.write("\033P> |" + XT_VERSION_NAME + "(" + mXtVersion + ")\033\\");
+                }
                 break;
             case 'm':
                 // https://bugs.launchpad.net/gnome-terminal/+bug/96676/comments/25
@@ -1473,6 +2276,7 @@ public final class TerminalEmulator {
                 if (mCursorRow <= mTopMargin) {
                     mScreen.blockCopy(mLeftMargin, mTopMargin, mRightMargin - mLeftMargin, mBottomMargin - (mTopMargin + 1), mLeftMargin, mTopMargin + 1);
                     blockClear(mLeftMargin, mTopMargin, mRightMargin - mLeftMargin);
+                    shiftImagePlacements(mTopMargin, mBottomMargin - 1, +1, false);
                 } else {
                     mCursorRow--;
                 }
@@ -1492,12 +2296,14 @@ public final class TerminalEmulator {
                 break;
             case ']': // OSC
                 mOSCOrDeviceControlArgs.setLength(0);
+                mOscOverflow = false;
                 continueSequence(ESC_OSC);
                 break;
             case '>': // DECKPNM
                 setDecsetinternalBit(DECSET_BIT_APPLICATION_KEYPAD, false);
                 break;
             case '_': // APC - Application Program Command.
+                mOSCOrDeviceControlArgs.setLength(0);
                 continueSequence(ESC_APC);
                 break;
             default:
@@ -1639,6 +2445,7 @@ public final class TerminalEmulator {
                 int linesToMove = linesAfterCursor - linesToInsert;
                 mScreen.blockCopy(0, mCursorRow, mColumns, linesToMove, 0, mCursorRow + linesToInsert);
                 blockClear(0, mCursorRow, mColumns, linesToInsert);
+                shiftImagePlacements(mCursorRow, mBottomMargin - linesToInsert, +linesToInsert, false);
             }
             break;
             case 'M': // "${CSI}${N}M" - delete N lines (DL).
@@ -1649,6 +2456,7 @@ public final class TerminalEmulator {
                 int linesToMove = linesAfterCursor - linesToDelete;
                 mScreen.blockCopy(0, mCursorRow + linesToDelete, mColumns, linesToMove, 0, mCursorRow);
                 blockClear(0, mCursorRow + linesToMove, mColumns, linesToDelete);
+                shiftImagePlacements(mCursorRow + linesToDelete, mBottomMargin, -linesToDelete, false);
             }
             break;
             case 'P': // "${CSI}{N}P" - delete ${N} characters (DCH).
@@ -1683,6 +2491,7 @@ public final class TerminalEmulator {
                     final int linesToScroll = Math.min(linesBetweenTopAndBottomMargins, linesToScrollArg);
                     mScreen.blockCopy(mLeftMargin, mTopMargin, mRightMargin - mLeftMargin, linesBetweenTopAndBottomMargins - linesToScroll, mLeftMargin, mTopMargin + linesToScroll);
                     blockClear(mLeftMargin, mTopMargin, mRightMargin - mLeftMargin, linesToScroll);
+                    shiftImagePlacements(mTopMargin, mBottomMargin - linesToScroll, +linesToScroll, false);
                 } else {
                     // "${CSI}${func};${startx};${starty};${firstrow};${lastrow}T" - initiate highlight mouse tracking.
                     unimplementedSequence(b);
@@ -2021,6 +2830,12 @@ public final class TerminalEmulator {
 
     /** An Operating System Controls (OSC) Set Text Parameters. May come here from BEL or ST. */
     private void doOscSetTextParameters(String bellOrStringTerminator) {
+        if (mOscOverflow) {
+            mOscOverflow = false;
+            mOSCOrDeviceControlArgs.setLength(0);
+            finishSequence();
+            return;
+        }
         int value = -1;
         String textParameter = "";
         // Extract initial $value from initial "$value;..." string.
@@ -2126,6 +2941,7 @@ public final class TerminalEmulator {
                 // OSC 8 ; params ; URI — open (non-empty URI) or close (empty URI) a hyperlink.
                 // textParameter is "params;URI"; the URI is everything after the first ';'.
                 // Params such as id=... are accepted and ignored (v1: single open link).
+                if (!mHyperlinksEnabled) break;
                 int sep = textParameter.indexOf(';');
                 String uri = (sep >= 0) ? textParameter.substring(sep + 1) : "";
                 if (uri.isEmpty()) {
@@ -2135,6 +2951,11 @@ public final class TerminalEmulator {
                 }
                 break;
             }
+            case 1337:
+                // OSC 1337 ; File=args:base64 — iTerm2 inline image (and cousins).
+                // Also handles Capabilities (Feature Reporting) queries.
+                handleInlineImageOsc(textParameter);
+                break;
             case 104:
                 // "104;$c" → Reset Color Number $c. It is reset to the color specified by the corresponding X
                 // resource. Any number of c parameters may be given. These parameters correspond to the ANSI colors 0-7,
@@ -2233,8 +3054,40 @@ public final class TerminalEmulator {
             mScreen.blockCopy(mLeftMargin, mTopMargin + 1, mRightMargin - mLeftMargin, mBottomMargin - mTopMargin - 1, mLeftMargin, mTopMargin);
             // .. and blank bottom row between margins:
             mScreen.blockSet(mLeftMargin, mBottomMargin - 1, mRightMargin - mLeftMargin, 1, ' ', currentStyle);
+            shiftImagePlacements(mTopMargin, mBottomMargin, -1, false);
         } else {
             mScreen.scrollDownOneLine(mTopMargin, mBottomMargin, currentStyle);
+            shiftImagePlacements(mTopMargin, mBottomMargin, -1, true);
+        }
+    }
+
+    /**
+     * Keep image placement rects aligned after row content moved vertically.
+     *
+     * <p>Row side-bands travel with the cells (see {@link TerminalRow#copyInterval}),
+     * but {@link TerminalImageData} rects are absolute external coordinates — without
+     * this they go stale on every scroll and the bitmap slice drawn per cell drifts
+     * (the INFORME BUG-3 "ghost row" symptom).</p>
+     *
+     * <p>Only placements that belong to the active screen buffer are touched, so
+     * scrolling the alternate screen (pagers) never moves main-screen rects.</p>
+     *
+     * @param regionTop         first external row whose content moved
+     * @param regionBottom      one past the last external row whose content moved
+     * @param deltaRows         rows shifted ({@code +} down, {@code -} up)
+     * @param transcriptShifted whether rows above the screen (external &lt; 0) also shifted
+     */
+    private void shiftImagePlacements(int regionTop, int regionBottom, int deltaRows, boolean transcriptShifted) {
+        if (deltaRows == 0 || regionTop >= regionBottom) return;
+        final boolean onAlt = (mScreen == mAltBuffer);
+        for (int i = 0; i < mImageDataList.size(); i++) {
+            final TerminalImageData data = mImageDataList.get(i);
+            if (data == null || !data.isPlaced() || data.onAltScreen != onAlt) continue;
+            if (data.startRow < 0) {
+                if (transcriptShifted) data.startRow += deltaRows;
+            } else if (data.startRow >= regionTop && data.startRow < regionBottom) {
+                data.startRow += deltaRows;
+            }
         }
     }
 
@@ -2305,12 +3158,39 @@ public final class TerminalEmulator {
     }
 
     private void collectOSCArgs(int b) {
-        if (mOSCOrDeviceControlArgs.length() < MAX_OSC_STRING_LENGTH) {
+        if (mOscOverflow) {
+            // Already past the cap: keep the escape state so BEL/ST still terminates.
+            continueSequence(mEscapeState);
+            return;
+        }
+        if (mOSCOrDeviceControlArgs.length() < currentOscBufferLimit()) {
             mOSCOrDeviceControlArgs.appendCodePoint(b);
             continueSequence(mEscapeState);
         } else {
-            unknownSequence(b);
+            mOscOverflow = true;
+            mOSCOrDeviceControlArgs.setLength(0);
+            continueSequence(mEscapeState);
         }
+    }
+
+    /**
+     * Buffer cap for the OSC payload currently being collected. Stays at
+     * {@link #MAX_OSC_STRING_LENGTH} for normal OSCs; once the payload is known
+     * to be an {@code 1337;} image sequence, raise to
+     * {@link #MAX_IMAGE_STRING_LENGTH} so base64 is not truncated.
+     *
+     * @return the max payload length allowed right now
+     */
+    private int currentOscBufferLimit() {
+        final String imagePrefix = "1337;";
+        final int n = mOSCOrDeviceControlArgs.length();
+        final int cmp = Math.min(n, imagePrefix.length());
+        for (int i = 0; i < cmp; i++) {
+            if (mOSCOrDeviceControlArgs.charAt(i) != imagePrefix.charAt(i))
+                return MAX_OSC_STRING_LENGTH;
+        }
+        // Entire collected prefix matches "1337;" (or is a strict prefix of it).
+        return (n >= imagePrefix.length()) ? MAX_IMAGE_STRING_LENGTH : MAX_OSC_STRING_LENGTH;
     }
 
     private void unimplementedSequence(int b) {
@@ -2589,6 +3469,7 @@ public final class TerminalEmulator {
         // XXX: Should we set terminal driver back to IUTF8 with termios?
         mUtf8Index = mUtf8ToFollow = 0;
         mCurrentHyperlinkUriIndex = 0;
+        resetImageRegistry();
 
         mColors.reset();
         mSession.onColorsChanged();
@@ -2641,6 +3522,421 @@ public final class TerminalEmulator {
         String scheme = uri.substring(0, colon).toLowerCase(Locale.US);
         return scheme.equals("http") || scheme.equals("https") || scheme.equals("ftp")
             || scheme.equals("file") || scheme.equals("gemini") || scheme.equals("mailto");
+    }
+
+    /**
+     * Enable or disable inline terminal images (OSC 1337 / kitty graphics).
+     * When disabled, new image sequences are ignored so no bytes are retained;
+     * the side-band ids already stamped on rows become stale no-ops on lookup.
+     *
+     * @param enabled whether inline images should be accepted and drawn
+     */
+    public void setTerminalImagesEnabled(boolean enabled) {
+        mTerminalImagesEnabled = enabled;
+        if (!enabled) clearImageRegistry();
+    }
+
+    /** Whether inline terminal images are currently accepted and drawn. */
+    public boolean isTerminalImagesEnabled() {
+        return mTerminalImagesEnabled;
+    }
+
+    /**
+     * Enable or disable OSC 8 hyperlink registration ({@code terminal_hyperlinks}).
+     * When disabled, new OSC 8 sequences are ignored and Feature Reporting omits {@code H}.
+     *
+     * @param enabled whether hyperlinks should be registered
+     */
+    public void setHyperlinksEnabled(boolean enabled) {
+        mHyperlinksEnabled = enabled;
+        if (!enabled) mCurrentHyperlinkUriIndex = 0;
+    }
+
+    /** Whether OSC 8 hyperlinks are currently registered. */
+    public boolean isHyperlinksEnabled() {
+        return mHyperlinksEnabled;
+    }
+
+    /**
+     * Version string reported by XTVERSION ({@code CSI > 0 q} → {@code DCS > | Terminal(ver) ST}).
+     *
+     * @param version app/terminal version, e.g. {@code 2.0.0}
+     */
+    public void setXtVersion(String version) {
+        if (version != null && !version.isEmpty()) mXtVersion = version;
+    }
+
+    /**
+     * iTerm2 Feature Reporting string ({@code TERM_FEATURES} / {@code OSC 1337;Capabilities}).
+     * Codes: {@code T3}=24-bit, {@code B}=bracketed paste, {@code M}=mouse,
+     * {@code H}=OSC 8 hyperlinks (when enabled), {@code F}=OSC 1337 FILE (when enabled).
+     * No Sixel ({@code Sx}); kitty graphics are probed with APC {@code a=q}, not this string.
+     *
+     * @return feature string without non-alphanumeric suffix
+     */
+    public String buildFeatureString() {
+        final StringBuilder sb = new StringBuilder(8);
+        sb.append("T3"); // 24BIT: compatibility + full RGB SGR
+        sb.append('B');  // BRACKETED_PASTE
+        sb.append('M');  // MOUSE (1000/1002/1006)
+        if (mHyperlinksEnabled) sb.append('H');
+        if (mTerminalImagesEnabled) sb.append('F');
+        return sb.toString();
+    }
+
+    /**
+     * Register inline image bytes without stamping cells (kitty {@code a=t}).
+     * Evicts oldest registry entries when the session byte budget is exceeded.
+     *
+     * @param encoded     decoded payload (encoded image or raw pixels)
+     * @param pixelWidth  intrinsic pixel width, or 0
+     * @param pixelHeight intrinsic pixel height, or 0
+     * @param pixelFormat {@link TerminalImageData} format code
+     * @return the 1-based registry id, or 0 when rejected
+     */
+    private int registerImage(byte[] encoded, int pixelWidth, int pixelHeight, int pixelFormat) {
+        if (!mTerminalImagesEnabled || encoded == null || encoded.length == 0) return 0;
+        if (encoded.length > MAX_IMAGE_ENCODED_BYTES) return 0;
+        evictImagesForBudget(encoded.length);
+        final int id = mImageDataList.size() + 1;
+        mImageDataList.add(new TerminalImageData(id, encoded, -1, -1, 0, 0,
+            pixelWidth, pixelHeight, pixelFormat));
+        mImageDataBytesTotal += encoded.length;
+        return id;
+    }
+
+    /**
+     * Place a registry entry at a cell rectangle, clearing any previous stamp
+     * of the same id and stamping the new one.
+     *
+     * @param registryId registry index from {@link #registerImage}
+     * @param startRow   external row of the top-left cell
+     * @param startCol   column of the top-left cell
+     * @param cellsW     width in cells (&gt;= 1)
+     * @param cellsH     height in cells (&gt;= 1)
+     * @return true when the placement was applied
+     */
+    private boolean stampImage(int registryId, int startRow, int startCol, int cellsW, int cellsH) {
+        final TerminalImageData data = getImageData(registryId);
+        if (data == null || !mTerminalImagesEnabled) return false;
+        cellsW = Math.max(1, cellsW);
+        cellsH = Math.max(1, cellsH);
+        if (startCol < 0 || startRow < 0 || startCol >= mColumns || startRow >= mRows) return false;
+        cellsW = Math.min(cellsW, mColumns - startCol);
+        cellsH = Math.min(cellsH, mRows - startRow);
+
+        // Drop the previous rectangle of this id so a re-place does not leave ghosts.
+        clearStampsFor(registryId);
+        data.placeAt(startRow, startCol, cellsW, cellsH, mScreen == mAltBuffer);
+        for (int r = 0; r < cellsH; r++)
+            for (int c = 0; c < cellsW; c++)
+                mScreen.setImage(startCol + c, startRow + r, registryId);
+        return true;
+    }
+
+    /**
+     * Register and stamp in one step (OSC 1337 and simple kitty display paths).
+     *
+     * @param encoded     decoded image bytes
+     * @param startRow    external row of the top-left cell
+     * @param startCol    column of the top-left cell
+     * @param cellsW      placement width in cells
+     * @param cellsH      placement height in cells
+     * @param pixelWidth  intrinsic pixel width, or 0
+     * @param pixelHeight intrinsic pixel height, or 0
+     * @return the 1-based registry id, or 0 when rejected
+     */
+    private int registerAndStampImage(byte[] encoded, int startRow, int startCol,
+                                      int cellsW, int cellsH, int pixelWidth, int pixelHeight) {
+        final int id = registerImage(encoded, pixelWidth, pixelHeight, TerminalImageData.FORMAT_ENCODED);
+        if (id == 0) return 0;
+        if (!stampImage(id, startRow, startCol, cellsW, cellsH)) return 0;
+        return id;
+    }
+
+    /** Zero every side-band cell still pointing at {@code registryId}. */
+    private void clearStampsFor(int registryId) {
+        final TerminalBuffer screen = mScreen;
+        final int end = screen.mScreenRows;
+        for (int r = -screen.getActiveTranscriptRows(); r < end; r++) {
+            try {
+                final TerminalRow line = screen.mLines[screen.externalToInternalRow(r)];
+                if (line == null) continue;
+                for (int c = 0; c < screen.mColumns; c++) {
+                    if (line.getImage(c) == registryId) line.setImage(c, 0);
+                }
+            } catch (RuntimeException ignored) {
+                // Row may have been recycled mid-scan; skip.
+            }
+        }
+    }
+
+    /** Zero image side-bands covering one cell (kitty {@code d=c}/{@code d=p}). */
+    private void clearImageStampsAt(int externalRow, int column) {
+        if (column < 0 || column >= mColumns || externalRow < 0 || externalRow >= mScreen.mScreenRows) return;
+        final int id = mScreen.getImageAt(externalRow, column);
+        if (id == 0) return;
+        final TerminalImageData data = getImageData(id);
+        if (data == null || !data.containsCell(externalRow, column)) {
+            mScreen.setImage(column, externalRow, 0);
+            return;
+        }
+        for (int r = data.startRow; r < data.startRow + data.cellsH; r++) {
+            if (r < 0 || r >= mScreen.mScreenRows) continue;
+            for (int c = data.startCol; c < data.startCol + data.cellsW; c++) {
+                if (c < 0 || c >= mColumns) continue;
+                if (mScreen.getImageAt(r, c) == id) mScreen.setImage(c, r, 0);
+            }
+        }
+    }
+
+    /** Zero every image stamp on screen (kitty {@code d=a}); payloads stay for re-place. */
+    private void clearAllImageStamps() {
+        final int end = mScreen.mScreenRows;
+        for (int r = -mScreen.getActiveTranscriptRows(); r < end; r++) {
+            try {
+                final TerminalRow line = mScreen.mLines[mScreen.externalToInternalRow(r)];
+                if (line == null) continue;
+                for (int c = 0; c < mScreen.mColumns; c++) {
+                    if (line.getImage(c) != 0) line.setImage(c, 0);
+                }
+            } catch (RuntimeException ignored) {
+                // Skip recycled rows.
+            }
+        }
+        for (TerminalImageData data : mImageDataList) {
+            if (data != null) data.placeAt(-1, -1, 0, 0);
+        }
+    }
+
+    /**
+     * Remove a registry entry (payload dropped; side-bands cleared first).
+     *
+     * @param registryId 1-based registry index
+     */
+    private void removeImage(int registryId) {
+        final TerminalImageData data = getImageData(registryId);
+        if (data == null) return;
+        clearStampsFor(registryId);
+        mImageDataBytesTotal -= (data.encoded != null) ? data.encoded.length : 0;
+        if (registryId > 0 && registryId <= mImageDataList.size()) {
+            mImageDataList.set(registryId - 1, null);
+        }
+        mKittyImageIds.values().removeIf(id -> id == registryId);
+        // A deleted image can no longer be shown through its virtual placements.
+        mKittyVirtualPlacements.values().removeIf(vp -> vp.registryId == registryId);
+    }
+
+    /**
+     * Resolve the inline image registry entry stamped at a screen cell.
+     *
+     * @param row    external (transcript-aware) row
+     * @param column screen column (0-based)
+     * @return the image data, or {@code null} when the cell has no live image
+     */
+    public TerminalImageData getImageDataAt(int row, int column) {
+        if (!mTerminalImagesEnabled) return null;
+        final int id = mScreen.getImageAt(row, column);
+        return getImageData(id);
+    }
+
+    /**
+     * Resolve a registry entry by 1-based id.
+     *
+     * @param id the registry index
+     * @return the image data, or {@code null} when the id is unknown/evicted
+     */
+    public TerminalImageData getImageData(int id) {
+        if (id <= 0 || id > mImageDataList.size()) return null;
+        return mImageDataList.get(id - 1); // null when evicted/cleared
+    }
+
+    /**
+     * Resolve a unicode-placeholder image id (foreground color low 24 bits plus
+     * msb diacritic) to its virtual placement, for the renderers.
+     *
+     * @param imageId full 32-bit id encoded in the placeholder cell
+     * @return the live virtual placement, or {@code null} when unknown, deleted,
+     * or the image kill-switch is off (renderers keep the plain glyph then)
+     */
+    public KittyVirtualPlacement resolveVirtualPlacement(int imageId) {
+        if (!mTerminalImagesEnabled) return null;
+        final KittyVirtualPlacement vp = mKittyVirtualPlacements.get(imageId);
+        if (vp == null || getImageData(vp.registryId) == null) return null;
+        return vp;
+    }
+
+    /**
+     * Handle OSC 1337: Feature Reporting {@code Capabilities} query, then
+     * {@code File=args:base64} inline images. Non-File variants (SetMark, …) are ignored.
+     *
+     * @param textParameter everything after {@code 1337;}
+     */
+    private void handleInlineImageOsc(String textParameter) {
+        // Feature Reporting: OSC 1337 ; Capabilities ST → OSC 1337 ; Capabilities = {FeatureString} ST
+        // Independent of the image kill-switch so apps can discover why FILE is absent.
+        if (textParameter.equals("Capabilities")) {
+            mSession.write("\033]1337;Capabilities=" + buildFeatureString() + "\033\\");
+            return;
+        }
+        if (!mTerminalImagesEnabled) return;
+        if (!textParameter.startsWith("File=")) return;
+        final String rest = textParameter.substring("File=".length());
+        final int colon = rest.indexOf(':');
+        if (colon < 0) return;
+        final String args = rest.substring(0, colon);
+        final String b64 = rest.substring(colon + 1);
+
+        int widthCells = -1;
+        int heightCells = -1;
+        int pixelWidth = 0;
+        int pixelHeight = 0;
+        for (String part : args.split(";")) {
+            final int eq = part.indexOf('=');
+            if (eq <= 0) continue;
+            final String key = part.substring(0, eq);
+            final String value = part.substring(eq + 1);
+            if (key.equalsIgnoreCase("width")) {
+                final int[] dim = parseImageDimension(value, true);
+                if (dim != null) {
+                    widthCells = dim[0];
+                    pixelWidth = dim[1];
+                }
+            } else if (key.equalsIgnoreCase("height")) {
+                final int[] dim = parseImageDimension(value, false);
+                if (dim != null) {
+                    heightCells = dim[0];
+                    pixelHeight = dim[1];
+                }
+            }
+            // name / size / inline / preserveAspectRatio accepted and ignored in v1.
+        }
+        // Without an explicit cell size there is nothing safe to stamp (we do not
+        // decode intrinsic dimensions in this pure-Java module).
+        if (widthCells < 0 && heightCells < 0) return;
+
+        final byte[] encoded = ImageBase64.decode(b64);
+        if (encoded == null) {
+            Logger.logWarn(mClient, LOG_TAG, "OSC 1337: invalid base64 image payload");
+            return;
+        }
+        // Sniff PNG IHDR when the client omitted pixel metrics (px/% sizes).
+        final int[] sniffed = sniffPngSize(encoded);
+        if (sniffed != null) {
+            if (pixelWidth == 0) pixelWidth = sniffed[0];
+            if (pixelHeight == 0) pixelHeight = sniffed[1];
+        }
+        // Single missing dimension: derive from the other + intrinsic pixels when possible.
+        if (widthCells < 0) widthCells = deriveMissingCells(heightCells, pixelWidth, pixelHeight, true);
+        if (heightCells < 0) heightCells = deriveMissingCells(widthCells, pixelWidth, pixelHeight, false);
+        registerAndStampImage(encoded, mCursorRow, mCursorCol, widthCells, heightCells, pixelWidth, pixelHeight);
+    }
+
+    /**
+     * Parse an OSC 1337 width/height value.
+     *
+     * @param value e.g. {@code 10}, {@code 100px}, {@code 50%}
+     * @param isWidth whether this is the width (affects cell rounding only via cell size)
+     * @return {@code {cells, pixels}} or {@code null} when unparseable; cells may be -1
+     *         when only a non-cell unit was given and cannot be converted yet
+     */
+    private int[] parseImageDimension(String value, boolean isWidth) {
+        if (value == null || value.isEmpty()) return null;
+        try {
+            if (value.endsWith("px")) {
+                final int px = Integer.parseInt(value.substring(0, value.length() - 2));
+                if (px <= 0) return null;
+                final int cell = isWidth ? mCellWidthPixels : mCellHeightPixels;
+                final int cells = cell > 0 ? Math.max(1, (px + cell - 1) / cell) : 1;
+                return new int[]{cells, px};
+            }
+            if (value.endsWith("%")) {
+                // Percent of the window: convert using current screen cells.
+                final int pct = Integer.parseInt(value.substring(0, value.length() - 1));
+                if (pct <= 0) return null;
+                final int full = isWidth ? mColumns : mRows;
+                final int cells = Math.max(1, full * pct / 100);
+                return new int[]{cells, 0};
+            }
+            final int cells = Integer.parseInt(value);
+            if (cells <= 0) return null;
+            final int cell = isWidth ? mCellWidthPixels : mCellHeightPixels;
+            return new int[]{cells, cell > 0 ? cells * cell : 0};
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * When only one of width/height was given, guess the other from intrinsic
+     * pixel dimensions (aspect ratio). Falls back to 1 cell.
+     *
+     * @param knownCells   the dimension that was specified
+     * @param pixelWidth   intrinsic width, or 0
+     * @param pixelHeight  intrinsic height, or 0
+     * @param missingIsWidth when true, compute the missing width from height
+     * @return the missing dimension in cells
+     */
+    private int deriveMissingCells(int knownCells, int pixelWidth, int pixelHeight, boolean missingIsWidth) {
+        if (pixelWidth > 0 && pixelHeight > 0 && knownCells > 0) {
+            if (missingIsWidth) {
+                final int cell = mCellWidthPixels > 0 ? mCellWidthPixels : 1;
+                final int px = (int) Math.round((long) knownCells * mCellHeightPixels * pixelWidth / (double) pixelHeight);
+                return Math.max(1, (px + cell - 1) / cell);
+            } else {
+                final int cell = mCellHeightPixels > 0 ? mCellHeightPixels : 1;
+                final int px = (int) Math.round((long) knownCells * mCellWidthPixels * pixelHeight / (double) pixelWidth);
+                return Math.max(1, (px + cell - 1) / cell);
+            }
+        }
+        return Math.max(1, knownCells);
+    }
+
+    /**
+     * Drop oldest registry entries (payload → null) until {@code incoming} bytes fit
+     * the budget. Nulls stay in place so remaining side-band ids never shift.
+     *
+     * @param incoming encoded bytes about to be registered
+     */
+    private void evictImagesForBudget(int incoming) {
+        for (int i = 0; i < mImageDataList.size() && mImageDataBytesTotal + incoming > MAX_IMAGE_REGISTRY_BYTES; i++) {
+            final TerminalImageData old = mImageDataList.get(i);
+            if (old != null && old.encoded != null) {
+                mImageDataBytesTotal -= old.encoded.length;
+                mImageDataList.set(i, null);
+            }
+        }
+    }
+
+    /**
+     * Invalidate all image payloads. Slots stay in the list (null payloads) so
+     * future ids keep appending after the old max — stale side-band ids on rows
+     * resolve to null and can never collide with a newly registered image.
+     */
+    private void clearImageRegistry() {
+        for (int i = 0; i < mImageDataList.size(); i++)
+            mImageDataList.set(i, null);
+        mImageDataBytesTotal = 0;
+        mKittyImageIds.clear();
+        mKittyVirtualPlacements.clear();
+        mKittyChunkB64 = null;
+        mKittyChunkControl = null;
+    }
+
+    /**
+     * Full reset: invalidate all payloads. Slots stay in the list (null payloads)
+     * for the same reason as {@link #clearImageRegistry()} — a screen reset does
+     * not wipe row side-bands, so recycling ids would let a surviving cell id
+     * resolve to a freshly registered, unrelated image.
+     */
+    private void resetImageRegistry() {
+        for (int i = 0; i < mImageDataList.size(); i++)
+            mImageDataList.set(i, null);
+        mImageDataBytesTotal = 0;
+        mKittyImageIds.clear();
+        mKittyVirtualPlacements.clear();
+        mKittyChunkB64 = null;
+        mKittyChunkControl = null;
     }
 
     public String getSelectedText(int x1, int y1, int x2, int y2) {

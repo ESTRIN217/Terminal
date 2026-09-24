@@ -190,6 +190,8 @@ public final class TermuxPreferenceConstants {
          */
         public static final String KEY_TERMINAL_HYPERLINKS = "terminal_hyperlinks";
         public static final boolean DEFAULT_VALUE_TERMINAL_HYPERLINKS = true;
+        public static final String KEY_TERMINAL_IMAGES = "terminal_images";
+        public static final boolean DEFAULT_VALUE_TERMINAL_IMAGES = true;
 
 
         /**

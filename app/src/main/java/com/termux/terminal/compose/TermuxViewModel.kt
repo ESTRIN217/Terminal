@@ -312,6 +312,19 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
+     * Enable or disable inline terminal image painting.
+     *
+     * @param enabled Whether images are shown
+     */
+    fun setImagesEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.update { state ->
+                state.copy(imagesEnabled = enabled)
+            }
+        }
+    }
+
+    /**
      * Update the title for a session.
      *
      * @param session The session whose title changed

@@ -16,6 +16,7 @@ import com.termux.shared.errors.Errno;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.shell.command.environment.IShellEnvironment;
 import com.termux.shared.shell.ShellUtils;
+import com.termux.shared.termux.TermuxConstants;
 import com.termux.terminal.TerminalSession;
 import com.termux.terminal.TerminalSessionClient;
 
@@ -156,6 +157,11 @@ public class TermuxSession {
         TerminalSession terminalSession = new TerminalSession(executionCommand.executable,
             executionCommand.workingDirectory, executionCommand.arguments, environmentArray,
             executionCommand.terminalTranscriptRows, terminalSessionClient);
+
+        // Kitty graphics file media (t=f/t=t/t=s): resolve guest paths through the
+        // proot binds mirrored by ProotShellEnvironment.buildProotCommand.
+        terminalSession.configureKittyImageMedia(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH,
+            TermuxConstants.DEBIAN_SHM_DIR_PATH, "/sdcard", "/storage");
 
         if (executionCommand.shellName != null) {
             terminalSession.mSessionName = executionCommand.shellName;

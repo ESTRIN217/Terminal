@@ -33,6 +33,10 @@ data class TermuxUiState(
      * Whether OSC 8 hyperlinks underline and open on tap (experimental).
      */
     val hyperlinksEnabled: Boolean = true,
+    /**
+     * Whether inline terminal images (OSC 1337 / kitty graphics) are painted.
+     */
+    val imagesEnabled: Boolean = true,
     val extraKeysConfig: ExtraKeysConfig = ExtraKeysConfig(pages = emptyList()),
     val debianInstaller: DebianInstallerUiState = DebianInstallerUiState()
 ) {

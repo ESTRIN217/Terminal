@@ -275,6 +275,7 @@ fun TermuxMainScreen(
                                     palette = palette,
                                     useNativeRenderer = uiState.useNativeRenderer,
                                     hyperlinksEnabled = uiState.hyperlinksEnabled,
+                                    imagesEnabled = uiState.imagesEnabled,
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
@@ -301,6 +302,7 @@ fun TermuxMainScreen(
                                     palette = palette,
                                     useNativeRenderer = uiState.useNativeRenderer,
                                     hyperlinksEnabled = uiState.hyperlinksEnabled,
+                                    imagesEnabled = uiState.imagesEnabled,
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
@@ -324,6 +326,7 @@ fun TermuxMainScreen(
                                     palette = palette,
                                     useNativeRenderer = uiState.useNativeRenderer,
                                     hyperlinksEnabled = uiState.hyperlinksEnabled,
+                                    imagesEnabled = uiState.imagesEnabled,
                                     onPaneFocused = { viewModel.focusSession(it) },
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
@@ -446,6 +449,7 @@ private fun sendKeyToSession(
  * @param useNativeRenderer Whether terminal panes use the native Canvas plus a hidden
  * input view instead of the legacy view
  * @param hyperlinksEnabled Whether OSC 8 hyperlinks underline and open on tap
+ * @param imagesEnabled Whether inline terminal images are painted
  * @param onPaneFocused Callback with the session id when the pane requests focus
  * @param onRemoveSession Callback to remove the session
  * @param onOpenInTerminal Callback to open a terminal in a directory (file manager panes)
@@ -465,6 +469,7 @@ private fun SessionPane(
     palette: TerminalPalette,
     useNativeRenderer: Boolean,
     hyperlinksEnabled: Boolean,
+    imagesEnabled: Boolean,
     onPaneFocused: (String) -> Unit,
     onRemoveSession: (TermuxSessionUiModel) -> Unit,
     onOpenInTerminal: (String) -> Unit,
@@ -556,6 +561,7 @@ private fun SessionPane(
                     onLongPressConsumed = { viewClient.onLongPress(null) },
                     onClientTap = { viewClient.onSingleTapUp(null) },
                     hyperlinksEnabled = hyperlinksEnabled,
+                    imagesEnabled = imagesEnabled,
                     onFontSizeStep = { step ->
                         val target = (fontSize + step).coerceIn(MinTerminalFontSizePx, MaxTerminalFontSizePx)
                         if (target != fontSize) onFontSizeStep(target)
@@ -595,6 +601,7 @@ private fun SessionPane(
                 isActivePane = isActivePane,
                 onActivatePane = { onPaneFocused(model.id) },
                 hyperlinksEnabled = hyperlinksEnabled,
+                imagesEnabled = imagesEnabled,
                 modifier = modifier
             )
         }

@@ -47,6 +47,14 @@ public abstract class UnixShellEnvironment implements IShellEnvironment {
      * to a terminal. The format and allowable values of this environment variable are unspecified. */
     public static final String ENV_TERM = "TERM";
 
+    /**
+     * Environment variable for the iTerm2 Feature Reporting string
+     * ({@code TERM_FEATURES}). Same encoding as {@code OSC 1337;Capabilities}:
+     * e.g. {@code T3BMHF} (24-bit, bracketed paste, mouse, hyperlinks, OSC 1337 FILE).
+     * Kitty graphics are probed with APC {@code a=q}, not this variable.
+     */
+    public static final String ENV_TERM_FEATURES = "TERM_FEATURES";
+
     /** Environment variable for the path of a directory made available for programs that need a place
      * to create temporary files. */
     public static final String ENV_TMPDIR = "TMPDIR";

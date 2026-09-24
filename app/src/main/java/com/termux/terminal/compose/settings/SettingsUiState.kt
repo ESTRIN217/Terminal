@@ -21,6 +21,7 @@ data class SettingsUiState(
     val useCustomColorScheme: Boolean = false,
     val nativeComposeRenderer: Boolean = false,
     val terminalHyperlinks: Boolean = true,
+    val terminalImages: Boolean = true,
     val force60Hz: Boolean = false,
     val logLevel: Int = 1,
     val terminalViewKeyLogging: Boolean = false,
