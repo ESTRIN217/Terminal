@@ -43,6 +43,12 @@ public final class TerminalRenderer {
     private TerminalEmulator mPlaceholderEmulator;
     private float mPlaceholderTop;
     private float mPlaceholderBottom;
+    /** Scratch style/selection context for {@link #mPlaceholderVisitor} (cell blanking). */
+    private TerminalRow mPlaceholderLine;
+    private int[] mPlaceholderPalette;
+    private boolean mPlaceholderReverseVideo;
+    private int mPlaceholderSelX1;
+    private int mPlaceholderSelX2;
     /** Paints decoded placeholder cells; runs after text so opaque images cover the glyph. */
     private final KittyPlaceholderDecoder.CellVisitor mPlaceholderVisitor =
         new KittyPlaceholderDecoder.CellVisitor() {
@@ -235,7 +241,8 @@ public final class TerminalRenderer {
             // Inline images paint after text so previews sit above leftover cell glyphs;
             // the cursor was already painted inside the run above and stays on top of
             // the image only when it falls outside the image rect (acceptable v1).
-            drawImagesForRow(mEmulator, screen, canvas, row, heightOffset);
+            drawImagesForRow(mEmulator, screen, canvas, row, heightOffset,
+                lineObject, palette, reverseVideo, selx1, selx2);
             // Unicode placeholders (kitty U+10EEEE): decode + paint after text so the
             // image covers the placeholder glyph; inheritance spans wrapped lines.
             if (mImagesEnabled) {
@@ -244,6 +251,11 @@ public final class TerminalRenderer {
                 mPlaceholderEmulator = mEmulator;
                 mPlaceholderTop = heightOffset - mFontLineSpacing;
                 mPlaceholderBottom = heightOffset;
+                mPlaceholderLine = lineObject;
+                mPlaceholderPalette = palette;
+                mPlaceholderReverseVideo = reverseVideo;
+                mPlaceholderSelX1 = selx1;
+                mPlaceholderSelX2 = selx2;
                 KittyPlaceholderDecoder.collectRow(lineObject, columns, mPlaceholderState, mPlaceholderVisitor);
             }
         }
@@ -278,6 +290,14 @@ public final class TerminalRenderer {
         final int srcRight = (int) ((long) (target.gridCol + 1) * bmpW / vp.cols);
         final float left = column * mFontWidth;
         final float right = left + mFontWidth;
+        // Blank the cell with its effective background before painting the slice: the
+        // placeholder glyph is drawn by the text run underneath and transparent image
+        // pixels must show the cell background (kitty spec), never the glyph.
+        final boolean reverseHere = mPlaceholderReverseVideo
+            || (column >= mPlaceholderSelX1 && column <= mPlaceholderSelX2);
+        mTextPaint.setColor(TextStyle.effectiveBackgroundColor(
+            mPlaceholderLine.getStyle(column), mPlaceholderPalette, reverseHere));
+        canvas.drawRect(left, top, right, bottom, mTextPaint);
         final android.graphics.Rect src = new android.graphics.Rect(
             Math.min(srcLeft, bmpW - 1), Math.min(srcTop, bmpH - 1),
             Math.max(srcLeft + 1, Math.min(srcRight, bmpW)),
@@ -289,16 +309,24 @@ public final class TerminalRenderer {
     /**
      * Paint every inline image whose placement intersects {@code externalRow}.
      * Each contiguous run of the same image id on the row draws once, with the
-     * source band taken from the matching columns of the bitmap.
+     * source band taken from the matching columns of the bitmap. Cells under the
+     * strip are blanked with their effective background first (kitty spec:
+     * transparent image regions show the cell background, never the glyph).
      *
      * @param emulator     the emulator (image registry)
      * @param screen       the buffer being drawn
      * @param canvas       target canvas
      * @param externalRow  external (transcript-aware) row
      * @param yBottom      bottom of the row (same baseline convention as text runs)
+     * @param lineObject   the row being painted (per-cell styles for blanking)
+     * @param palette      the emulator indexed colors
+     * @param reverseVideo whether the emulator is in reverse-video mode
+     * @param selx1        selection left bound for the row (or -1)
+     * @param selx2        selection right bound for the row (or -1)
      */
     private void drawImagesForRow(TerminalEmulator emulator, TerminalBuffer screen, Canvas canvas,
-                                  int externalRow, float yBottom) {
+                                  int externalRow, float yBottom, TerminalRow lineObject,
+                                  int[] palette, boolean reverseVideo, int selx1, int selx2) {
         if (!mImagesEnabled) return;
         final int columns = emulator.mColumns;
         final float top = yBottom - mFontLineSpacing;
@@ -314,7 +342,8 @@ public final class TerminalRenderer {
             while (spanEnd < columns && screen.getImageAt(externalRow, spanEnd) == imageId) spanEnd++;
             final TerminalImageData data = emulator.getImageData(imageId);
             if (data != null && data.intersectsRow(externalRow)) {
-                drawImageStrip(canvas, data, externalRow, col, spanEnd - col, top, bottom);
+                drawImageStrip(canvas, data, externalRow, col, spanEnd - col, top, bottom,
+                    lineObject, palette, reverseVideo, selx1, selx2);
             }
             col = spanEnd;
         }
@@ -330,9 +359,16 @@ public final class TerminalRenderer {
      * @param widthCells  strip width in cells
      * @param top         strip top in canvas Y
      * @param bottom      strip bottom in canvas Y
+     * @param lineObject  the row being painted (per-cell styles for blanking)
+     * @param palette     the emulator indexed colors
+     * @param reverseVideo whether the emulator is in reverse-video mode
+     * @param selx1       selection left bound for the row (or -1)
+     * @param selx2       selection right bound for the row (or -1)
      */
     private void drawImageStrip(Canvas canvas, TerminalImageData data, int externalRow,
-                                int startColumn, int widthCells, float top, float bottom) {
+                                int startColumn, int widthCells, float top, float bottom,
+                                TerminalRow lineObject, int[] palette, boolean reverseVideo,
+                                int selx1, int selx2) {
         final Bitmap bitmap = bitmapFor(data);
         if (bitmap == null || bitmap.isRecycled()) return;
         final int bmpW = bitmap.getWidth();
@@ -348,6 +384,16 @@ public final class TerminalRenderer {
         final int srcRight = (int) ((long) (localCol + widthCells) * bmpW / data.cellsW);
         final float left = startColumn * mFontWidth;
         final float right = left + widthCells * mFontWidth;
+        // Blank every covered cell with its own effective background before painting:
+        // text runs (filename text etc.) are drawn underneath and transparent image
+        // pixels must show the cell background, never the leftover glyph.
+        for (int c = startColumn; c < startColumn + widthCells; c++) {
+            final boolean reverseHere = reverseVideo || (c >= selx1 && c <= selx2);
+            mTextPaint.setColor(TextStyle.effectiveBackgroundColor(
+                lineObject.getStyle(c), palette, reverseHere));
+            final float cellLeft = c * mFontWidth;
+            canvas.drawRect(cellLeft, top, cellLeft + mFontWidth, bottom, mTextPaint);
+        }
         final android.graphics.Rect src = new android.graphics.Rect(
             Math.min(srcLeft, bmpW - 1), srcTop,
             Math.max(srcLeft + 1, Math.min(srcRight, bmpW)), Math.min(bmpH, srcTop + srcH));
