@@ -3568,7 +3568,7 @@ public final class TerminalEmulator {
 
     /**
      * iTerm2 Feature Reporting string ({@code TERM_FEATURES} / {@code OSC 1337;Capabilities}).
-     * Codes: {@code T3}=24-bit, {@code B}=bracketed paste, {@code M}=mouse,
+     * Codes: {@code T}=24-bit, {@code B}=bracketed paste, {@code M}=mouse,
      * {@code H}=OSC 8 hyperlinks (when enabled), {@code F}=OSC 1337 FILE (when enabled).
      * No Sixel ({@code Sx}); kitty graphics are probed with APC {@code a=q}, not this string.
      *
@@ -3576,7 +3576,7 @@ public final class TerminalEmulator {
      */
     public String buildFeatureString() {
         final StringBuilder sb = new StringBuilder(8);
-        sb.append("T3"); // 24BIT: compatibility + full RGB SGR
+        sb.append("T"); // 24BIT: full RGB SGR
         sb.append('B');  // BRACKETED_PASTE
         sb.append('M');  // MOUSE (1000/1002/1006)
         if (mHyperlinksEnabled) sb.append('H');
@@ -3791,6 +3791,7 @@ public final class TerminalEmulator {
         int heightCells = -1;
         int pixelWidth = 0;
         int pixelHeight = 0;
+        boolean inline = true;
         for (String part : args.split(";")) {
             final int eq = part.indexOf('=');
             if (eq <= 0) continue;
@@ -3808,9 +3809,14 @@ public final class TerminalEmulator {
                     heightCells = dim[0];
                     pixelHeight = dim[1];
                 }
+            } else if (key.equalsIgnoreCase("inline")) {
+                inline = !"0".equalsIgnoreCase(value.trim());
             }
-            // name / size / inline / preserveAspectRatio accepted and ignored in v1.
+            // name / size / preserveAspectRatio accepted and ignored in v1.
         }
+        // inline=0 means the client wants the image downloaded/displayed externally,
+        // not rendered inline in the terminal (spec: iTerm2 inline images).
+        if (!inline) return;
         // Without an explicit cell size there is nothing safe to stamp (we do not
         // decode intrinsic dimensions in this pure-Java module).
         if (widthCells < 0 && heightCells < 0) return;

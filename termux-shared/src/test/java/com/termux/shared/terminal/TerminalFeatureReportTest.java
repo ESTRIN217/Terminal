@@ -8,28 +8,28 @@ public class TerminalFeatureReportTest {
 
     @Test
     public void build_bothOn_includesFileAndHyperlinks() {
-        Assert.assertEquals("T3BMHF", TerminalFeatureReport.buildFeatureString(true, true));
+        Assert.assertEquals("TBMHF", TerminalFeatureReport.buildFeatureString(true, true));
     }
 
     @Test
     public void build_imagesOff_omitsFile() {
-        Assert.assertEquals("T3BMH", TerminalFeatureReport.buildFeatureString(false, true));
+        Assert.assertEquals("TBMH", TerminalFeatureReport.buildFeatureString(false, true));
     }
 
     @Test
     public void build_hyperlinksOff_omitsHyperlinks() {
-        Assert.assertEquals("T3BMF", TerminalFeatureReport.buildFeatureString(true, false));
+        Assert.assertEquals("TBMF", TerminalFeatureReport.buildFeatureString(true, false));
     }
 
     @Test
     public void build_bothOff_isBare() {
-        Assert.assertEquals("T3BM", TerminalFeatureReport.buildFeatureString(false, false));
+        Assert.assertEquals("TBM", TerminalFeatureReport.buildFeatureString(false, false));
     }
 
     @Test
     public void build_neverAdvertisesSixel() {
         final String s = TerminalFeatureReport.buildFeatureString(true, true);
         Assert.assertFalse(s.contains("Sx"));
-        Assert.assertTrue(s.startsWith("T3"));
+        Assert.assertTrue(s.startsWith("T"));
     }
 }

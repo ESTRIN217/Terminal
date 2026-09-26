@@ -488,4 +488,39 @@ public class ComposeTerminalFrameTest {
         Assert.assertEquals(-50, ComposeTerminalFrame.scrollOffsetForNewOutput(-50, 3, 50, true));
         Assert.assertEquals(-50, ComposeTerminalFrame.scrollOffsetForNewOutput(-60, 3, 50, true));
     }
+
+    @Test
+    public void testSkipCells_omitsColumnsFromRuns() {
+        TerminalRow row = asciiRow(6, "abcdef", TextStyle.NORMAL);
+        java.util.Set<Integer> skip = new java.util.HashSet<>();
+        skip.add(2);
+        skip.add(3);
+
+        List<ComposeTerminalFrame.TextRun> runs =
+            ComposeTerminalFrame.buildLineRuns(row, 6, -1, -1, -1, true, codePoint -> false, skip);
+
+        Assert.assertEquals(2, runs.size());
+        Assert.assertEquals(0, runs.get(0).getStartColumn());
+        Assert.assertEquals(2, runs.get(0).getColumnWidth());
+        Assert.assertEquals(4, runs.get(1).getStartColumn());
+        Assert.assertEquals(2, runs.get(1).getColumnWidth());
+    }
+
+    @Test
+    public void testSkipCells_adjacentSkipsMergeIntoSingleGap() {
+        TerminalRow row = asciiRow(6, "abcdef", TextStyle.NORMAL);
+        java.util.Set<Integer> skip = new java.util.HashSet<>();
+        skip.add(1);
+        skip.add(2);
+        skip.add(3);
+
+        List<ComposeTerminalFrame.TextRun> runs =
+            ComposeTerminalFrame.buildLineRuns(row, 6, -1, -1, -1, true, codePoint -> false, skip);
+
+        Assert.assertEquals(2, runs.size());
+        Assert.assertEquals(0, runs.get(0).getStartColumn());
+        Assert.assertEquals(1, runs.get(0).getColumnWidth());
+        Assert.assertEquals(4, runs.get(1).getStartColumn());
+        Assert.assertEquals(2, runs.get(1).getColumnWidth());
+    }
 }

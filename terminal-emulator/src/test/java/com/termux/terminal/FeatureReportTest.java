@@ -39,7 +39,7 @@ public class FeatureReportTest extends TerminalTestCase {
 	public void testCapabilitiesQueryIncludesFileAndHyperlinks() {
 		withTerminalSized(2, 2);
 		final String features = mTerminal.buildFeatureString();
-		assertTrue(features.contains("T3"));
+		assertTrue(features.contains("T"));
 		assertTrue(features.contains("B"));
 		assertTrue(features.contains("M"));
 		assertTrue(features.contains("H"));
@@ -90,15 +90,15 @@ public class FeatureReportTest extends TerminalTestCase {
 	public void testFeatureStringMatchesSharedBuilder() {
 		withTerminalSized(2, 2);
 		// Keep TerminalEmulator.buildFeatureString aligned with TerminalFeatureReport codes
-		// for the default (both ON) case: T3 + B + M + H + F.
-		assertEquals("T3BMHF", mTerminal.buildFeatureString());
+		// for the default (both ON) case: T + B + M + H + F.
+		assertEquals("TBMHF", mTerminal.buildFeatureString());
 		mTerminal.setTerminalImagesEnabled(false);
-		assertEquals("T3BMH", mTerminal.buildFeatureString());
+		assertEquals("TBMH", mTerminal.buildFeatureString());
 		mTerminal.setTerminalImagesEnabled(true);
 		mTerminal.setHyperlinksEnabled(false);
-		assertEquals("T3BMF", mTerminal.buildFeatureString());
+		assertEquals("TBMF", mTerminal.buildFeatureString());
 		mTerminal.setHyperlinksEnabled(false);
 		mTerminal.setTerminalImagesEnabled(false);
-		assertEquals("T3BM", mTerminal.buildFeatureString());
+		assertEquals("TBM", mTerminal.buildFeatureString());
 	}
 }

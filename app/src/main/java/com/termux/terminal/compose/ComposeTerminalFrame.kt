@@ -299,6 +299,8 @@ object ComposeTerminalFrame {
      * forms its own run
      * @param hasWidthMismatch Width-mismatch probe per code point (measured vs wcwidth); true
      * forces a run break, mirroring the legacy font-metrics check
+     * @param skipCells Column indices to exclude from runs (e.g. cells with an active
+     * inline image or resolved unicode placeholder whose glyph must not be painted)
      * @return The runs covering all [columns] columns, in order
      */
     @JvmStatic
@@ -310,7 +312,8 @@ object ComposeTerminalFrame {
         selectionX1: Int,
         selectionX2: Int,
         enableLigatures: Boolean,
-        hasWidthMismatch: (codePoint: Int) -> Boolean = { false }
+        hasWidthMismatch: (codePoint: Int) -> Boolean = { false },
+        skipCells: Set<Int> = emptySet()
     ): List<TextRun> {
         val runs = ArrayList<TextRun>()
         val text = line.mText
@@ -342,6 +345,27 @@ object ComposeTerminalFrame {
             val style = line.getStyle(column)
             val hyperlink = line.getHyperlink(column)
             val mismatch = hasWidthMismatch(codePoint)
+
+            if (skipCells.contains(column)) {
+                if (hasRun) {
+                    runs.add(
+                        TextRun(
+                            runStartColumn, column - runStartColumn,
+                            runStartCharIndex, charIndex - runStartCharIndex,
+                            lastStyle, lastInCursor, lastInSelection, lastHyperlink
+                        )
+                    )
+                    hasRun = false
+                }
+                column += codePointWcWidth
+                charIndex += charsForCodePoint
+                while (charIndex < spaceUsed && charIndex < text.size &&
+                    WcWidth.width(text, charIndex) <= 0
+                ) {
+                    charIndex += if (Character.isHighSurrogate(text[charIndex])) 2 else 1
+                }
+                continue
+            }
 
             if (!hasRun) {
                 lastStyle = style

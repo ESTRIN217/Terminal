@@ -221,4 +221,11 @@ public class ProotShellEnvironmentTest {
         Assert.assertEquals("/root", env.get("HOME"));
         Assert.assertEquals(TermuxConstants.TERMUX_HOME_DIR_PATH, env.get("PWD"));
     }
+
+    @Test
+    public void testGetEnvironment_kittyBrandingForKgp() {
+        HashMap<String, String> env = new ProotShellEnvironment().getEnvironment(null, false);
+        Assert.assertEquals("1", env.get("KITTY_WINDOW_ID"));
+        Assert.assertEquals("kitty", env.get("TERM_PROGRAM"));
+    }
 }

@@ -282,6 +282,11 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
         environment.put(ENV_LANGUAGE, "C");
         environment.put(ENV_DEBIAN_FRONTEND, GUEST_DEBIAN_FRONTEND);
 
+        // Advertise kitty terminal branding so yazi and other KGP-aware TUIs select the
+        // Kitty Graphics Protocol image adapter without requiring manual env setup.
+        environment.put(ENV_KITTY_WINDOW_ID, "1");
+        environment.put(ENV_TERM_PROGRAM, "kitty");
+
         // termux-exec conflicts with proot: never propagate these. LD_PRELOAD
         // must also stay out of the host proot process environment (the host
         // binary could not load a guest-absolute preload path); the linkfix

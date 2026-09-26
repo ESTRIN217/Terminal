@@ -206,7 +206,7 @@ Una URL impresa sin OSC 8 solo es alcanzable vía **Seleccionar URL** (o selecci
 
 `{FeatureString}` (prefijo alfanumérico; ignora el resto): `T3` = 24-bit, `B` = bracketed paste, `M` = mouse, `H` = OSC 8, `F` = OSC 1337 FILE. **No** se anuncia Sixel (`Sx`). **No** hay code para kitty en `TERM_FEATURES` — usar `a=q`.
 
-Ejemplo ON: `T3BMHF`. Con imágenes OFF: `T3BMH`.
+Ejemplo ON: `TBMHF`. Con imágenes OFF: `TBMH`.
 
 ```sh
 # kitty (yazi, kitten icat, …)

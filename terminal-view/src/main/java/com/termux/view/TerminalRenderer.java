@@ -159,6 +159,23 @@ public final class TerminalRenderer {
             final char[] line = lineObject.mText;
             final int charsUsedInLine = lineObject.getSpaceUsed();
 
+            java.util.HashSet<Integer> skipCells = null;
+            java.util.ArrayList<int[]> pendingPlaceholders = null;
+            if (mImagesEnabled) {
+                skipCells = new java.util.HashSet<>();
+                pendingPlaceholders = new java.util.ArrayList<>();
+                for (int col = 0; col < columns; col++) {
+                    if (screen.getImageAt(row, col) != 0) skipCells.add(col);
+                }
+                if (!(row > topRow && screen.getLineWrap(row - 1))) mPlaceholderState.reset();
+                final java.util.HashSet<Integer> finalSkipCells = skipCells;
+                final java.util.ArrayList<int[]> finalPending = pendingPlaceholders;
+                KittyPlaceholderDecoder.collectRow(lineObject, columns, mPlaceholderState, (col, target) -> {
+                    finalSkipCells.add(col);
+                    finalPending.add(new int[]{col, target.imageId, target.gridRow, target.gridCol});
+                });
+            }
+
             long lastRunStyle = 0;
             boolean lastRunInsideCursor = false;
             boolean lastRunInsideSelection = false;
@@ -187,6 +204,30 @@ public final class TerminalRenderer {
                 final float measuredCodePointWidth = (codePoint < asciiMeasures.length) ? asciiMeasures[codePoint] : mTextPaint.measureText(line,
                     currentCharIndex, charsForCodePoint);
                 final boolean fontWidthMismatch = Math.abs(measuredCodePointWidth / mFontWidth - codePointWcWidth) > 0.01;
+
+                if (skipCells != null && skipCells.contains(column)) {
+                    if (lastRunStartColumn >= 0) {
+                        final int columnWidthSinceLastRun = column - lastRunStartColumn;
+                        final int charsSinceLastRun = currentCharIndex - lastRunStartIndex;
+                        int cursorColor = lastRunInsideCursor ? mEmulator.mColors.mCurrentColors[TextStyle.COLOR_INDEX_CURSOR] : 0;
+                        boolean invertCursorTextColor = false;
+                        if (lastRunInsideCursor && cursorShape == TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK) {
+                            invertCursorTextColor = true;
+                        }
+                        drawTextRun(canvas, line, palette, heightOffset, lastRunStartColumn, columnWidthSinceLastRun,
+                            lastRunStartIndex, charsSinceLastRun, measuredWidthForRun,
+                            cursorColor, cursorShape, lastRunStyle, reverseVideo || invertCursorTextColor || lastRunInsideSelection,
+                            lastRunHyperlink != 0 && mHyperlinksEnabled);
+                    }
+                    lastRunStartColumn = -1;
+                    measuredWidthForRun = 0.f;
+                    column += codePointWcWidth;
+                    currentCharIndex += charsForCodePoint;
+                    while (currentCharIndex < charsUsedInLine && WcWidth.width(line, currentCharIndex) <= 0) {
+                        currentCharIndex += Character.isHighSurrogate(line[currentCharIndex]) ? 2 : 1;
+                    }
+                    continue;
+                }
 
                 // Break the run when style, cursor, selection or OSC 8 hyperlink changes, when this code point
                 // (or the one that started the run) has a width that does not match wcwidth(), or
@@ -243,10 +284,10 @@ public final class TerminalRenderer {
             // the image only when it falls outside the image rect (acceptable v1).
             drawImagesForRow(mEmulator, screen, canvas, row, heightOffset,
                 lineObject, palette, reverseVideo, selx1, selx2);
-            // Unicode placeholders (kitty U+10EEEE): decode + paint after text so the
-            // image covers the placeholder glyph; inheritance spans wrapped lines.
-            if (mImagesEnabled) {
-                if (!(row > topRow && screen.getLineWrap(row - 1))) mPlaceholderState.reset();
+            // Unicode placeholders (kitty U+10EEEE): paint after text so the image
+            // covers the placeholder glyph; cells were collected before text to skip
+            // the glyph in the text run.
+            if (pendingPlaceholders != null) {
                 mPlaceholderCanvas = canvas;
                 mPlaceholderEmulator = mEmulator;
                 mPlaceholderTop = heightOffset - mFontLineSpacing;
@@ -256,7 +297,10 @@ public final class TerminalRenderer {
                 mPlaceholderReverseVideo = reverseVideo;
                 mPlaceholderSelX1 = selx1;
                 mPlaceholderSelX2 = selx2;
-                KittyPlaceholderDecoder.collectRow(lineObject, columns, mPlaceholderState, mPlaceholderVisitor);
+                for (int[] ph : pendingPlaceholders) {
+                    mPlaceholderVisitor.visit(ph[0],
+                        new KittyPlaceholderDecoder.Target(ph[1], ph[2], ph[3]));
+                }
             }
         }
     }

@@ -788,16 +788,31 @@ private fun renderComposeFrame(
         val cursorX = if (externalRow == cursorRow && cursorVisible) cursorCol else -1
         val line = screen.allocateFullLineIfNecessary(screen.externalToInternalRow(externalRow))
         val (selX1, selX2) = ComposeTerminalFrame.selectionBoundsForRow(selection, externalRow, columns)
-        val runs = ComposeTerminalFrame.buildLineRuns(
-            line, columns, cursorX, selX1, selX2, enableLigatures
-        ) { codePoint ->
-            val measured = if (codePoint < metrics.asciiMeasures.size) {
-                metrics.asciiMeasures[codePoint]
-            } else {
-                paint.measureText(String(Character.toChars(codePoint)))
+        val skipCells = HashSet<Int>()
+        var pendingPlaceholders: List<Pair<Int, com.termux.terminal.KittyPlaceholderDecoder.Target>>? = null
+        if (imagesEnabled) {
+            for (col in 0 until columns) {
+                if (screen.getImageAt(externalRow, col) != 0) skipCells.add(col)
             }
-            abs(measured / metrics.fontWidth - WcWidth.width(codePoint)) > 0.01f
+            if (!(externalRow > topRow && screen.getLineWrap(externalRow - 1))) placeholderState.reset()
+            pendingPlaceholders = ArrayList()
+            com.termux.terminal.KittyPlaceholderDecoder.collectRow(line, columns, placeholderState) { col, target ->
+                skipCells.add(col)
+                pendingPlaceholders.add(col to target)
+            }
         }
+        val runs = ComposeTerminalFrame.buildLineRuns(
+            line, columns, cursorX, selX1, selX2, enableLigatures,
+            hasWidthMismatch = { codePoint: Int ->
+                val measured = if (codePoint < metrics.asciiMeasures.size) {
+                    metrics.asciiMeasures[codePoint]
+                } else {
+                    paint.measureText(String(Character.toChars(codePoint)))
+                }
+                kotlin.math.abs(measured / metrics.fontWidth - WcWidth.width(codePoint)) > 0.01f
+            },
+            skipCells = skipCells
+        )
         for (run in runs) {
             drawComposeRun(
                 canvas, line.mText, run, colors, defaultBackground, reverseVideo,
@@ -810,10 +825,10 @@ private fun renderComposeFrame(
                 canvas, emulator, screen, externalRow, heightOffset, metrics, paint,
                 line, colors, defaultBackground, reverseVideo, selX1, selX2
             )
-            // Unicode placeholders (kitty U+10EEEE): decode + paint after text so the
-            // image covers the placeholder glyph; inheritance spans wrapped lines.
-            if (!(externalRow > topRow && screen.getLineWrap(externalRow - 1))) placeholderState.reset()
-            com.termux.terminal.KittyPlaceholderDecoder.collectRow(line, columns, placeholderState) { column, target ->
+            // Unicode placeholders (kitty U+10EEEE): paint after text so the image
+            // covers the placeholder glyph; cells were collected before text to skip
+            // the glyph in the text run.
+            pendingPlaceholders?.forEach { (column, target) ->
                 drawComposePlaceholderCell(
                     canvas, emulator, column, target, heightOffset, metrics, paint,
                     line, colors, defaultBackground, reverseVideo, selX1, selX2

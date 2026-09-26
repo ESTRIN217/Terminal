@@ -14,8 +14,8 @@ public final class TerminalFeatureReport {
 
     private static final String LOG_TAG = "TerminalFeatureReport";
 
-    /** 24BIT: compatibility + full RGB SGR ({@code CSI 38;2;…} and colon form). */
-    public static final String CODE_24BIT = "T3";
+    /** 24BIT: full RGB SGR ({@code CSI 38;2;…} and colon form). Spec code: {@code T}. */
+    public static final String CODE_24BIT = "T";
     /** BRACKETED_PASTE (DECSET 2004). */
     public static final String CODE_BRACKETED_PASTE = "B";
     /** MOUSE (DECSET 1000/1002/1006). */
@@ -33,7 +33,7 @@ public final class TerminalFeatureReport {
      *
      * @param imagesEnabled    {@code terminal_images} — advertise {@code F} when true
      * @param hyperlinksEnabled {@code terminal_hyperlinks} — advertise {@code H} when true
-     * @return e.g. {@code T3BMHF} or {@code T3BM} when both features are off
+     * @return e.g. {@code TBMHF} or {@code TBM} when both features are off
      */
     public static String buildFeatureString(boolean imagesEnabled, boolean hyperlinksEnabled) {
         final StringBuilder sb = new StringBuilder(8);

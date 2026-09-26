@@ -174,6 +174,15 @@ public class TerminalImagesOsc1337Test extends TerminalTestCase {
 		assertEquals(0, mTerminal.getScreen().getImageAt(0, 0));
 	}
 
+	public void testInlineZeroDoesNotRender() {
+		withTerminalSized(10, 4);
+		String osc = "\033]1337;File=inline=0;width=2;height=2:" + PNG_1x1_B64 + "\007";
+		enterString(osc);
+		assertNull(mTerminal.getImageDataAt(0, 0));
+		assertEquals(0, mTerminal.getScreen().getImageAt(0, 0));
+		assertCursorAt(0, 0);
+	}
+
 	private static String repeat(String s, int times) {
 		final StringBuilder sb = new StringBuilder(s.length() * times);
 		for (int i = 0; i < times; i++) sb.append(s);
