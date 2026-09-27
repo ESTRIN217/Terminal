@@ -1,5 +1,6 @@
 package com.termux.terminal.compose
 
+import androidx.compose.runtime.Immutable
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -8,6 +9,7 @@ import org.json.JSONObject
  *
  * @param pages The pages of extra key rows; each page is a list of rows of buttons
  */
+@Immutable
 data class ExtraKeysConfig(
     val pages: List<List<List<ExtraKeyConfig>>>
 ) {
@@ -193,6 +195,7 @@ data class ExtraKeysConfig(
  * @param isMacro Whether this is a macro (space-separated key sequence)
  * @param popup Optional popup configuration (triggered by swipe up)
  */
+@Immutable
 data class ExtraKeyConfig(
     val key: String,
     val display: String,

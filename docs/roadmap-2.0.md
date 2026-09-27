@@ -111,16 +111,16 @@ Análisis metodológico del renderer nativo y de la UI Compose; entrega = este i
 2. **Sort + symlink scan en `Dispatchers.Main`** — `FileManagerViewModel.refresh()` filtraba, ordenaba (`FileSortOption.getComparator` → stats por comparación) y escaneaba `readSymlinkTargetRaw`/`isBrokenSymlink` dentro de `withContext(Main)` tras `listFiles`. Fix: pipeline completo (filter → sort → scan → publish) en `Dispatchers.IO` vía `applyListing()`; en Main solo `_uiState.update`.
 3. **`setSearchQuery` re-listeaba el directorio por tecla** — cada keystroke llamaba `refresh()` → `listFiles` completo. Fix: cache `lastListed: Array<File>?`/`lastListedDir`; `setSearchQuery`/`toggleSort`/`toggleHidden` usan `reapplyCachedListing()` (re-filtro en memoria sobre IO, sin enumerar). El cache se invalida al iniciar un `refresh()` full (mutaciones de archivo, navegación) para no servir listings previos a una mutación; si no hay cache válida se cae a `refresh()`. Sin debounce (el filter en IO por tecla es barato).
 
-**P1 — Pendiente (post-2.0)**
+**P1 — Fixed**
 
-4. **Stats en bodies de composable (filemanager)** — `file.length()`/`file.isDirectory` en filas del `LazyColumn` (`FileManagerScreen.kt` ~477/456), `bookmarkDirs()` re-alloca lista+Pairs por recomposición del diálogo (~706), DETAILS `f.length()` en composition (~600). Mover a state ya resuelto en el ViewModel o `remember`.
-5. **`object : ExtraKeysCallback` nuevo por recomposición** — `TermuxMainScreen.kt` ~358: identidad anónima nueva cada recomposición → el slot de `ExtraKeysBar` nunca es skippable. Extraer a `remember`/`rememberUpdatedState`.
-6. **Sin `@Stable`/`@Immutable` ni `derivedStateOf`** — `TermuxUiState`/`List`/`TerminalSession`/`ExtraKeysConfig` inestables; cero `derivedStateOf` en todo el repo. Strong skipping está ON por default (Kotlin/Compose Compiler 2.4.x, sin bloque `composeCompiler` explícito); fui huecos puntuales (puntos 4–5, state monolítico).
-7. **UI state monolítico del filemanager** — un solo `FileManagerUiState.collectAsState` recompose la pantalla entera ante cualquier cambio (`busy`, `focusedIndex`, status…). Considerar selectors o estado particionado.
-8. **`licenses()` reconstruido 3×** — `LicensesScreen.kt` ~108/116 rehace la lista en el mismo loop. `remember`/`val` único.
-9. **`crash_log.md`/prefs en `onResume`** — `TermuxCrashUtils.notifyAppCrashFromCrashLogFile` en cada resume (lifecycle, no frame; ya en background thread con pref cached). Baja prioridad; no es hot path de dibujo.
-10. **Ktor** — declarado en `gradle/libs.versions.toml` pero **sin** `implementation` en ningún `*.kts` ni imports: catálogo muerto. No hay fetch de releases/issues → no hay cache HTTP que añadir hoy. Si se cablea Ktor, diseñar cache desde el inicio. *(Errata del item 17 original: "Ktor ya en el stack" era incorrecto.)*
-11. **Imágenes** — el item 17 decía "no hay imágenes en UI": **falso**. `AboutScreen` usa Coil 3 `AsyncImage` (`coil-compose` + okhttp). Coil ya cachea en memoria/disco y decodifica off-main; riesgo residual bajo. *(Errata corregida.)*
+4. **Stats en bodies de composable (filemanager)** — ✅ hecho: `file.isDirectory`/`file.length()` cacheados con `remember(file.absolutePath)` en filas del LazyColumn; `bookmarkDirs()` con `remember` en el diálogo; `f.length()` del DETAILS con `remember(f.absolutePath)`.
+5. **`object : ExtraKeysCallback` nuevo por recomposición** — ✅ hecho: extraído a `remember(activeModel)` con lambda SAM en `TermuxMainScreen.kt`; la identidad del callback es estable entre recomposiciones con la misma sesión activa.
+6. **Sin `@Stable`/`@Immutable`** — ✅ hecho: `@Immutable` añadido a `TermuxUiState`, `SplitState`, `TermuxSessionUiModel`, `DebianInstallerUiState`, `ExtraKeysConfig`, `ExtraKeyConfig` y `FileManagerUiState`. `derivedStateOf` sigue pendiente (evaluar casos puntuales post-2.0).
+7. **UI state monolítico del filemanager** — ⏳ pendiente (post-2.0): refactor significativo (particionar `FileManagerUiState` en flows separados o usar `select`). No bloquea 2.0.
+8. **`licenses()` reconstruido 3×** — ✅ hecho: extraída a `val licenses = licenses()` local en el `item` del LazyColumn; se construye una vez por recomposición del item, no por iteración.
+9. **`crash_log.md`/prefs en `onResume`** — ⏳ pendiente (post-2.0, baja prioridad): lifecycle, no frame; ya en background thread con pref cached. No es hot path de dibujo.
+10. **Ktor** — ✅ hecho: entradas muertas eliminadas de `gradle/libs.versions.toml` (versión `ktor` + 4 librerías). Si se cablea Ktor en el futuro, diseñar cache desde el inicio. *(Errata del item 17 original: "Ktor ya en el stack" era incorrecto.)*
+11. **Imágenes** — ✅ verificado: `AboutScreen` usa Coil 3 `AsyncImage` con cache en memoria/disco y decodificación off-main. Riesgo residual bajo. *(Errata corregida del item 17 "no hay imágenes".)*
 
 **P2 — Pendiente (post-2.0, draw path / micro-opt)**
 
@@ -180,5 +180,5 @@ Análisis metodológico del renderer nativo y de la UI Compose; entrega = este i
 | Fase 2 — UI Compose | Completada (ítems 4–5, 11 menú "Más" terminal y 12 editar en filemanager) |
 | Fase 2.5 — Rendimiento de plataforma | Completada (13–15) |
 | Fase 3 — Rendering | Completada (OSC 1337 + KGP listos para producción — ver Fase 3.8; paridad legacy/nativa cerrada — ver Fase 3.6) |
-| Fase 3.7 — Auditoría perf Compose | Completada (informe 16–17 + fixes P0: remember font/palette, IO filemanager, cache de listado) |
+| Fase 3.7 — Auditoría perf Compose | Completada (informe 16–17 + fixes P0: remember font/palette, IO filemanager, cache de listado + P1: file stats, ExtraKeysCallback, @Immutable, licenses, Ktor) |
 | Fase 4 — Release 2.0 | Pendiente (incluye 18 clave release, 19 docs) |

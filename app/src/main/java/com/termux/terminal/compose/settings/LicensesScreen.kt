@@ -104,8 +104,9 @@ fun LicensesScreen(
         ) {
             item {
                 SettingsSectionTitle(title = stringResource(R.string.open_source_licenses))
+                val licenses = licenses()
                 SettingsCardGroup {
-                    licenses().forEachIndexed { index, license ->
+                    licenses.forEachIndexed { index, license ->
                         SettingsListTile(
                             leadingIcon = Icons.Default.Description,
                             title = license.name,
@@ -113,7 +114,7 @@ fun LicensesScreen(
                             trailingIcon = Icons.Default.ChevronRight,
                             onClick = { ShareUtils.openUrl(context, license.url) }
                         )
-                        if (index < licenses().lastIndex) {
+                        if (index < licenses.lastIndex) {
                             HorizontalDivider(
                                 modifier = Modifier.padding(horizontal = 16.dp),
                                 color = MaterialTheme.colorScheme.outlineVariant

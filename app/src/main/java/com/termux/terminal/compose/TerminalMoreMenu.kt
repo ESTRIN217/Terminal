@@ -9,7 +9,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -25,7 +26,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.Title
 import com.termux.R
@@ -99,7 +100,7 @@ fun TerminalMoreMenu(
     onAction: (TerminalMoreAction) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -160,7 +161,7 @@ fun TerminalMoreMenu(
         )
         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         TerminalMoreMenuItem(
-            icon = Icons.Default.HelpOutline,
+            icon = Icons.AutoMirrored.Filled.HelpOutline,
             label = stringResource(R.string.action_open_help),
             onClick = { onAction(TerminalMoreAction.HELP) }
         )

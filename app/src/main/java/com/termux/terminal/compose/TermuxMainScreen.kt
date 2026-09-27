@@ -357,46 +357,45 @@ fun TermuxMainScreen(
         // for list navigation (see FileManagerKeyHandlerHolder).
         val activeModel = uiState.activeSessionModel
         if (uiState.isExtraKeysVisible && activeModel != null) {
+            val extraKeysCallback = remember(activeModel) {
+                ExtraKeysCallback { key, isMacro ->
+                    when (activeModel) {
+                        is TermuxSessionUiModel.Terminal -> {
+                            val session = activeModel.session
+                            if (isMacro) {
+                                val keys = key.split(" ")
+                                var ctrlActive = false
+                                var altActive = false
+                                var shiftActive = false
+                                for (k in keys) {
+                                    when (k) {
+                                        "CTRL" -> ctrlActive = true
+                                        "ALT" -> altActive = true
+                                        "SHIFT" -> shiftActive = true
+                                        "FN" -> Unit
+                                        else -> {
+                                            sendKeyToSession(session, k, ctrlActive, altActive, shiftActive)
+                                            ctrlActive = false
+                                            altActive = false
+                                            shiftActive = false
+                                        }
+                                    }
+                                }
+                            } else {
+                                sendKeyToSession(session, key)
+                            }
+                        }
+                        is TermuxSessionUiModel.FileManager -> {
+                            FileManagerKeyHandlerHolder.active?.invoke(key, isMacro)
+                        }
+                    }
+                }
+            }
             ExtraKeysBar(
                 config = uiState.extraKeysConfig,
                 activeModifiers = uiState.extraKeysModifiers,
                 onToggleModifier = viewModel::toggleExtraKeysModifier,
-                callback = object : ExtraKeysCallback {
-                    override fun onKeyClick(key: String, isMacro: Boolean) {
-                        when (activeModel) {
-                            is TermuxSessionUiModel.Terminal -> {
-                                val session = activeModel.session
-                                if (isMacro) {
-                                    val keys = key.split(" ")
-                                    var ctrlActive = false
-                                    var altActive = false
-                                    var shiftActive = false
-                                    for (k in keys) {
-                                        when (k) {
-                                            "CTRL" -> ctrlActive = true
-                                            "ALT" -> altActive = true
-                                            "SHIFT" -> shiftActive = true
-                                            // Consumed: FN only modifies hardware key events
-                                            // (legacy parity), never bar-to-bar combos.
-                                            "FN" -> Unit
-                                            else -> {
-                                                sendKeyToSession(session, k, ctrlActive, altActive, shiftActive)
-                                                ctrlActive = false
-                                                altActive = false
-                                                shiftActive = false
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    sendKeyToSession(session, key)
-                                }
-                            }
-                            is TermuxSessionUiModel.FileManager -> {
-                                FileManagerKeyHandlerHolder.active?.invoke(key, isMacro)
-                            }
-                        }
-                    }
-                },
+                callback = extraKeysCallback,
                 modifier = Modifier
             )
         }

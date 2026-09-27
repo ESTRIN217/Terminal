@@ -419,6 +419,8 @@ fun FileManagerScreen(
                     val linkTarget = state.symlinkTargets[file.absolutePath]
                     val isLink = linkTarget != null
                     val isBroken = state.brokenLinks.contains(file.absolutePath)
+                    val isDir = remember(file.absolutePath) { file.isDirectory }
+                    val fileSize = remember(file.absolutePath) { file.length() }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -453,12 +455,12 @@ fun FileManagerScreen(
                         }
                         Icon(
                             if (isLink) Icons.Default.Link
-                            else if (file.isDirectory) Icons.Default.Folder
+                            else if (isDir) Icons.Default.Folder
                             else Icons.Default.Description,
                             contentDescription = null,
                             tint = if (isBroken) MaterialTheme.colorScheme.error
                             else if (isLink) MaterialTheme.colorScheme.tertiary
-                            else if (file.isDirectory) MaterialTheme.colorScheme.primary
+                            else if (isDir) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(28.dp)
                         )
@@ -473,8 +475,8 @@ fun FileManagerScreen(
                             Text(
                                 text = if (isBroken) stringResource(R.string.filemanager_broken_link, linkTarget ?: file.absolutePath)
                                 else if (isLink) stringResource(R.string.filemanager_link_target, linkTarget)
-                                else if (file.isDirectory) stringResource(R.string.filemanager_folder)
-                                else FileOperationsHelper.formatSize(file.length()),
+                                else if (isDir) stringResource(R.string.filemanager_folder)
+                                else FileOperationsHelper.formatSize(fileSize),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (isBroken) MaterialTheme.colorScheme.error
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -597,7 +599,7 @@ fun FileManagerScreen(
                         ?.let { FileOperationsHelper.formatSize(it) }
                         ?: stringResource(R.string.filemanager_calculating)
                 } else {
-                    FileOperationsHelper.formatSize(f.length())
+                    FileOperationsHelper.formatSize(remember(f.absolutePath) { f.length() })
                 }
                 AlertDialog(
                     onDismissRequest = { dialog = DialogKind.NONE },
@@ -698,12 +700,13 @@ fun FileManagerScreen(
             )
         }
         DialogKind.BOOKMARKS -> {
+            val bookmarks = remember { viewModel.bookmarkDirs() }
             AlertDialog(
                 onDismissRequest = { dialog = DialogKind.NONE },
                 title = { Text(stringResource(R.string.action_bookmarks)) },
                 text = {
                     Column {
-                        viewModel.bookmarkDirs().forEach { (label, dir) ->
+                        bookmarks.forEach { (label, dir) ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()

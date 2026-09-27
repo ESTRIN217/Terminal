@@ -1,5 +1,6 @@
 package com.termux.terminal.compose
 
+import androidx.compose.runtime.Immutable
 import com.termux.terminal.TerminalSession
 
 /**
@@ -19,6 +20,7 @@ import com.termux.terminal.TerminalSession
  * (legacy TerminalView stays as fallback when false)
  * @param debianInstaller Debian rootfs installer overlay state
  */
+@Immutable
 data class TermuxUiState(
     val sessions: List<TermuxSessionUiModel> = emptyList(),
     val activeSessionIndex: Int = 0,
@@ -92,6 +94,7 @@ data class TermuxUiState(
  * @param paneOneId Stable id of the session in the left pane
  * @param paneTwoId Stable id of the session in the right pane
  */
+@Immutable
 data class SplitState(
     val paneOneId: String,
     val paneTwoId: String
@@ -112,6 +115,7 @@ data class SplitState(
  * @param name Display name for the tab
  * @param title Secondary title (terminal escape-sequence title)
  */
+@Immutable
 sealed class TermuxSessionUiModel {
     abstract val id: String
     abstract val name: String
@@ -155,6 +159,7 @@ sealed class TermuxSessionUiModel {
  * @param statusText Human-readable status line (already formatted by the activity)
  * @param error Error message when installation failed, {@code null} otherwise
  */
+@Immutable
 data class DebianInstallerUiState(
     val visible: Boolean = false,
     val progress: Float? = null,
