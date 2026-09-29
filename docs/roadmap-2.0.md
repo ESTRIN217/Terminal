@@ -91,6 +91,7 @@ Auditoría `TerminalView` (legacy) vs `ComposeTerminalCanvas` + hosts (nativa). 
 9. Salir de touch mode (teclado hardware) cierra la selección (paridad `TextSelectionCursorController.onTouchModeChanged`).
 10. Métricas de fuente: `measureCanvasMetrics` y el `Paint` del canvas usan `fontSize.toInt()` igual que `TerminalView.setTextSize(int)` (evita drift si llegara un tamaño fraccional).
 11. Scrollbar vertical en el canvas: thumb con la fórmula `activeRows + mTopRow - mRows`, visible solo con scrollback (`topRow < 0`), paridad `computeVerticalScroll*` + `awakenScrollBars`.
+12. **Los toques no llegaban a la TUI porque el teclado los interceptaba** — el tap pedía el teclado (`activateSession()` + `onClientTap()`) **antes** de enviar el click; con `android:windowSoftInputMode="adjustResize"` (AndroidManifest.xml:59) el IME encoge la ventana → `onSizeChanged` → `session.updateSize()` → `setPtyWindowSize` → **SIGWINCH a la TUI**, que reflowea y reinicia menús desplegables/bloques de código/opciones justo después del toque (y el teclado se come media pantalla). En el legacy no se nota porque allí el tap de dedo nunca manda click (`TerminalView.onTouchEvent` solo lo envía para `SOURCE_MOUSE`, `TerminalView.java:712-736`), así que nunca había nada que reflowear tras él. **Regla final** (`ComposeTerminalFrame.pointerOwnedByApp()`, testeada): con mouse tracking activo la app es dueña del puntero y el canvas solo entrega el press y promueve el pane — **nada más**: ni teclado, ni hipervínculos, ni selección nativa. El press sale en el touch **down** (`detectTapGestures.onPress` + `tryAwaitRelease()`) y el release se manda siempre en un `finally`, tanto si el gesto se completa (tap, long press) como si lo cancela el drag/pinch, así que la app nunca ve un botón pegado y recibe el timing real press/release en vez de las dos secuencias en el mismo write. El **long-press dejó de secuestrar el gesto**: con la app dueña del puntero es su hold, no el arranque de nuestra selección (verificado en dispositivo: la selección nativa con barra Copiar/Pegar/Más aparecía encima de opencode). Mismo criterio en el `Release` del ratón físico. El comentario anterior que lo daba por "legacy quick-tap parity" era incorrecto: es una mejora deliberada del canvas nativo. Consecuencia asumida: con mouse tracking el teclado ya no se abre al tocar (toggle de la toolbar / extra keys para escribir), como en un terminal real. Diagnóstico: un `logDebug` por press con `column/row/grid` (nivel Debug en Ajustes) para que un "la TUI no registra el touch" se resuelva con logcat.
 
 **Aceptado / fuera de alcance**
 - Right-click → menú legacy (out of scope, ya anotado en el canvas).
@@ -103,7 +104,7 @@ Auditoría `TerminalView` (legacy) vs `ComposeTerminalCanvas` + hosts (nativa). 
 
 ### Fase 3.7 — Auditoría de rendimiento Compose (análisis, no bloquea 2.0) ✅
 
-Análisis metodológico del renderer nativo y de la UI Compose; entrega = este informe con hallazgos priorizados (P0 crash/jank → P2 micro-opt). Solo los P0 de jank severo se arreglan en esta fase; P1/P2 quedan post-2.0.
+Análisis metodológico del renderer nativo y de la UI Compose; entrega = este informe con hallazgos priorizados (P0 crash/jank → P2 micro-opt). Solo los P0 de jank severo se arreglan en esta fase; P1 se arreglaron acto seguido y el bloque P2 se cerró más tarde, ya fuera de la ventana de la 2.0 (ver "P2 — Hecho").
 
 **P0 — Fixed (jank severo)**
 
@@ -122,19 +123,17 @@ Análisis metodológico del renderer nativo y de la UI Compose; entrega = este i
 10. **Ktor** — ✅ hecho: entradas muertas eliminadas de `gradle/libs.versions.toml` (versión `ktor` + 4 librerías). Si se cablea Ktor en el futuro, diseñar cache desde el inicio. *(Errata del item 17 original: "Ktor ya en el stack" era incorrecto.)*
 11. **Imágenes** — ✅ verificado: `AboutScreen` usa Coil 3 `AsyncImage` con cache en memoria/disco y decodificación off-main. Riesgo residual bajo. *(Errata corregida del item 17 "no hay imágenes".)*
 
-**P2 — Pendiente (post-2.0, draw path / micro-opt)**
+**P2 — Hecho (post-2.0, draw path / micro-opt)**
 
-12. **Asignaciones por frame en el draw path** (confirmado; escala rows×runs×fps):
-    - `ComposeTerminalFrame.buildLineRuns()` — `ArrayList<TextRun>` + un `TextRun` por run, por row, por frame (`ComposeTerminalFrame.kt` ~312/352/378).
-    - `resolveRunColors()` — `ResolvedRunColors` por run, por frame (~560).
-    - `selectionBoundsForRow()` — `Pair<Int,Int>` por row (~102–106), consumido en `ComposeTerminalCanvas.kt` ~767.
-    - Scrollbar — `Paint()` nuevo cada frame (`ComposeTerminalCanvas.kt` ~668).
-    - Lambda `hasWidthMismatch` + `String(Character.toChars(...))` por code point non-ASCII, por row (~768–777).
-    - Plan: pools/reutilización de `TextRun`, prealloc del Paint de scrollbar, devolver longs/índices en vez de `Pair`, lambda fuera del loop de rows.
-13. **Cero `GraphicsLayer`/`drawWithCache`/`rememberGraphicsLayer`/`clipRect`/`clipPath`** — evaluar capas estáticas (scrollbar, cursor fijo) y clipping hardware para selección/scrollbar.
-14. **Overdraw posible** — canvas hace `drawColor` full-frame de fondo (~749) encima del `Box.background` del Surface padre (`TermuxMainScreen.kt` ~518). Medir con Debug GPU overdraw.
-15. **Path legacy** (`TerminalView`/`TerminalRenderer`): reutiliza `mTextPaint` + cache `asciiMeasures[127]` — no priorizar.
-16. **`CanvasFontMetrics`** es `data class` con `FloatArray` → equals estructural deficiente; puede romper skip si se re-mide. Marcar `@Immutable` o igualdad manual.
+Bloque implementado **después** del cierre de la fase (los P0/P1 ya estaban hechos): el draw path del renderer nativo pasa de `rows×runs` asignaciones por frame a 4 objetos por frame, sin cambios de comportamiento visual.
+
+12. **Asignaciones por frame en el draw path** — ✅ hecho. Un solo algoritmo de agrupación con dos fachadas: `ComposeTerminalFrame.forEachRun()` (nuevo, `fun interface LineRunConsumer`) entrega cada run por callback según se completa y `buildLineRuns()` la envuelve recolectando en `List<TextRun>` (firma intacta → los tests Java siguen igual). El canvas pinta con un `ComposeRowRunPainter` (uno por frame, con `text`/`y` reapuntados por fila) y un `ResolvedRunColorsBuffer` reutilizable — `resolveRunColorsInto()` es el algoritmo y `resolveRunColors()` delega devolviendo el data class; los 4 call sites (run, `cellBlankColor` desde placeholder y desde strip de imagen) comparten el mismo buffer. Además: `selectionBoundsForRowPacked()` empaqueta `(selX1, selX2)` en un `long` (fin del `Pair` por fila), la lambda `hasWidthMismatch` se crea una vez por frame y mide con un `CharArray(2)` scratch (`paint.measureText(chars, 0, n)`) en vez de `String(Character.toChars(...))` por code point no-ASCII, y el `Paint` del thumb del scrollbar sube a `remember`. Resultado por frame: 1 painter + 1 buffer + 1 lambda + 1 scratch. Tests de paridad `forEachRun` vs `buildLineRuns` (los 7 motivos de corte: estilo, cursor, selección, ligatures, width-mismatch, skipCells y todos a la vez), `resolveRunColorsInto` vs `resolveRunColors` (6 estilos × reverse × selección × cursor × 3 estilos de cursor) y `selectionBoundsForRowPacked` vs el `Pair`.
+13. **Cero `GraphicsLayer`/`drawWithCache`/`rememberGraphicsLayer`/`clipRect`/`clipPath`** — ❌ descartado con veredicto: el contenido del terminal se repinta en cada tick de output, así que `drawWithCache` solo cachearía por frame; el único candidato real (el `drawRoundRect` del thumb) es un rectángulo redondeado por frame, y la selección ya se pinta recortada por el rect de cada run. Una capa GPU para eso no compensa.
+14. **Overdraw posible** — ✅ hecho: se quita el `Box.background(Color(palette.background))` de la rama nativa (`TermuxMainScreen.kt`), que el `canvas.drawColor()` incondicional del canvas tapaba siempre. Para que el pane siga opaco en la ventana previa al emulador, el canvas pinta el fondo de la paleta en vez de hacer early-return. Se conserva el fill del canvas (no el del Box) porque el emulador puede cambiar su fondo por OSC 4/10/11 sin que el estado `palette` se entere, y la cadena superior ya es opaca (`Surface` en la activity + `Scaffold`); el path legacy pone su fondo en la propia vista (`TerminalViewRegistry`), así que no le afecta. Ahorra un fill full-frame por frame.
+15. **Path legacy** (`TerminalView`/`TerminalRenderer`) — ❌ se mantiene "no priorizar": ya reutiliza `mTextPaint` + cache `asciiMeasures[127]`.
+16. **`CanvasFontMetrics`** — ✅ hecho: `@Immutable` + `equals`/`hashCode` propios con `asciiMeasures.contentEquals`/`contentHashCode` (un `data class` comparaba el `FloatArray` por identidad). Beneficio defensivo: hoy `metrics` nace en un `remember(typeface, fontSize)` con identidad estable, así que no cambia el comportamiento actual; evita que una re-medición idéntica se lea como distinta si mañana pasa por un state holder. Test de igualdad por contenido.
+
+**Fuera de alcance de este bloque (anotado para más adelante):** el path de imágenes (`imagesEnabled`) sigue asignando por fila un `HashSet<Int>` de `skipCells`, un `ArrayList` de placeholders y un `Pair` por placeholder, y barre `screen.getImageAt` en O(rows×columns) por frame. Reutilizar las colecciones es trivial; el barrido por celda es el coste real y merece su propio análisis.
 
 **Correcciones a los ítems 16–17 originales**
 - Item 17 "LazyColumn + key": **verificado OK** — `FileManagerScreen.kt` ~416 ya usa `key = { _, file -> file.absolutePath }`. El punto real de RAM es el `List<File>` completo de `FileManagerUiState.files` (listado de dir entero en memoria; la UI solo virtualiza el render). Cap artificial de listas ya **descartado** en Fase 2.5 (ítem 14).
@@ -180,5 +179,5 @@ Análisis metodológico del renderer nativo y de la UI Compose; entrega = este i
 | Fase 2 — UI Compose | Completada (ítems 4–5, 11 menú "Más" terminal y 12 editar en filemanager) |
 | Fase 2.5 — Rendimiento de plataforma | Completada (13–15) |
 | Fase 3 — Rendering | Completada (OSC 1337 + KGP listos para producción — ver Fase 3.8; paridad legacy/nativa cerrada — ver Fase 3.6) |
-| Fase 3.7 — Auditoría perf Compose | Completada (informe 16–17 + fixes P0: remember font/palette, IO filemanager, cache de listado + P1: file stats, ExtraKeysCallback, @Immutable, licenses, Ktor) |
+| Fase 3.7 — Auditoría perf Compose | Completada (informe 16–17 + fixes P0: remember font/palette, IO filemanager, cache de listado + P1: file stats, ExtraKeysCallback, @Immutable, licenses, Ktor + P2 post-2.0: draw path sin asignaciones por run, overdraw del pane, equals de CanvasFontMetrics) |
 | Fase 4 — Release 2.0 | Pendiente (incluye 18 clave release, 19 docs) |

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,7 +36,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -524,7 +522,11 @@ private fun SessionPane(
                     }
                 }
             }
-            Box(modifier = modifier.background(Color(palette.background))) {
+            // No background on this Box: the canvas below is the pane's only renderer and
+            // fills the whole pane with the emulator background every frame (it also fills
+            // the palette background while the emulator does not exist yet), so painting one
+            // here too would just be a second full-frame overdraw.
+            Box(modifier = modifier) {
                 // Back closes the selection toolbar like legacy TerminalView.onKeyDown
                 // does for the BACK key while a text selection is active.
                 BackHandler(enabled = paneState.selection != null) {

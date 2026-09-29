@@ -523,4 +523,160 @@ public class ComposeTerminalFrameTest {
         Assert.assertEquals(4, runs.get(1).getStartColumn());
         Assert.assertEquals(2, runs.get(1).getColumnWidth());
     }
+
+    /**
+     * Collect the runs of a line through the streaming {@code forEachRun} the canvas paints
+     * with, so it can be compared against the collecting {@code buildLineRuns}.
+     */
+    private static List<ComposeTerminalFrame.TextRun> collectRuns(
+        TerminalRow row, int columns, int cursorX, int selectionX1, int selectionX2,
+        boolean enableLigatures, kotlin.jvm.functions.Function1<Integer, Boolean> hasWidthMismatch,
+        java.util.Set<Integer> skipCells) {
+        final List<ComposeTerminalFrame.TextRun> runs = new java.util.ArrayList<>();
+        ComposeTerminalFrame.forEachRun(row, columns, cursorX, selectionX1, selectionX2,
+            enableLigatures, hasWidthMismatch, skipCells,
+            (startColumn, columnWidth, startCharIndex, charCount, style, inCursor, inSelection,
+                hyperlinkIndex) -> runs.add(new ComposeTerminalFrame.TextRun(startColumn,
+                    columnWidth, startCharIndex, charCount, style, inCursor, inSelection,
+                    hyperlinkIndex)));
+        return runs;
+    }
+
+    /**
+     * The canvas paints runs through {@code forEachRun} (no run object per run) while the
+     * tests above pin {@code buildLineRuns}: both must yield the exact same sequence, for
+     * every reason a run can break (style, cursor, selection, ligatures, font-width
+     * mismatch and skipped cells).
+     */
+    @Test
+    public void testForEachRun_matchesBuildLineRuns() {
+        long plain = TextStyle.encode(
+            TextStyle.COLOR_INDEX_FOREGROUND, TextStyle.COLOR_INDEX_BACKGROUND, 0);
+        long bold = TextStyle.encode(
+            TextStyle.COLOR_INDEX_FOREGROUND, TextStyle.COLOR_INDEX_BACKGROUND,
+            TextStyle.CHARACTER_ATTRIBUTE_BOLD);
+        TerminalRow mixed = new TerminalRow(6, plain);
+        mixed.setChar(0, 'a', plain);
+        mixed.setChar(1, 'b', plain);
+        mixed.setChar(2, 'c', bold);
+        mixed.setChar(3, 'd', bold);
+        mixed.setChar(4, 'e', plain);
+        mixed.setChar(5, 'f', plain);
+        TerminalRow uniform = asciiRow(6, "abcdef", TextStyle.NORMAL);
+        java.util.Set<Integer> skip = new java.util.HashSet<>();
+        skip.add(1);
+        skip.add(4);
+        kotlin.jvm.functions.Function1<Integer, Boolean> never = codePoint -> false;
+        kotlin.jvm.functions.Function1<Integer, Boolean> oddOnly =
+            codePoint -> codePoint == 'c';
+
+        // Uniform row, no splits.
+        Assert.assertEquals(
+            ComposeTerminalFrame.buildLineRuns(uniform, 6, -1, -1, -1, true, never),
+            collectRuns(uniform, 6, -1, -1, -1, true, never, java.util.Collections.emptySet()));
+        // Style change splits.
+        Assert.assertEquals(
+            ComposeTerminalFrame.buildLineRuns(mixed, 6, -1, -1, -1, true, never),
+            collectRuns(mixed, 6, -1, -1, -1, true, never, java.util.Collections.emptySet()));
+        // Cursor cell splits and flags the run.
+        Assert.assertEquals(
+            ComposeTerminalFrame.buildLineRuns(mixed, 6, 3, -1, -1, true, never),
+            collectRuns(mixed, 6, 3, -1, -1, true, never, java.util.Collections.emptySet()));
+        // Selection range splits and flags the runs.
+        Assert.assertEquals(
+            ComposeTerminalFrame.buildLineRuns(mixed, 6, -1, 1, 4, true, never),
+            collectRuns(mixed, 6, -1, 1, 4, true, never, java.util.Collections.emptySet()));
+        // Ligatures off: one run per code point.
+        Assert.assertEquals(
+            ComposeTerminalFrame.buildLineRuns(mixed, 6, -1, -1, -1, false, never),
+            collectRuns(mixed, 6, -1, -1, -1, false, never, java.util.Collections.emptySet()));
+        // Width mismatch breaks runs and glues the neighbor.
+        Assert.assertEquals(
+            ComposeTerminalFrame.buildLineRuns(mixed, 6, -1, -1, -1, true, oddOnly),
+            collectRuns(mixed, 6, -1, -1, -1, true, oddOnly, java.util.Collections.emptySet()));
+        // Skipped cells (inline image / placeholder columns).
+        Assert.assertEquals(
+            ComposeTerminalFrame.buildLineRuns(mixed, 6, -1, -1, -1, true, never, skip),
+            collectRuns(mixed, 6, -1, -1, -1, true, never, skip));
+        // All at once.
+        Assert.assertEquals(
+            ComposeTerminalFrame.buildLineRuns(mixed, 6, 2, 1, 5, true, oddOnly, skip),
+            collectRuns(mixed, 6, 2, 1, 5, true, oddOnly, skip));
+    }
+
+    /**
+     * The draw path resolves colors into a reusable holder instead of allocating a
+     * {@code ResolvedRunColors} per run: the two paths must agree field by field.
+     */
+    @Test
+    public void testResolveRunColorsInto_matchesResolveRunColors() {
+        int[] palette = distinctPalette();
+        int defaultBackground = palette[TextStyle.COLOR_INDEX_BACKGROUND];
+        long[] styles = {
+            TextStyle.encode(2, 3, 0),
+            TextStyle.encode(1, TextStyle.COLOR_INDEX_BACKGROUND, TextStyle.CHARACTER_ATTRIBUTE_BOLD),
+            TextStyle.encode(2, 3, TextStyle.CHARACTER_ATTRIBUTE_INVERSE),
+            TextStyle.encode(2, 3, TextStyle.CHARACTER_ATTRIBUTE_DIM),
+            TextStyle.encode(2, 3, TextStyle.CHARACTER_ATTRIBUTE_INVISIBLE),
+            TextStyle.NORMAL,
+        };
+        int[] cursorStyles = {
+            TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK,
+            TerminalEmulator.TERMINAL_CURSOR_STYLE_UNDERLINE,
+            TerminalEmulator.TERMINAL_CURSOR_STYLE_BAR,
+        };
+        for (long style : styles) {
+            for (boolean reverseVideo : new boolean[] { false, true }) {
+                for (boolean inSelection : new boolean[] { false, true }) {
+                    for (boolean inCursor : new boolean[] { false, true }) {
+                        for (int cursorStyle : cursorStyles) {
+                            ComposeTerminalFrame.ResolvedRunColors expected =
+                                ComposeTerminalFrame.resolveRunColors(style, palette,
+                                    defaultBackground, reverseVideo, inSelection, inCursor,
+                                    cursorStyle);
+                            ComposeTerminalFrame.ResolvedRunColorsBuffer buffer =
+                                new ComposeTerminalFrame.ResolvedRunColorsBuffer();
+                            ComposeTerminalFrame.resolveRunColorsInto(buffer, style, palette,
+                                defaultBackground, reverseVideo, inSelection, inCursor,
+                                cursorStyle);
+                            Assert.assertEquals(expected.getForeColor(), buffer.getForeColor());
+                            Assert.assertEquals(expected.getBackColor(), buffer.getBackColor());
+                            Assert.assertEquals(
+                                expected.getDrawBackground(), buffer.getDrawBackground());
+                            Assert.assertEquals(expected.getCursorColor(), buffer.getCursorColor());
+                            Assert.assertEquals(expected.getEffect(), buffer.getEffect());
+                            Assert.assertEquals(expected.getDrawText(), buffer.getDrawText());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * The draw path reads the per-row selection bounds from a packed {@code long} instead of
+     * allocating a {@code Pair} per row: the two must agree, including the "not selected"
+     * encoding.
+     */
+    @Test
+    public void testSelectionBoundsForRowPacked_matchesPair() {
+        ComposeTerminalFrame.TextSelection selection =
+            new ComposeTerminalFrame.TextSelection(3, -2, 7, 0);
+        int[] rows = { -3, -2, -1, 0, 1 };
+        for (int row : rows) {
+            kotlin.Pair<Integer, Integer> pair =
+                ComposeTerminalFrame.selectionBoundsForRow(selection, row, 12);
+            long packed =
+                ComposeTerminalFrame.selectionBoundsForRowPacked(selection, row, 12);
+            Assert.assertEquals((int) pair.getFirst(),
+                ComposeTerminalFrame.PackedSelectionBounds.first(packed));
+            Assert.assertEquals((int) pair.getSecond(),
+                ComposeTerminalFrame.PackedSelectionBounds.second(packed));
+        }
+        // A null selection is the same "not selected" range.
+        long none = ComposeTerminalFrame.selectionBoundsForRowPacked(null, 0, 12);
+        Assert.assertEquals(-1, ComposeTerminalFrame.PackedSelectionBounds.first(none));
+        Assert.assertEquals(-1, ComposeTerminalFrame.PackedSelectionBounds.second(none));
+        Assert.assertEquals(-1, ComposeTerminalFrame.PackedSelectionBounds.of(-1, -1));
+    }
 }

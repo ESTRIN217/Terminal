@@ -3,6 +3,7 @@ package com.termux.terminal.compose
 import com.termux.terminal.TerminalBuffer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -223,5 +224,32 @@ class ComposeTerminalFrameTest {
         // Hitting the transcript end pins to the oldest row.
         assertEquals(-50, ComposeTerminalFrame.scrollOffsetForNewOutput(-50, 3, 50, isAutoScrollDisabled = true))
         assertEquals(-50, ComposeTerminalFrame.scrollOffsetForNewOutput(-60, 3, 50, isAutoScrollDisabled = true))
+    }
+
+    @Test
+    fun pointerOwnedByApp_onlyWithMouseTracking() {
+        // A mouse-tracking app receives the touches as mouse events, so the canvas stops
+        // handling them: no soft keyboard (its IME resize reflows the TUI under the finger),
+        // no native text selection on long press and no hyperlinks.
+        assertTrue(ComposeTerminalFrame.pointerOwnedByApp(mouseTrackingActive = true))
+        // Without mouse tracking the terminal keeps every touch, as the legacy view does.
+        assertFalse(ComposeTerminalFrame.pointerOwnedByApp(mouseTrackingActive = false))
+    }
+
+    @Test
+    fun canvasFontMetrics_equalityIsByContentNotArrayIdentity() {
+        // A data class would compare asciiMeasures by array identity, so two identical
+        // measurements would look different to Compose and defeat recomposition/draw skipping.
+        val first = CanvasFontMetrics(8f, 16, 12, 28, floatArrayOf(8f, 9f))
+        val same = CanvasFontMetrics(8f, 16, 12, 28, floatArrayOf(8f, 9f))
+        assertEquals(first, same)
+        assertEquals(first.hashCode(), same.hashCode())
+
+        // A different measure or a different glyph width is a real difference.
+        assertNotEquals(first, first.copy(fontWidth = 9f))
+        assertNotEquals(first, first.copy(lineSpacing = 17))
+        assertNotEquals(first, first.copy(ascent = 13))
+        assertNotEquals(first, first.copy(lineSpacingAndAscent = 29))
+        assertNotEquals(first, first.copy(asciiMeasures = floatArrayOf(8f, 10f)))
     }
 }

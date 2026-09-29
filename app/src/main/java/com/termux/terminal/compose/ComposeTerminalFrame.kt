@@ -53,6 +53,36 @@ object ComposeTerminalFrame {
     )
 
     /**
+     * Consumer of the [TextRun]s of one line, fed by [forEachRun] so the draw path can paint a
+     * frame without materializing a run object per run. The fields carry exactly the
+     * [TextRun] constructor arguments, in the same order.
+     */
+    fun interface LineRunConsumer {
+        /**
+         * Paint one run of the line.
+         *
+         * @param startColumn First grid column of the run
+         * @param columnWidth Width of the run in grid columns
+         * @param startCharIndex Offset into [TerminalRow.mText] where the run text starts
+         * @param charCount Number of Java chars of the run text
+         * @param style The [TextStyle]-encoded style shared by the run
+         * @param inCursor Whether the run holds the visible cursor cell
+         * @param inSelection Whether the run is inside the text selection
+         * @param hyperlinkIndex OSC 8 URI registry index for the run (0 = not a hyperlink)
+         */
+        fun onRun(
+            startColumn: Int,
+            columnWidth: Int,
+            startCharIndex: Int,
+            charCount: Int,
+            style: Long,
+            inCursor: Boolean,
+            inSelection: Boolean,
+            hyperlinkIndex: Int
+        )
+    }
+
+    /**
      * Resolved ARGB colors and paint effects for a [TextRun], mirroring the legacy
      * {@code drawTextRun} color logic (bold-to-bright, reverse video, dim, invisible, cursor).
      *
@@ -103,10 +133,64 @@ object ComposeTerminalFrame {
      */
     @JvmStatic
     fun selectionBoundsForRow(selection: TextSelection?, row: Int, columns: Int): Pair<Int, Int> {
-        if (selection == null || row < selection.y1 || row > selection.y2) return -1 to -1
+        val packed = selectionBoundsForRowPacked(selection, row, columns)
+        return PackedSelectionBounds.first(packed) to PackedSelectionBounds.second(packed)
+    }
+
+    /**
+     * The [selectionBoundsForRow] range packed into a `long`, so the draw path resolves the
+     * bounds of every row without allocating a [Pair] per row per frame.
+     *
+     * @param selection The active selection, or null
+     * @param row The external row to query
+     * @param columns Number of grid columns of the line
+     * @return The packed `(selX1, selX2)`, decoded with [PackedSelectionBounds]
+     */
+    @JvmStatic
+    fun selectionBoundsForRowPacked(selection: TextSelection?, row: Int, columns: Int): Long {
+        if (selection == null || row < selection.y1 || row > selection.y2) return PackedSelectionBounds.NONE
         val selX1 = if (row == selection.y1) selection.x1 else 0
         val selX2 = if (row == selection.y2) selection.x2 else columns - 1
-        return selX1 to selX2
+        return PackedSelectionBounds.of(selX1, selX2)
+    }
+
+    /**
+     * Packing helpers for a pair of ints into a single `long` (first in the high 32 bits,
+     * second in the low ones), so per-row values can cross the draw path without boxing.
+     */
+    object PackedSelectionBounds {
+        /** Packed `(-1, -1)`: the row has no selection. */
+        const val NONE = -1L
+
+        /** Pack `(-1, -1)`, the "row not selected" range. */
+        @JvmStatic
+        fun none(): Long = NONE
+
+        /**
+         * Pack a pair of ints into a `long`.
+         *
+         * @param first High 32 bits
+         * @param second Low 32 bits
+         */
+        @JvmStatic
+        fun of(first: Int, second: Int): Long =
+            (first.toLong() shl 32) or (second.toLong() and 0xffffffffL)
+
+        /**
+         * Unpack the high 32 bits.
+         *
+         * @param packed A value produced by [of]
+         */
+        @JvmStatic
+        fun first(packed: Long): Int = (packed shr 32).toInt()
+
+        /**
+         * Unpack the low 32 bits.
+         *
+         * @param packed A value produced by [of]
+         */
+        @JvmStatic
+        fun second(packed: Long): Int = (packed and 0xffffffffL).toInt()
     }
 
     /**
@@ -288,7 +372,11 @@ object ComposeTerminalFrame {
     }
 
     /**
-     * Split one screen line into drawable runs.
+     * Split one screen line into drawable runs and hand each of them to [consumer] as it is
+     * completed, so a frame can be painted without allocating a run object per run.
+     *
+     * This is the single run-grouping algorithm: [buildLineRuns] collects the same sequence
+     * into a list, and the canvas consumes it through a reusable [LineRunConsumer].
      *
      * @param line The terminal row to split
      * @param columns Number of grid columns of the line
@@ -301,21 +389,20 @@ object ComposeTerminalFrame {
      * forces a run break, mirroring the legacy font-metrics check
      * @param skipCells Column indices to exclude from runs (e.g. cells with an active
      * inline image or resolved unicode placeholder whose glyph must not be painted)
-     * @return The runs covering all [columns] columns, in order
+     * @param consumer Invoked once per run, in order, with the [TextRun] constructor fields
      */
     @JvmStatic
-    @JvmOverloads
-    fun buildLineRuns(
+    fun forEachRun(
         line: TerminalRow,
         columns: Int,
         cursorX: Int,
         selectionX1: Int,
         selectionX2: Int,
         enableLigatures: Boolean,
-        hasWidthMismatch: (codePoint: Int) -> Boolean = { false },
-        skipCells: Set<Int> = emptySet()
-    ): List<TextRun> {
-        val runs = ArrayList<TextRun>()
+        hasWidthMismatch: (codePoint: Int) -> Boolean,
+        skipCells: Set<Int>,
+        consumer: LineRunConsumer
+    ) {
         val text = line.mText
         val spaceUsed = line.spaceUsed
 
@@ -348,12 +435,10 @@ object ComposeTerminalFrame {
 
             if (skipCells.contains(column)) {
                 if (hasRun) {
-                    runs.add(
-                        TextRun(
-                            runStartColumn, column - runStartColumn,
-                            runStartCharIndex, charIndex - runStartCharIndex,
-                            lastStyle, lastInCursor, lastInSelection, lastHyperlink
-                        )
+                    consumer.onRun(
+                        runStartColumn, column - runStartColumn,
+                        runStartCharIndex, charIndex - runStartCharIndex,
+                        lastStyle, lastInCursor, lastInSelection, lastHyperlink
                     )
                     hasRun = false
                 }
@@ -380,12 +465,10 @@ object ComposeTerminalFrame {
                 inSelection != lastInSelection || hyperlink != lastHyperlink ||
                 mismatch || lastMismatch || !enableLigatures
             ) {
-                runs.add(
-                    TextRun(
-                        runStartColumn, column - runStartColumn,
-                        runStartCharIndex, charIndex - runStartCharIndex,
-                        lastStyle, lastInCursor, lastInSelection, lastHyperlink
-                    )
+                consumer.onRun(
+                    runStartColumn, column - runStartColumn,
+                    runStartCharIndex, charIndex - runStartCharIndex,
+                    lastStyle, lastInCursor, lastInSelection, lastHyperlink
                 )
                 lastStyle = style
                 lastInCursor = inCursor
@@ -407,11 +490,55 @@ object ComposeTerminalFrame {
         }
 
         if (hasRun) {
+            consumer.onRun(
+                runStartColumn, columns - runStartColumn,
+                runStartCharIndex, charIndex - runStartCharIndex,
+                lastStyle, lastInCursor, lastInSelection, lastHyperlink
+            )
+        }
+    }
+
+    /**
+     * Split one screen line into drawable runs.
+     *
+     * Convenience collector over [forEachRun] for callers that want the runs as a list (the
+     * canvas consumes them through a reusable [LineRunConsumer] instead, so nothing is
+     * allocated per run while painting).
+     *
+     * @param line The terminal row to split
+     * @param columns Number of grid columns of the line
+     * @param cursorX Cursor column for this row, or -1 when the cursor is not on it
+     * @param selectionX1 First selected column of this row, or -1 when the row has no selection
+     * @param selectionX2 Last selected column of this row (inclusive)
+     * @param enableLigatures Whether ligature shaping is enabled; when false every code point
+     * forms its own run
+     * @param hasWidthMismatch Width-mismatch probe per code point (measured vs wcwidth); true
+     * forces a run break, mirroring the legacy font-metrics check
+     * @param skipCells Column indices to exclude from runs (e.g. cells with an active
+     * inline image or resolved unicode placeholder whose glyph must not be painted)
+     * @return The runs covering all [columns] columns, in order
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun buildLineRuns(
+        line: TerminalRow,
+        columns: Int,
+        cursorX: Int,
+        selectionX1: Int,
+        selectionX2: Int,
+        enableLigatures: Boolean,
+        hasWidthMismatch: (codePoint: Int) -> Boolean = { false },
+        skipCells: Set<Int> = emptySet()
+    ): List<TextRun> {
+        val runs = ArrayList<TextRun>()
+        forEachRun(
+            line, columns, cursorX, selectionX1, selectionX2, enableLigatures,
+            hasWidthMismatch, skipCells
+        ) { startColumn, columnWidth, startCharIndex, charCount, style, inCursor, inSelection, hyperlinkIndex ->
             runs.add(
                 TextRun(
-                    runStartColumn, columns - runStartColumn,
-                    runStartCharIndex, charIndex - runStartCharIndex,
-                    lastStyle, lastInCursor, lastInSelection, lastHyperlink
+                    startColumn, columnWidth, startCharIndex, charCount,
+                    style, inCursor, inSelection, hyperlinkIndex
                 )
             )
         }
@@ -507,6 +634,20 @@ object ComposeTerminalFrame {
         blinkRateMs in TerminalView.TERMINAL_CURSOR_BLINK_RATE_MIN..TerminalView.TERMINAL_CURSOR_BLINK_RATE_MAX
 
     /**
+     * Whether the running application owns the pointer, i.e. it enabled mouse tracking
+     * (DECRQM modes 1000/1002) and therefore receives the touch gestures as mouse events.
+     *
+     * While this is true the canvas stops handling touches itself: it does not open the
+     * soft keyboard (the IME resizes the window, which re-derives the grid, sends a SIGWINCH
+     * and makes the TUI reflow under the finger), it does not start its own text selection on
+     * a long press, and it does not open hyperlinks. It only promotes the pane.
+     *
+     * @param mouseTrackingActive Whether the application enabled mouse tracking
+     */
+    @JvmStatic
+    fun pointerOwnedByApp(mouseTrackingActive: Boolean): Boolean = mouseTrackingActive
+
+    /**
      * Fling velocity damping, mirroring the legacy `SCALE = 0.25f` in
      * {@link TerminalView}'s fling listener so a fast swipe decays within roughly the same
      * distance as the legacy view.
@@ -526,8 +667,36 @@ object ComposeTerminalFrame {
     fun flingBounds(minRows: Int, maxRows: Int): IntRange = minRows..maxRows
 
     /**
-     * Resolve the paint colors of a run from its style, mirroring the legacy color logic.
+     * Reusable holder of the colors resolved for one run, so a frame can be painted without
+     * allocating a [ResolvedRunColors] per run (and per blanked image cell). The values are
+     * only valid until the next [resolveRunColorsInto] call on the same instance, so a single
+     * instance can be shared by a whole frame.
+     */
+    class ResolvedRunColorsBuffer {
+        /** Resolved foreground color (ARGB). */
+        var foreColor: Int = 0
+
+        /** Resolved background color (ARGB). */
+        var backColor: Int = 0
+
+        /** Whether the background rect must be painted (non-default background). */
+        var drawBackground: Boolean = false
+
+        /** Cursor color (ARGB), or 0 when the run does not hold the cursor. */
+        var cursorColor: Int = 0
+
+        /** The [TextStyle]-decoded effect bits (drives Paint flags in the canvas layer). */
+        var effect: Int = 0
+
+        /** Whether the text itself must be painted (false for invisible cells). */
+        var drawText: Boolean = false
+    }
+
+    /**
+     * Resolve the paint colors of a run from its style into [buffer], mirroring the legacy
+     * color logic. Allocation-free counterpart of [resolveRunColors].
      *
+     * @param buffer The holder to write; the same instance can be reused for every run
      * @param style The [TextStyle]-encoded run style
      * @param paletteColors The emulator indexed colors
      * ([TextStyle.NUM_INDEXED_COLORS] entries)
@@ -539,11 +708,11 @@ object ComposeTerminalFrame {
      * @param inCursor Whether the run holds the visible cursor cell
      * @param cursorStyle One of the {@code TERMINAL_CURSOR_STYLE_*} constants of
      * [TerminalEmulator]
-     * @return The resolved colors and effects
      */
     @JvmStatic
     @JvmOverloads
-    fun resolveRunColors(
+    fun resolveRunColorsInto(
+        buffer: ResolvedRunColorsBuffer,
         style: Long,
         paletteColors: IntArray,
         defaultBackground: Int,
@@ -551,7 +720,7 @@ object ComposeTerminalFrame {
         inSelection: Boolean = false,
         inCursor: Boolean = false,
         cursorStyle: Int = TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK
-    ): ResolvedRunColors {
+    ) {
         var foreColor = TextStyle.decodeForeColor(style)
         val effect = TextStyle.decodeEffect(style)
         var backColor = TextStyle.decodeBackColor(style)
@@ -588,14 +757,53 @@ object ComposeTerminalFrame {
             foreColor = 0xFF000000.toInt() + (red shl 16) + (green shl 8) + blue
         }
 
-        val cursorColor = if (inCursor) paletteColors[TextStyle.COLOR_INDEX_CURSOR] else 0
+        buffer.foreColor = foreColor
+        buffer.backColor = backColor
+        buffer.drawBackground = backColor != defaultBackground
+        buffer.cursorColor = if (inCursor) paletteColors[TextStyle.COLOR_INDEX_CURSOR] else 0
+        buffer.effect = effect
+        buffer.drawText = effect and TextStyle.CHARACTER_ATTRIBUTE_INVISIBLE == 0
+    }
+
+    /**
+     * Resolve the paint colors of a run from its style, mirroring the legacy color logic.
+     *
+     * @param style The [TextStyle]-encoded run style
+     * @param paletteColors The emulator indexed colors
+     * ([TextStyle.NUM_INDEXED_COLORS] entries)
+     * @param defaultBackground The default background color (ARGB); only non-default
+     * backgrounds are painted
+     * @param emulatorReverseVideo Whether the emulator is in reverse-video mode
+     * @param inSelection Whether the run is inside the text selection, which inverts the cell
+     * colors the same way the legacy renderer does
+     * @param inCursor Whether the run holds the visible cursor cell
+     * @param cursorStyle One of the {@code TERMINAL_CURSOR_STYLE_*} constants of
+     * [TerminalEmulator]
+     * @return The resolved colors and effects
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun resolveRunColors(
+        style: Long,
+        paletteColors: IntArray,
+        defaultBackground: Int,
+        emulatorReverseVideo: Boolean,
+        inSelection: Boolean = false,
+        inCursor: Boolean = false,
+        cursorStyle: Int = TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK
+    ): ResolvedRunColors {
+        val buffer = ResolvedRunColorsBuffer()
+        resolveRunColorsInto(
+            buffer, style, paletteColors, defaultBackground, emulatorReverseVideo,
+            inSelection, inCursor, cursorStyle
+        )
         return ResolvedRunColors(
-            foreColor = foreColor,
-            backColor = backColor,
-            drawBackground = backColor != defaultBackground,
-            cursorColor = cursorColor,
-            effect = effect,
-            drawText = effect and TextStyle.CHARACTER_ATTRIBUTE_INVISIBLE == 0
+            foreColor = buffer.foreColor,
+            backColor = buffer.backColor,
+            drawBackground = buffer.drawBackground,
+            cursorColor = buffer.cursorColor,
+            effect = buffer.effect,
+            drawText = buffer.drawText
         )
     }
 }

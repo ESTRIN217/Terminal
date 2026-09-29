@@ -16,6 +16,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -89,6 +90,11 @@ import kotlinx.coroutines.delay
  *   wheel arrows respect the emulator cursor/keypad application modes (DECCKM/DECKPAM),
  *   long-press honors the scale-gesture and client vetoes, and a tap right after starting a
  *   selection is ignored for 300 ms (legacy `TextSelectionCursorController.hide()` guard).
+ * - **TUI touches**: when the session has mouse tracking active the application owns the
+ *   pointer, so the canvas only delivers the mouse press (on touch down, always released) and
+ *   promotes the pane — no soft keyboard (its IME resize reflows the TUI under the finger), no
+ *   hyperlinks and no long-press text selection. The toolbar keyboard toggle stays available to
+ *   type into a mouse-tracking app.
  *
  * The legacy view set via [TerminalViewHost] stays as the default fallback behind the
  * {@code native_compose_renderer} feature flag.
@@ -248,6 +254,15 @@ internal fun ComposeTerminalCanvas(
     // Last laid-out size, used to derive the grid before first paint.
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
 
+    // Scrollbar thumb paint, created once instead of on every frame (the thumb is the only
+    // thing the draw scope paints besides the terminal itself).
+    val scrollBarPaint = remember {
+        Paint().apply {
+            color = android.graphics.Color.argb(115, 255, 255, 255)
+            isAntiAlias = true
+        }
+    }
+
     // A layout or font-size / glyph metrics change must re-derive the grid even when the
     // pixel size is unchanged, mirroring the legacy updateSize() on both onSizeChanged and
     // setTextSize(). Runs after the layout pass, so canvasSize is populated before first use.
@@ -326,8 +341,10 @@ internal fun ComposeTerminalCanvas(
         }
     }
 
-    // Tap or a physical-mouse click with no drag: promote a secondary split pane first,
-    // then hand focus and the soft keyboard to the hidden input view owning this session.
+    // Tap handled by the terminal itself (no mouse-tracking app claiming the pointer, or a
+    // tap that closed a selection): promote a secondary split pane first, then hand focus and
+    // the soft keyboard to the hidden input view owning this session. A mouse-tracking app
+    // gets the click instead and never reaches this — see the tap path below.
     fun activateSession() {
         if (!isActivePane) onActivatePane?.invoke()
         val inputView = TerminalViewRegistry.getViewForSession(session)
@@ -348,7 +365,6 @@ internal fun ComposeTerminalCanvas(
     // Anchor for wheel events sent to mouse-tracking apps: legacy TerminalView anchors them
     // at the touch down position, so remember it at drag start.
     var dragAnchor by remember(session) { mutableStateOf(Offset.Zero) }
-    var fingerScrolled by remember(session) { mutableStateOf(false) }
     val doFling: suspend (Float) -> Unit = fling@ { rawVelocity ->
         val emulator = session.emulator ?: return@fling
         if (flingRunning) return@fling
@@ -509,8 +525,11 @@ internal fun ComposeTerminalCanvas(
                                                 emulator.sendMouseEvent(
                                                     TerminalEmulator.MOUSE_LEFT_BUTTON, column, row, false
                                                 )
+                                            } else if (!mouseDragged) {
+                                                // A click that scrolled is not a click: the drag
+                                                // already went to the transcript.
+                                                activateSession()
                                             }
-                                            if (!mouseDragged) activateSession()
                                         }
                                         mouseDown = false
                                         mouseLeftDown = false
@@ -535,6 +554,33 @@ internal fun ComposeTerminalCanvas(
             }
             .pointerInput(session, state) {
                 detectTapGestures(
+                    onPress = { offset ->
+                        // A mouse-tracking app owns the pointer: the press goes out on touch
+                        // down and the release always follows, in a later tick and whether the
+                        // gesture completes (tap, long press) or is cancelled (drag, pinch),
+                        // so the app never sees a stuck button. Sending the pair from here
+                        // instead of from onTap also gives the app the real press/release
+                        // timing instead of both sequences in the same write.
+                        val emulator = session.emulator ?: return@detectTapGestures
+                        if (!ComposeTerminalFrame.pointerOwnedByApp(emulator.isMouseTrackingActive)) {
+                            return@detectTapGestures
+                        }
+                        val (column, row) = columnAndRow(offset.x, offset.y)
+                        Logger.logDebug(
+                            LOG_TAG, "Press delivered to app: button=left column=$column" +
+                                " row=$row grid=${emulator.mColumns}x${emulator.mRows}"
+                        )
+                        emulator.sendMouseEvent(
+                            TerminalEmulator.MOUSE_LEFT_BUTTON, column, row, true
+                        )
+                        try {
+                            tryAwaitRelease()
+                        } finally {
+                            emulator.sendMouseEvent(
+                                TerminalEmulator.MOUSE_LEFT_BUTTON, column, row, false
+                            )
+                        }
+                    },
                     onTap = { offset ->
                         if (state.selection != null) {
                             // Legacy onSingleTapUp stops the text selection mode on a tap, but
@@ -546,13 +592,20 @@ internal fun ComposeTerminalCanvas(
                                 state.selection = null
                             }
                         } else {
+                            val emulator = session.emulator
+                            // The app owns the pointer, so onPress already delivered the click:
+                            // just take the pane focus and leave focus, keyboard and hyperlinks
+                            // to the terminal.
+                            if (emulator != null &&
+                                ComposeTerminalFrame.pointerOwnedByApp(emulator.isMouseTrackingActive)
+                            ) {
+                                if (!isActivePane) onActivatePane?.invoke()
+                                return@detectTapGestures
+                            }
                             // OSC 8: open the hyperlink under the finger before the normal
                             // tap path (parity with TerminalView.onSingleTapUp). Mouse-tracking
                             // apps keep the click; selection is handled above.
-                            val emulator = session.emulator
-                            if (hyperlinksEnabled && emulator != null &&
-                                !emulator.isMouseTrackingActive
-                            ) {
+                            if (hyperlinksEnabled && emulator != null) {
                                 val (linkCol, linkRow) = gridColumnAndRow(offset.x, offset.y)
                                 val uri = emulator.getHyperlinkUriAt(linkRow, linkCol)
                                 if (TerminalEmulator.isAllowedHyperlinkUri(uri)) {
@@ -565,17 +618,6 @@ internal fun ComposeTerminalCanvas(
                             // side effects (soft keyboard, etc.) still run. The canvas also
                             // focuses the hidden view above so focus order matches.
                             onClientTap?.invoke()
-                            // Legacy onUp quick-tap parity: when mouse tracking is active a
-                            // quick touch tap reports the left button press/release to the app.
-                            if (emulator?.isMouseTrackingActive == true && !fingerScrolled) {
-                                val (column, row) = columnAndRow(offset.x, offset.y)
-                                emulator.sendMouseEvent(
-                                    TerminalEmulator.MOUSE_LEFT_BUTTON, column, row, true
-                                )
-                                emulator.sendMouseEvent(
-                                    TerminalEmulator.MOUSE_LEFT_BUTTON, column, row, false
-                                )
-                            }
                         }
                     },
                     onLongPress = { offset ->
@@ -583,6 +625,12 @@ internal fun ComposeTerminalCanvas(
                         // unless a scale gesture is in progress, the client consumed the
                         // event, or the mode is already active.
                         if (isPinching) return@detectTapGestures
+                        // A mouse-tracking app owns the pointer: the press is already on its
+                        // way, so the long press is its hold, not the start of our selection.
+                        if (session.emulator?.let {
+                                ComposeTerminalFrame.pointerOwnedByApp(it.isMouseTrackingActive)
+                            } == true
+                        ) return@detectTapGestures
                         if (onLongPressConsumed()) return@detectTapGestures
                         if (state.selection != null) return@detectTapGestures
                         if (!isActivePane) onActivatePane?.invoke()
@@ -623,17 +671,13 @@ internal fun ComposeTerminalCanvas(
                                 dragRemainder, delta, metrics.lineSpacing
                             )
                             dragRemainder = remainder
-                            if (rows != 0) {
-                                fingerScrolled = true
-                                routeScroll(rows, emulator, dragAnchor.x, dragAnchor.y)
-                            }
+                            if (rows != 0) routeScroll(rows, emulator, dragAnchor.x, dragAnchor.y)
                         }
                     }
                 },
                 orientation = Orientation.Vertical,
                 onDragStarted = {
                     dragRemainder = 0f
-                    fingerScrolled = false
                     dragAnchor = it
                 },
                 onDragStopped = { velocity ->
@@ -643,11 +687,20 @@ internal fun ComposeTerminalCanvas(
             )
     ) {
         if (canvasSize == IntSize.Zero) return@Canvas
-        val emulator = session.emulator ?: return@Canvas
         // State read inside the draw scope subscribes this canvas: every frame tick
         // schedules a redraw of this session only.
         @Suppress("UNUSED_EXPRESSION")
         frameTick
+        val emulator = session.emulator
+        if (emulator == null) {
+            // Before the hidden input view hands us an emulator there is nothing to paint,
+            // but the canvas is the pane's only renderer (the pane no longer paints its own
+            // background), so keep it opaque with the palette background.
+            drawIntoCanvas { drawCanvas ->
+                drawCanvas.nativeCanvas.drawColor(palette.background)
+            }
+            return@Canvas
+        }
         // Display-time clamp covers transcript resizes between frames; the stored offset
         // is re-clamped in LaunchedEffect(frameTick) above.
         val topRow = ComposeTerminalFrame.clampScrollOffset(
@@ -681,15 +734,10 @@ internal fun ComposeTerminalCanvas(
             val thumbTop = trackHeight * scrollOffset / (scrollRange - scrollExtent)
             val barWidthPx = scrollBarWidthPx
             drawIntoCanvas { drawCanvas ->
-                val c = drawCanvas.nativeCanvas
-                val scrollPaint = Paint().apply {
-                    color = android.graphics.Color.argb(115, 255, 255, 255)
-                    isAntiAlias = true
-                }
                 val right = canvasSize.width.toFloat()
-                c.drawRoundRect(
+                drawCanvas.nativeCanvas.drawRoundRect(
                     right - barWidthPx, thumbTop, right, thumbTop + thumbHeight,
-                    barWidthPx / 2f, barWidthPx / 2f, scrollPaint
+                    barWidthPx / 2f, barWidthPx / 2f, scrollBarPaint
                 )
             }
         }
@@ -699,14 +747,38 @@ internal fun ComposeTerminalCanvas(
 /**
  * Font metrics cached per (typeface, size), mirroring the legacy [TerminalRenderer]
  * constructor so grid geometry matches the fallback view.
+ *
+ * [Immutable] plus a content-based [equals]/[hashCode]: a `data class` would compare
+ * [asciiMeasures] by array identity, so two measurements with identical metrics would look
+ * different to Compose and defeat recomposition/draw skipping.
  */
+@Immutable
 internal data class CanvasFontMetrics(
     val fontWidth: Float,
     val lineSpacing: Int,
     val ascent: Int,
     val lineSpacingAndAscent: Int,
     val asciiMeasures: FloatArray
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is CanvasFontMetrics) return false
+        return fontWidth == other.fontWidth &&
+            lineSpacing == other.lineSpacing &&
+            ascent == other.ascent &&
+            lineSpacingAndAscent == other.lineSpacingAndAscent &&
+            asciiMeasures.contentEquals(other.asciiMeasures)
+    }
+
+    override fun hashCode(): Int {
+        var result = fontWidth.hashCode()
+        result = 31 * result + lineSpacing
+        result = 31 * result + ascent
+        result = 31 * result + lineSpacingAndAscent
+        result = 31 * result + asciiMeasures.contentHashCode()
+        return result
+    }
+}
 
 /**
  * Measure monospace metrics into [paint] and snapshot them.
@@ -739,8 +811,14 @@ internal fun measureCanvasMetrics(paint: Paint, typeface: Typeface, fontSize: Fl
  * (reverse video, per-row runs, cursor rect, text run, selection reverse video).
  * The frame starts with a full fill of the default background color so the canvas is
  * opaque: default-background cells are never painted per-run (the legacy renderer relied
- * on the view background color), and a transparent canvas would show the hidden input
- * view underneath as a static second copy of the text while the canvas scrolls.
+ * on the view background color), and the pane therefore needs no background of its own.
+ * The hidden input view underneath never shows through — it is a full-size
+ * [com.termux.view.TerminalView] held at `alpha = 0` with `setWillNotDraw(true)`
+ * (see [HiddenTerminalInputHost]), so it paints nothing at all.
+ *
+ * Everything the row loop needs is created once per frame here: the canvas repaints on
+ * every output tick, so allocating a lambda, a run, a color set or a String per
+ * run/row/code point would be garbage at `rows x runs x fps`.
  *
  * @param topRow Scroll offset owned by the canvas (same semantics as the legacy `mTopRow`);
  * rows paint from `topRow` to `topRow + mRows`
@@ -779,6 +857,33 @@ private fun renderComposeFrame(
     val screen = emulator.screen
     val defaultBackground = colors[TextStyle.COLOR_INDEX_BACKGROUND]
 
+    // Per-frame scratch: the width-mismatch probe, the resolved colors of the run/cell
+    // currently being painted and the run painter. Shared by the whole frame and consumed
+    // immediately, so no value outlives the call that set it.
+    val colorsBuffer = ComposeTerminalFrame.ResolvedRunColorsBuffer()
+    val codePointChars = CharArray(2)
+    val hasWidthMismatch: (Int) -> Boolean = { codePoint ->
+        val measured = if (codePoint < metrics.asciiMeasures.size) {
+            metrics.asciiMeasures[codePoint]
+        } else {
+            // Reused char buffer instead of String(Character.toChars(...)): a new String
+            // plus char array per non-ASCII code point, per row, per frame.
+            paint.measureText(codePointChars, 0, Character.toChars(codePoint, codePointChars, 0))
+        }
+        kotlin.math.abs(measured / metrics.fontWidth - WcWidth.width(codePoint)) > 0.01f
+    }
+    val runPainter = ComposeRowRunPainter(
+        canvas = canvas,
+        paletteColors = colors,
+        defaultBackground = defaultBackground,
+        reverseVideo = reverseVideo,
+        cursorStyle = cursorStyle,
+        metrics = metrics,
+        paint = paint,
+        hyperlinksEnabled = hyperlinksEnabled,
+        colorsBuffer = colorsBuffer
+    )
+
     var heightOffset = metrics.lineSpacingAndAscent.toFloat()
     // Per-row inheritance state for unicode-placeholder cells (reset per logical line).
     val placeholderState = com.termux.terminal.KittyPlaceholderDecoder.RowState()
@@ -787,7 +892,9 @@ private fun renderComposeFrame(
         val externalRow = topRow + row
         val cursorX = if (externalRow == cursorRow && cursorVisible) cursorCol else -1
         val line = screen.allocateFullLineIfNecessary(screen.externalToInternalRow(externalRow))
-        val (selX1, selX2) = ComposeTerminalFrame.selectionBoundsForRow(selection, externalRow, columns)
+        val selBounds = ComposeTerminalFrame.selectionBoundsForRowPacked(selection, externalRow, columns)
+        val selX1 = ComposeTerminalFrame.PackedSelectionBounds.first(selBounds)
+        val selX2 = ComposeTerminalFrame.PackedSelectionBounds.second(selBounds)
         val skipCells = HashSet<Int>()
         var pendingPlaceholders: List<Pair<Int, com.termux.terminal.KittyPlaceholderDecoder.Target>>? = null
         if (imagesEnabled) {
@@ -801,29 +908,17 @@ private fun renderComposeFrame(
                 pendingPlaceholders.add(col to target)
             }
         }
-        val runs = ComposeTerminalFrame.buildLineRuns(
+        runPainter.text = line.mText
+        runPainter.y = heightOffset
+        ComposeTerminalFrame.forEachRun(
             line, columns, cursorX, selX1, selX2, enableLigatures,
-            hasWidthMismatch = { codePoint: Int ->
-                val measured = if (codePoint < metrics.asciiMeasures.size) {
-                    metrics.asciiMeasures[codePoint]
-                } else {
-                    paint.measureText(String(Character.toChars(codePoint)))
-                }
-                kotlin.math.abs(measured / metrics.fontWidth - WcWidth.width(codePoint)) > 0.01f
-            },
-            skipCells = skipCells
+            hasWidthMismatch, skipCells, runPainter
         )
-        for (run in runs) {
-            drawComposeRun(
-                canvas, line.mText, run, colors, defaultBackground, reverseVideo,
-                cursorStyle, heightOffset, paint, metrics, hyperlinksEnabled
-            )
-        }
         // Images paint after text so previews sit above leftover cell glyphs.
         if (imagesEnabled) {
             drawComposeImages(
                 canvas, emulator, screen, externalRow, heightOffset, metrics, paint,
-                line, colors, defaultBackground, reverseVideo, selX1, selX2
+                line, colors, defaultBackground, reverseVideo, selX1, selX2, colorsBuffer
             )
             // Unicode placeholders (kitty U+10EEEE): paint after text so the image
             // covers the placeholder glyph; cells were collected before text to skip
@@ -831,10 +926,114 @@ private fun renderComposeFrame(
             pendingPlaceholders?.forEach { (column, target) ->
                 drawComposePlaceholderCell(
                     canvas, emulator, column, target, heightOffset, metrics, paint,
-                    line, colors, defaultBackground, reverseVideo, selX1, selX2
+                    line, colors, defaultBackground, reverseVideo, selX1, selX2, colorsBuffer
                 )
             }
         }
+    }
+}
+
+/**
+ * Paints the text runs of a row as [ComposeTerminalFrame.forEachRun] produces them, without
+ * allocating a [ComposeTerminalFrame.TextRun] per run. One instance per frame: the frame
+ * constants live in the constructor and [text]/[y] are repointed at the row being painted.
+ *
+ * Mirrors the legacy [com.termux.view.TerminalRenderer.drawTextRun]: optional background,
+ * cursor rect, and the text slice scaled onto its grid columns when its measured width
+ * mismatches wcwidth (non-monospace glyphs).
+ *
+ * @param hyperlinksEnabled When the run carries an OSC 8 hyperlink and this is true, force
+ * an underline (legacy [com.termux.view.TerminalRenderer.drawTextRun] parity)
+ */
+private class ComposeRowRunPainter(
+    private val canvas: android.graphics.Canvas,
+    private val paletteColors: IntArray,
+    private val defaultBackground: Int,
+    private val reverseVideo: Boolean,
+    private val cursorStyle: Int,
+    private val metrics: CanvasFontMetrics,
+    private val paint: Paint,
+    private val hyperlinksEnabled: Boolean,
+    private val colorsBuffer: ComposeTerminalFrame.ResolvedRunColorsBuffer
+) : ComposeTerminalFrame.LineRunConsumer {
+
+    /** The row being painted ([com.termux.terminal.TerminalRow.mText]). */
+    var text: CharArray = CharArray(0)
+
+    /** Baseline of the row being painted. */
+    var y: Float = 0f
+
+    override fun onRun(
+        startColumn: Int,
+        columnWidth: Int,
+        startCharIndex: Int,
+        charCount: Int,
+        style: Long,
+        inCursor: Boolean,
+        inSelection: Boolean,
+        hyperlinkIndex: Int
+    ) {
+        ComposeTerminalFrame.resolveRunColorsInto(
+            colorsBuffer, style, paletteColors, defaultBackground, reverseVideo,
+            inSelection, inCursor, cursorStyle
+        )
+
+        var left = startColumn * metrics.fontWidth
+        var right = left + columnWidth * metrics.fontWidth
+
+        var savedMatrix = false
+        // Clamp the slice defensively: the row buffer can be reshaped by the emulator between
+        // frames, and measureText/drawTextRun throw on out-of-range slices (fatal in draw).
+        val safeStart = startCharIndex.coerceIn(0, text.size)
+        val safeCount = charCount.coerceAtLeast(0).coerceAtMost(text.size - safeStart)
+        if (safeCount > 0) {
+            val measured = paint.measureText(text, safeStart, safeCount)
+            if (abs(measured / metrics.fontWidth - columnWidth) > 0.01f && measured > 0f) {
+                canvas.save()
+                canvas.scale(columnWidth * metrics.fontWidth / measured, 1f)
+                left *= measured / (columnWidth * metrics.fontWidth)
+                right *= measured / (columnWidth * metrics.fontWidth)
+                savedMatrix = true
+            }
+        }
+
+        if (colorsBuffer.drawBackground) {
+            paint.color = colorsBuffer.backColor
+            canvas.drawRect(left, y - metrics.lineSpacingAndAscent + metrics.ascent, right, y, paint)
+        }
+
+        if (colorsBuffer.cursorColor != 0) {
+            paint.color = colorsBuffer.cursorColor
+            val cursorHeight = (metrics.lineSpacingAndAscent - metrics.ascent).toFloat()
+            val cursorBottom = y
+            var cursorTop = y - cursorHeight
+            var cursorLeft = left
+            val cursorRight = right
+            if (cursorStyle == TerminalEmulator.TERMINAL_CURSOR_STYLE_UNDERLINE) {
+                cursorTop = y - cursorHeight / 4f
+            } else if (cursorStyle == TerminalEmulator.TERMINAL_CURSOR_STYLE_BAR) {
+                cursorLeft = right - (right - left) / 4f
+            }
+            canvas.drawRect(cursorLeft, cursorTop, cursorRight, cursorBottom, paint)
+        }
+
+        if (colorsBuffer.drawText && safeCount > 0) {
+            val effect = colorsBuffer.effect
+            paint.isFakeBoldText = effect and
+                (TextStyle.CHARACTER_ATTRIBUTE_BOLD or TextStyle.CHARACTER_ATTRIBUTE_BLINK) != 0
+            val isHyperlink = hyperlinksEnabled && hyperlinkIndex != 0
+            paint.isUnderlineText =
+                effect and TextStyle.CHARACTER_ATTRIBUTE_UNDERLINE != 0 || isHyperlink
+            paint.textSkewX = if (effect and TextStyle.CHARACTER_ATTRIBUTE_ITALIC != 0) -0.35f else 0f
+            paint.isStrikeThruText = effect and TextStyle.CHARACTER_ATTRIBUTE_STRIKETHROUGH != 0
+            paint.color = colorsBuffer.foreColor
+            canvas.drawTextRun(
+                text, safeStart, safeCount,
+                safeStart, safeCount, left, y - metrics.lineSpacingAndAscent, false, paint
+            )
+        }
+
+        if (savedMatrix) canvas.restore()
     }
 }
 
@@ -856,9 +1055,10 @@ private fun renderComposeFrame(
   * @param paletteColors the emulator indexed colors
   * @param defaultBackground the default background color (ARGB)
   * @param reverseVideo whether the emulator is in reverse-video mode
-  * @param selX1 selection left bound for the row (or -1)
-  * @param selX2 selection right bound for the row (or -1)
-  */
+ * @param selX1 selection left bound for the row (or -1)
+ * @param selX2 selection right bound for the row (or -1)
+ * @param colorsBuffer per-frame holder for the resolved colors (reused, read immediately)
+ */
 private fun drawComposePlaceholderCell(
     canvas: android.graphics.Canvas,
     emulator: TerminalEmulator,
@@ -872,7 +1072,8 @@ private fun drawComposePlaceholderCell(
     defaultBackground: Int,
     reverseVideo: Boolean,
     selX1: Int,
-    selX2: Int
+    selX2: Int,
+    colorsBuffer: ComposeTerminalFrame.ResolvedRunColorsBuffer
 ) {
     val vp = emulator.resolveVirtualPlacement(target.imageId) ?: return
     if (target.gridRow < 0 || target.gridRow >= vp.rows ||
@@ -894,7 +1095,7 @@ private fun drawComposePlaceholderCell(
     // placeholder glyph is drawn by the text run underneath and transparent image
     // pixels must show the cell background, never the glyph.
     paint.color = cellBlankColor(
-        line, column, paletteColors, defaultBackground, reverseVideo, selX1, selX2
+        colorsBuffer, line, column, paletteColors, defaultBackground, reverseVideo, selX1, selX2
     )
     canvas.drawRect(left, top, right, bottom, paint)
     val src = android.graphics.Rect(
@@ -921,6 +1122,7 @@ private fun drawComposePlaceholderCell(
  * @return the resolved background color as ARGB
  */
 private fun cellBlankColor(
+    colorsBuffer: ComposeTerminalFrame.ResolvedRunColorsBuffer,
     line: com.termux.terminal.TerminalRow,
     column: Int,
     paletteColors: IntArray,
@@ -928,10 +1130,13 @@ private fun cellBlankColor(
     reverseVideo: Boolean,
     selX1: Int,
     selX2: Int
-): Int = ComposeTerminalFrame.resolveRunColors(
-    line.getStyle(column), paletteColors, defaultBackground, reverseVideo,
-    inSelection = column >= selX1 && column <= selX2
-).backColor
+): Int {
+    ComposeTerminalFrame.resolveRunColorsInto(
+        colorsBuffer, line.getStyle(column), paletteColors, defaultBackground, reverseVideo,
+        inSelection = column >= selX1 && column <= selX2
+    )
+    return colorsBuffer.backColor
+}
 
 /**
  * Paint every inline image placement intersecting [externalRow], mirroring the legacy
@@ -952,6 +1157,7 @@ private fun cellBlankColor(
  * @param reverseVideo whether the emulator is in reverse-video mode
  * @param selX1 selection left bound for the row (or -1)
  * @param selX2 selection right bound for the row (or -1)
+ * @param colorsBuffer per-frame holder for the resolved colors (reused, read immediately)
  */
 private fun drawComposeImages(
     canvas: android.graphics.Canvas,
@@ -966,7 +1172,8 @@ private fun drawComposeImages(
     defaultBackground: Int,
     reverseVideo: Boolean,
     selX1: Int,
-    selX2: Int
+    selX2: Int,
+    colorsBuffer: ComposeTerminalFrame.ResolvedRunColorsBuffer
 ) {
     val top = yBottom - metrics.lineSpacing
     val bottom = yBottom
@@ -984,7 +1191,8 @@ private fun drawComposeImages(
         if (data != null && data.intersectsRow(externalRow)) {
             drawComposeImageStrip(
                 canvas, data, externalRow, col, spanEnd - col, top, bottom, metrics,
-                paint, line, paletteColors, defaultBackground, reverseVideo, selX1, selX2
+                paint, line, paletteColors, defaultBackground, reverseVideo, selX1, selX2,
+                colorsBuffer
             )
         }
         col = spanEnd
@@ -1023,6 +1231,7 @@ private val composeImageBitmaps = android.util.LruCache<Int, ComposeCachedImageB
  * @param reverseVideo whether the emulator is in reverse-video mode
  * @param selX1 selection left bound for the row (or -1)
  * @param selX2 selection right bound for the row (or -1)
+ * @param colorsBuffer per-frame holder for the resolved colors (reused, read immediately)
  */
 private fun drawComposeImageStrip(
     canvas: android.graphics.Canvas,
@@ -1039,7 +1248,8 @@ private fun drawComposeImageStrip(
     defaultBackground: Int,
     reverseVideo: Boolean,
     selX1: Int,
-    selX2: Int
+    selX2: Int,
+    colorsBuffer: ComposeTerminalFrame.ResolvedRunColorsBuffer
 ) {
     val bitmap = composeBitmapFor(data) ?: return
     val bmpW = bitmap.width
@@ -1059,7 +1269,7 @@ private fun drawComposeImageStrip(
     // pixels must show the cell background, never the leftover glyph.
     for (c in startColumn until startColumn + widthCells) {
         paint.color = cellBlankColor(
-            line, c, paletteColors, defaultBackground, reverseVideo, selX1, selX2
+            colorsBuffer, line, c, paletteColors, defaultBackground, reverseVideo, selX1, selX2
         )
         val cellLeft = c * metrics.fontWidth
         canvas.drawRect(cellLeft, top, cellLeft + metrics.fontWidth, bottom, paint)
@@ -1108,91 +1318,6 @@ private fun composeBitmapFor(
         composeImageBitmaps.put(data.id, ComposeCachedImageBitmap(data, bitmap))
     }
     return bitmap
-}
-
-/**
- * Paint one [ComposeTerminalFrame.TextRun]: optional background, cursor rect and text.
- *
- * The run text slice is scaled onto its grid columns when its measured width mismatches
- * wcwidth (non-monospace glyphs), exactly like the legacy renderer scales mismatched runs.
- *
- * @param hyperlinksEnabled When the run carries an OSC 8 hyperlink and this is true, force
- * an underline (legacy [com.termux.view.TerminalRenderer.drawTextRun] parity)
- */
-private fun drawComposeRun(
-    canvas: android.graphics.Canvas,
-    text: CharArray,
-    run: ComposeTerminalFrame.TextRun,
-    paletteColors: IntArray,
-    defaultBackground: Int,
-    emulatorReverseVideo: Boolean,
-    cursorStyle: Int,
-    y: Float,
-    paint: Paint,
-    metrics: CanvasFontMetrics,
-    hyperlinksEnabled: Boolean = true
-) {
-    val resolved = ComposeTerminalFrame.resolveRunColors(
-        run.style, paletteColors, defaultBackground, emulatorReverseVideo,
-        run.inSelection, run.inCursor, cursorStyle
-    )
-
-    var left = run.startColumn * metrics.fontWidth
-    var right = left + run.columnWidth * metrics.fontWidth
-
-    var savedMatrix = false
-    // Clamp the slice defensively: the row buffer can be reshaped by the emulator between
-    // frames, and measureText/drawTextRun throw on out-of-range slices (fatal in draw).
-    val safeStart = run.startCharIndex.coerceIn(0, text.size)
-    val safeCount = run.charCount.coerceAtLeast(0).coerceAtMost(text.size - safeStart)
-    if (safeCount > 0) {
-        val measured = paint.measureText(text, safeStart, safeCount)
-        if (abs(measured / metrics.fontWidth - run.columnWidth) > 0.01f && measured > 0f) {
-            canvas.save()
-            canvas.scale(run.columnWidth * metrics.fontWidth / measured, 1f)
-            left *= measured / (run.columnWidth * metrics.fontWidth)
-            right *= measured / (run.columnWidth * metrics.fontWidth)
-            savedMatrix = true
-        }
-    }
-
-    if (resolved.drawBackground) {
-        paint.color = resolved.backColor
-        canvas.drawRect(left, y - metrics.lineSpacingAndAscent + metrics.ascent, right, y, paint)
-    }
-
-    if (resolved.cursorColor != 0) {
-        paint.color = resolved.cursorColor
-        val cursorHeight = (metrics.lineSpacingAndAscent - metrics.ascent).toFloat()
-        val cursorBottom = y
-        var cursorTop = y - cursorHeight
-        var cursorLeft = left
-        val cursorRight = right
-        if (cursorStyle == TerminalEmulator.TERMINAL_CURSOR_STYLE_UNDERLINE) {
-            cursorTop = y - cursorHeight / 4f
-        } else if (cursorStyle == TerminalEmulator.TERMINAL_CURSOR_STYLE_BAR) {
-            cursorLeft = right - (right - left) / 4f
-        }
-        canvas.drawRect(cursorLeft, cursorTop, cursorRight, cursorBottom, paint)
-    }
-
-    if (resolved.drawText && safeCount > 0) {
-        val effect = resolved.effect
-        paint.isFakeBoldText = effect and
-            (TextStyle.CHARACTER_ATTRIBUTE_BOLD or TextStyle.CHARACTER_ATTRIBUTE_BLINK) != 0
-        val isHyperlink = hyperlinksEnabled && run.hyperlinkIndex != 0
-        paint.isUnderlineText =
-            effect and TextStyle.CHARACTER_ATTRIBUTE_UNDERLINE != 0 || isHyperlink
-        paint.textSkewX = if (effect and TextStyle.CHARACTER_ATTRIBUTE_ITALIC != 0) -0.35f else 0f
-        paint.isStrikeThruText = effect and TextStyle.CHARACTER_ATTRIBUTE_STRIKETHROUGH != 0
-        paint.color = resolved.foreColor
-        canvas.drawTextRun(
-            text, safeStart, safeCount,
-            safeStart, safeCount, left, y - metrics.lineSpacingAndAscent, false, paint
-        )
-    }
-
-    if (savedMatrix) canvas.restore()
 }
 
 private const val LOG_TAG = "ComposeTerminalCanvas"
