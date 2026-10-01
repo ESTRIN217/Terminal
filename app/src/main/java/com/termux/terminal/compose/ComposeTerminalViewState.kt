@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.IntSize
 
 /**
  * Scroll and text-selection state shared between the [ComposeTerminalCanvas] and its
@@ -16,8 +17,23 @@ import androidx.compose.runtime.setValue
  * also starts text selection (long press); the overlay drags its handles, refines the
  * selection and paints the Copy/Paste/More toolbar. Both write through the same state so no
  * explicit coordination is needed.
+ *
+ * It also carries the pane geometry published by the hidden input view (see
+ * [HiddenTerminalInputHost]). Nothing in the pane derives it from a Compose measure pass:
+ * writing snapshot state from inside one is what makes Compose re-enter measurement and throw
+ * {@code IllegalStateException: layout state is not idle before measure starts}, and it leaves
+ * a pane that never gets a size painting nothing at all when a second pane shares the screen.
  */
 class ComposeTerminalViewState {
+
+    /**
+     * The pane size in pixels as reported by the hidden [com.termux.view.TerminalView] layout,
+     * or [IntSize.Zero] before the first layout. The hidden view owns the terminal grid
+     * ([com.termux.view.TerminalView.updateSize]), so this is the one source of truth for the
+     * pane geometry: the canvas repaints when it changes and the selection overlay clamps its
+     * toolbar and handle flips against it.
+     */
+    var paneSize by mutableStateOf(IntSize.Zero)
 
     /**
      * The canvas scroll offset in rows, with the same semantics as the legacy `mTopRow`:

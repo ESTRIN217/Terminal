@@ -9,8 +9,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
@@ -31,6 +33,14 @@ import com.termux.view.TerminalViewClient
  * working unchanged. Scroll ownership (`mTopRow`) also stays in the view; the canvas reads
  * it back per frame. Taps on the canvas forward focus plus the soft keyboard here.
  *
+ * The view is also the single owner of the terminal grid: it derives columns/rows from its own
+ * size and calls [TerminalSession.updateSize] on every layout and font change, exactly like the
+ * legacy renderer. It publishes the size it was laid out at through [onPaneSizeChanged] instead
+ * of letting the canvas derive its own with `Modifier.onSizeChanged`, because that callback
+ * fires inside the Compose *measure* pass and writing snapshot state from there is what makes
+ * Compose re-enter measurement (`IllegalStateException: layout state is not idle before measure
+ * starts`) once a second pane shares the screen.
+ *
  * @param session The terminal session to attach to the hidden view
  * @param fontSize Font size in density-independent pixels
  * @param typeface The [Typeface] to use for the terminal text, or null for the default
@@ -48,6 +58,12 @@ import com.termux.view.TerminalViewClient
  * Soft-IME text input clears the pane selection through
  * [TerminalViewClient.onCodePoint] → [TerminalViewRegistry.dismissActivePaneSelection],
  * mirroring legacy `sendTextToTerminal()` → `stopTextSelectionMode()`.
+ * @param onPaneSizeChanged Invoked with the pane size every time the hidden view is laid out,
+ * including the first one. This is the geometry the canvas repaints on and the selection
+ * overlay clamps its toolbar against, so it must stay in sync with the grid the view derives
+ * from it
+ * @param hyperlinksEnabled Whether OSC 8 hyperlinks underline and open on tap
+ * @param imagesEnabled Whether inline terminal images (OSC 1337 / kitty) are painted
  * @param modifier Modifier to apply to the composable
  */
 @Composable
@@ -61,6 +77,9 @@ fun HiddenTerminalInputHost(
     isActivePane: Boolean = true,
     onActivatePane: (() -> Unit)? = null,
     onUserKeyInput: () -> Unit = {},
+    onPaneSizeChanged: (IntSize) -> Unit = {},
+    hyperlinksEnabled: Boolean = true,
+    imagesEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
@@ -68,13 +87,29 @@ fun HiddenTerminalInputHost(
     var appliedFontSize by remember { mutableFloatStateOf(0f) }
     var appliedTypeface by remember { mutableStateOf<Typeface?>(null) }
     var appliedLigatures by remember { mutableStateOf(true) }
+    var appliedHyperlinks by remember { mutableStateOf(true) }
+    var appliedImages by remember { mutableStateOf(true) }
     var appliedPalette by remember { mutableStateOf<TerminalPalette?>(null) }
+
+    // Read the size callback through rememberUpdatedState: the layout listener below is
+    // registered once per view, so it must always reach the current lambda.
+    val currentOnPaneSizeChanged by rememberUpdatedState(onPaneSizeChanged)
 
     val focusListener = remember(session, isActivePane, onActivatePane) {
         View.OnFocusChangeListener { view, hasFocus ->
             // Same promotion rule as TerminalViewHost: only the gain event counts, so a
             // role swap cannot bounce the focus back right after losing it.
             if (hasFocus && !isActivePane) view.post { onActivatePane?.invoke() }
+        }
+    }
+
+    // The canvas has no size of its own: the grid below is derived from this view's layout,
+    // so publish that layout instead of re-deriving it from a Compose measure callback (which
+    // would write snapshot state during measure). Kept as a named listener so it can be
+    // detached again when the view leaves composition.
+    val layoutListener = remember {
+        View.OnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
+            currentOnPaneSizeChanged(IntSize(right - left, bottom - top))
         }
     }
 
@@ -94,8 +129,15 @@ fun HiddenTerminalInputHost(
                 appliedTypeface = resolvedTypeface
                 setLigaturesEnabled(enableLigatures)
                 appliedLigatures = enableLigatures
+                setHyperlinksEnabled(hyperlinksEnabled)
+                appliedHyperlinks = hyperlinksEnabled
+                setImagesEnabled(imagesEnabled)
+                appliedImages = imagesEnabled
                 attachSession(session)
                 appliedSession = session
+                // Fires on the first layout too, which is what gives the canvas something to
+                // paint before the first output tick.
+                addOnLayoutChangeListener(layoutListener)
                 // Same pending-palette dance as TerminalViewHost: the emulator usually does
                 // not exist until layout assigns a size.
                 if (TerminalViewRegistry.applyPalette(this, session, palette)) {
@@ -107,7 +149,9 @@ fun HiddenTerminalInputHost(
                 }
                 post { if (isActivePane) requestFocus() }
                 setOnFocusChangeListener(focusListener)
-                TerminalViewRegistry.registerView(session, this, isActivePane)
+                TerminalViewRegistry.registerView(
+                    session, this, isActivePane, canvasOwnsBlink = true
+                )
                 terminalView = this
             }
         },
@@ -132,6 +176,14 @@ fun HiddenTerminalInputHost(
                 view.setLigaturesEnabled(enableLigatures)
                 appliedLigatures = enableLigatures
             }
+            if (appliedHyperlinks != hyperlinksEnabled) {
+                view.setHyperlinksEnabled(hyperlinksEnabled)
+                appliedHyperlinks = hyperlinksEnabled
+            }
+            if (appliedImages != imagesEnabled) {
+                view.setImagesEnabled(imagesEnabled)
+                appliedImages = imagesEnabled
+            }
             if (appliedPalette != palette) {
                 if (TerminalViewRegistry.applyPalette(view, session, palette)) {
                     appliedPalette = palette
@@ -155,13 +207,14 @@ fun HiddenTerminalInputHost(
             if (isActivePane && !view.hasFocus() && view.isAttachedToWindow) {
                 view.requestFocus()
             }
-            TerminalViewRegistry.registerView(session, view, isActivePane)
+            TerminalViewRegistry.registerView(session, view, isActivePane, canvasOwnsBlink = true)
         }
     )
 
     DisposableEffect(session) {
         onDispose {
             terminalView?.let { view ->
+                view.removeOnLayoutChangeListener(layoutListener)
                 TerminalViewRegistry.unregisterView(session, view)
             }
         }

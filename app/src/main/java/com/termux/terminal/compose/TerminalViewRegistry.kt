@@ -4,6 +4,7 @@ import com.termux.shared.logger.Logger
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -118,6 +119,15 @@ object TerminalViewRegistry {
     /** Views currently composed, keyed by the session handle they render. */
     private val viewsBySessionHandle = ConcurrentHashMap<String, TerminalView>()
 
+    /**
+     * Views whose cursor blinking is owned by the Compose canvas above them (native renderer
+     * panes): the canvas runs its own phase per pane and only for the focused one, so these
+     * hidden views must keep their own blinker inert at the default rate 0 instead of being
+     * given the {@code terminal-cursor-blink-rate} value.
+     */
+    private val canvasOwnedBlinkViews =
+        Collections.newSetFromMap(ConcurrentHashMap<TerminalView, Boolean>())
+
     /** Palettes that failed to apply (no emulator yet), per view. */
     private val pendingPalettes = ConcurrentHashMap<TerminalView, TerminalPalette>()
 
@@ -149,12 +159,30 @@ object TerminalViewRegistry {
      * @param session The session rendered by the view
      * @param view The composed terminal view
      * @param isFocused Whether this view belongs to the focused (active) pane
+     * @param canvasOwnsBlink Whether the pane's cursor blink is owned by the Compose canvas
+     * ([HiddenTerminalInputHost] panes) instead of the view's own blinker
      */
     @JvmStatic
-    fun registerView(session: TerminalSession, view: TerminalView, isFocused: Boolean) {
+    fun registerView(
+        session: TerminalSession,
+        view: TerminalView,
+        isFocused: Boolean,
+        canvasOwnsBlink: Boolean = false
+    ) {
         viewsBySessionHandle[session.mHandle] = view
         if (isFocused) activeView = view
+        if (canvasOwnsBlink) canvasOwnedBlinkViews.add(view) else canvasOwnedBlinkViews.remove(view)
     }
+
+    /**
+     * Whether [view] blinks through the Compose canvas of its pane, so callers must leave its
+     * own blinker inert.
+     *
+     * @param view The composed terminal view
+     * @return true when the canvas above [view] owns the cursor blink phase
+     */
+    @JvmStatic
+    fun canvasOwnsBlink(view: TerminalView): Boolean = canvasOwnedBlinkViews.contains(view)
 
     /**
      * Unregister a view when it leaves composition.
@@ -168,6 +196,7 @@ object TerminalViewRegistry {
             viewsBySessionHandle.remove(session.mHandle)
         }
         pendingPalettes.remove(view)
+        canvasOwnedBlinkViews.remove(view)
         if (activeView === view) activeView = null
     }
 

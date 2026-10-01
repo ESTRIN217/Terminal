@@ -7,7 +7,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
@@ -28,7 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -48,7 +47,9 @@ import kotlin.math.roundToInt
  *
  * The overlay is composed on top of [ComposeTerminalCanvas] by [TermuxMainScreen] and shares
  * the pane's [ComposeTerminalViewState], so handle geometry is derived from the same scroll
- * offset and [CanvasFontMetrics] the canvas paints with. The anchoring mirrors the legacy
+ * offset and [CanvasFontMetrics] the canvas paints with, and the pane size it clamps against
+ * ([ComposeTerminalViewState.paneSize]) is the one the hidden input view was laid out at. The
+ * anchoring mirrors the legacy
  * `TextSelectionHandleView.positionAtCursor`: the start handle anchors at the selection start
  * column, the end one at `x2 + 1`; pixel coordinates come from `getPointX/getPointY`
  * (`x = round(cx * fontWidth)`, `y = (cy + 1 - topRow) * lineSpacing`). Each handle is drawn
@@ -120,62 +121,68 @@ internal fun ComposeTerminalSelectionOverlay(
     // so the toolbar never sits under the dragging finger.
     var isDraggingHandle by remember { mutableStateOf(false) }
 
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val canvasWidth = with(density) { maxWidth.toPx() }
-        val canvasHeight = with(density) { maxHeight.toPx() }
+    // Pane geometry comes from the hidden input view's layout (state.paneSize), not from a
+    // BoxWithConstraints: that would run a subcomposition inside the Compose measure pass, where
+    // the toolbar's own onSizeChanged write would re-enter measurement ("layout state is not idle
+    // before measure starts").
+    val canvasWidth = state.paneSize.width.toFloat()
+    val canvasHeight = state.paneSize.height.toFloat()
 
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopStart) {
-            SelectionHandle(
-                isStart = true,
-                anchor = startAnchor,
-                handleSize = handleSize,
-                state = state,
-                emulator = emulator,
-                rows = rows,
-                metrics = metrics,
-                viewWidthPx = canvasWidth,
-                onDraggingChange = { isDraggingHandle = it },
-                onDrag = { cx, cy, newTopRow ->
-                    state.selection = ComposeTerminalFrame.clampSelectionHandle(
-                        cx, cy, state.selection ?: return@SelectionHandle,
-                        isStart = true, mRows = rows, rowsInHistory = rowsInHistory,
-                        columns = columns, screen = emulator.screen
-                    )
-                    state.scrollRows = newTopRow
-                }
-            )
-            SelectionHandle(
-                isStart = false,
-                anchor = endAnchor,
-                handleSize = handleSize,
-                state = state,
-                emulator = emulator,
-                rows = rows,
-                metrics = metrics,
-                viewWidthPx = canvasWidth,
-                onDraggingChange = { isDraggingHandle = it },
-                onDrag = { cx, cy, newTopRow ->
-                    state.selection = ComposeTerminalFrame.clampSelectionHandle(
-                        cx, cy, state.selection ?: return@SelectionHandle,
-                        isStart = false, mRows = rows, rowsInHistory = rowsInHistory,
-                        columns = columns, screen = emulator.screen
-                    )
-                    state.scrollRows = newTopRow
-                }
-            )
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.TopStart) {
+        SelectionHandle(
+            isStart = true,
+            anchor = startAnchor,
+            handleSize = handleSize,
+            state = state,
+            emulator = emulator,
+            rows = rows,
+            metrics = metrics,
+            viewWidthPx = canvasWidth,
+            onDraggingChange = { isDraggingHandle = it },
+            onDrag = { cx, cy, newTopRow ->
+                state.selection = ComposeTerminalFrame.clampSelectionHandle(
+                    cx, cy, state.selection ?: return@SelectionHandle,
+                    isStart = true, mRows = rows, rowsInHistory = rowsInHistory,
+                    columns = columns, screen = emulator.screen
+                )
+                state.scrollRows = newTopRow
+            }
+        )
+        SelectionHandle(
+            isStart = false,
+            anchor = endAnchor,
+            handleSize = handleSize,
+            state = state,
+            emulator = emulator,
+            rows = rows,
+            metrics = metrics,
+            viewWidthPx = canvasWidth,
+            onDraggingChange = { isDraggingHandle = it },
+            onDrag = { cx, cy, newTopRow ->
+                state.selection = ComposeTerminalFrame.clampSelectionHandle(
+                    cx, cy, state.selection ?: return@SelectionHandle,
+                    isStart = false, mRows = rows, rowsInHistory = rowsInHistory,
+                    columns = columns, screen = emulator.screen
+                )
+                state.scrollRows = newTopRow
+            }
+        )
 
-            // Floating toolbar above the selection start, clamped inside the canvas (the legacy
-            // action mode anchors its toolbar near the selection content rect). Hidden while a
-            // handle is dragged, like the legacy floating ActionMode.
-            if (!isDraggingHandle) {
-                val toolbarX = (startAnchor.x).coerceIn(0f, (canvasWidth - toolbarSize.width).coerceAtLeast(0f))
-                val toolbarY = (startAnchor.y - handleSizePx - toolbarGapPx)
-                    .coerceIn(0f, (canvasHeight - toolbarSize.height).coerceAtLeast(0f))
-                Surface(
-                    modifier = Modifier
-                        .offset { IntOffset(toolbarX.roundToInt(), toolbarY.roundToInt()) }
-                        .onSizeChanged { toolbarSize = it }
-                ) {
+        // Floating toolbar above the selection start, clamped inside the canvas (the legacy
+        // action mode anchors its toolbar near the selection content rect). Hidden while a
+        // handle is dragged, like the legacy floating ActionMode.
+        if (!isDraggingHandle) {
+            val toolbarX = (startAnchor.x).coerceIn(0f, (canvasWidth - toolbarSize.width).coerceAtLeast(0f))
+            val toolbarY = (startAnchor.y - handleSizePx - toolbarGapPx)
+                .coerceIn(0f, (canvasHeight - toolbarSize.height).coerceAtLeast(0f))
+            Surface(
+                modifier = Modifier
+                    .offset { IntOffset(toolbarX.roundToInt(), toolbarY.roundToInt()) }
+                    // onGloballyPositioned fires after placement, not inside measure: the
+                    // toolbar size is only read during composition here, but there is no
+                    // reason to write snapshot state from the measure pass either.
+                    .onGloballyPositioned { toolbarSize = it.size }
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val selectedText = emulator.getSelectedText(
                         selection.x1, selection.y1, selection.x2, selection.y2
@@ -211,7 +218,6 @@ internal fun ComposeTerminalSelectionOverlay(
                     ) {
                         Text(text = context.getString(R.string.text_selection_more))
                     }
-                }
                 }
             }
         }

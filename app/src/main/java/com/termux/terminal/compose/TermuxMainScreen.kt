@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -265,54 +266,62 @@ fun TermuxMainScreen(
                             Row(modifier = Modifier.fillMaxSize()) {
                                 // Panes keep their positions: focusing a pane never moves its
                                 // session between halves (see TermuxViewModel.activateSession).
-                                SessionPane(
-                                    model = paneOneModel,
-                                    isActivePane = paneOneModel.id == focusedId,
-                                    fontSize = uiState.fontSize,
-                                    typeface = typeface,
-                                    enableLigatures = enableLigatures,
-                                    viewClient = viewClient,
-                                    palette = palette,
-                                    useNativeRenderer = uiState.useNativeRenderer,
-                                    hyperlinksEnabled = uiState.hyperlinksEnabled,
-                                    imagesEnabled = uiState.imagesEnabled,
-                                    onPaneFocused = { viewModel.focusSession(it) },
-                                    onRemoveSession = onRemoveSession,
-                                    onOpenInTerminal = onOpenInTerminal,
-                                    onEditFile = onEditFile,
-                                    onShowMoreMenu = onShowMoreMenu,
-                                    onFontSizeStep = viewModel::setFontSize,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                )
+                                // key(model.id) ties each pane's remembered state (scroll offset,
+                                // selection, blink phase, frame tick) to its session instead of to
+                                // its slot, so swapping the session a pane holds never leaves the
+                                // previous session's state behind.
+                                key(paneOneModel.id) {
+                                    SessionPane(
+                                        model = paneOneModel,
+                                        isActivePane = paneOneModel.id == focusedId,
+                                        fontSize = uiState.fontSize,
+                                        typeface = typeface,
+                                        enableLigatures = enableLigatures,
+                                        viewClient = viewClient,
+                                        palette = palette,
+                                        useNativeRenderer = uiState.useNativeRenderer,
+                                        hyperlinksEnabled = uiState.hyperlinksEnabled,
+                                        imagesEnabled = uiState.imagesEnabled,
+                                        onPaneFocused = { viewModel.focusSession(it) },
+                                        onRemoveSession = onRemoveSession,
+                                        onOpenInTerminal = onOpenInTerminal,
+                                        onEditFile = onEditFile,
+                                        onShowMoreMenu = onShowMoreMenu,
+                                        onFontSizeStep = viewModel::setFontSize,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                    )
+                                }
                                 VerticalDivider(
                                     modifier = Modifier
                                         .width(1.dp)
                                         .fillMaxHeight(),
                                     color = MaterialTheme.colorScheme.outlineVariant
                                 )
-                                SessionPane(
-                                    model = paneTwoModel,
-                                    isActivePane = paneTwoModel.id == focusedId,
-                                    fontSize = uiState.fontSize,
-                                    typeface = typeface,
-                                    enableLigatures = enableLigatures,
-                                    viewClient = viewClient,
-                                    palette = palette,
-                                    useNativeRenderer = uiState.useNativeRenderer,
-                                    hyperlinksEnabled = uiState.hyperlinksEnabled,
-                                    imagesEnabled = uiState.imagesEnabled,
-                                    onPaneFocused = { viewModel.focusSession(it) },
-                                    onRemoveSession = onRemoveSession,
-                                    onOpenInTerminal = onOpenInTerminal,
-                                    onEditFile = onEditFile,
-                                    onShowMoreMenu = onShowMoreMenu,
-                                    onFontSizeStep = viewModel::setFontSize,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                )
+                                key(paneTwoModel.id) {
+                                    SessionPane(
+                                        model = paneTwoModel,
+                                        isActivePane = paneTwoModel.id == focusedId,
+                                        fontSize = uiState.fontSize,
+                                        typeface = typeface,
+                                        enableLigatures = enableLigatures,
+                                        viewClient = viewClient,
+                                        palette = palette,
+                                        useNativeRenderer = uiState.useNativeRenderer,
+                                        hyperlinksEnabled = uiState.hyperlinksEnabled,
+                                        imagesEnabled = uiState.imagesEnabled,
+                                        onPaneFocused = { viewModel.focusSession(it) },
+                                        onRemoveSession = onRemoveSession,
+                                        onOpenInTerminal = onOpenInTerminal,
+                                        onEditFile = onEditFile,
+                                        onShowMoreMenu = onShowMoreMenu,
+                                        onFontSizeStep = viewModel::setFontSize,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                    )
+                                }
                             }
                         } else {
                             activeModel?.let { model ->
@@ -484,6 +493,10 @@ private fun handleExtraKeysSpecialKey(
  * Render a session as a pane of the main content area, keeping the active/focused semantics
  * of a two-pane split.
  *
+ * Terminal panes keep the per-pane state ([ComposeTerminalViewState]) keyed by session id, so
+ * two panes of the same split never share a scroll offset, selection or blink phase and a pane
+ * that changes session starts from a clean state.
+ *
  * @param model The session model to render
  * @param isActivePane Whether this pane is the focused (active) pane
  * @param fontSize Font size for terminal panes
@@ -525,10 +538,13 @@ private fun SessionPane(
 ) {
     when (model) {
         is TermuxSessionUiModel.Terminal -> if (useNativeRenderer) {
-            // Native path: the hidden view below owns IME/keys/focus/scroll state, the
-            // opaque canvas above is the only renderer (it fills the default background
-            // every frame; the hidden view is alpha 0 so it can never show through).
-            // Both are full-size so geometry (and updateSize) stays consistent between them.
+            // Native path: the hidden view below owns IME/keys/focus/scroll state and the
+            // terminal grid (it derives columns/rows from its own layout), the opaque canvas
+            // above is the only renderer (it fills the palette background every frame; the
+            // hidden view is alpha 0 so it can never show through). Both are full-size so the
+            // grid stays consistent between them, and the hidden view publishes the size it
+            // was laid out at into paneState so the canvas can repaint on a resize without
+            // measuring anything itself.
             // The pane shares its scroll/selection state and glyph metrics between the
             // canvas and the selection overlay so handles and highlight align with paint.
             val paneState = remember(model.id) { ComposeTerminalViewState() }
@@ -595,6 +611,9 @@ private fun SessionPane(
                         paneState.selection = null
                         paneState.blinkResetTick++
                     },
+                    onPaneSizeChanged = { paneState.paneSize = it },
+                    hyperlinksEnabled = hyperlinksEnabled,
+                    imagesEnabled = imagesEnabled,
                     modifier = Modifier.fillMaxSize()
                 )
                 ComposeTerminalCanvas(

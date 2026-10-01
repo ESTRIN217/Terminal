@@ -6,6 +6,8 @@ aporte.
   (gitignored) para no exponer credenciales; `enableOnBackInvokedCallback` activo.
 - Extra keys con paridad de Termux: macros, popup swipe-up, `extra-keys-style`,
   `extra-keys-text-all-caps`, claves especiales KEYBOARD/DRAWER/PASTE/SCROLL y DECCKM.
+- Split arreglado con el canvas nativo (panel en blanco + crash de measure); pendiente de
+  verificar en dispositivo.
 - `./gradlew test` y `:app:assembleDebug` en verde.
 
 ## Decisiones (y por qué) 
@@ -26,8 +28,22 @@ aporte.
   `testImplementation(libs.org.json)` + `unitTests.isReturnDefaultValues = true`.
 - `extra-keys-style=default` cambia el aspecto de la barra (ENTER ↲, TAB ↹, BKSP ⌫, DEL ⌦,
   "-" → ―). Es la paridad buscada, pero es un cambio visual visible al actualizar.
+- **Un solo dueño de la geometría del terminal: la `TerminalView` oculta** (deriva cols/rows de su
+  layout y llama `session.updateSize`, como el legacy) y publica `state.paneSize` por
+  `addOnLayoutChangeListener`; el canvas no mide (usa `emulator.mColumns/mRows` y
+  `DrawScope.size`). Motivo: dos dueños se peleaban y el tamaño se escribía desde measure.
 
 ## Aprendizajes y errores a evitar 
+- **Nunca escribir estado de snapshot desde el measure de Compose**: `Modifier.onSizeChanged` (es
+  `Modifier.layout`) y `BoxWithConstraints` (subcomposición en measure) lo hacen, y con dos panes
+  Compose re-entra la medición → `IllegalStateException: layout state is not idle before measure
+  starts`. Para "mi tamaño": layout de la vista Android (`addOnLayoutChangeListener`) u
+  `onGloballyPositioned` (fase de place). Ya había mordido antes con `BoxWithConstraints` +
+  `TerminalView` al abrir/cerrar el split.
+- **Renderer único de un pane = pintar su fondo en cada frame, siempre**: gatear el paint por un
+  tamaño aún no recibido deja el panel en blanco (ni siquiera el fondo).
+- El split se implementó solo para `TerminalViewHost`: al añadir un renderer nuevo hay que
+  revisarlo contra panes múltiples (foco, IME, flags, geometría, blink), no asumir que funciona.
 - Compose 1.13: `ViewConfiguration.current` no existe → `LocalViewConfiguration.current`.
 - Compose 1.13: `PointerInputChange.positionChange()` es una extensión de primer nivel; sin su
   import Kotlin resuelve el campo interno `positionChange$ui: Boolean` y falla la compilación.
@@ -38,7 +54,9 @@ aporte.
   apagaba tras cada tecla salvo que estuvieran bloqueados.
 
 ## Próximos pasos 
-- Verificar en dispositivo: posición del `Popup` del popup, repeat de flechas con el popup abierto,
-  y las 4 claves especiales.
+- **Verificar en dispositivo**: con `native_compose_renderer` + split, que los dos paneles pinten,
+  que tap cambia el foco, que rotar y teclear en ambos funciona, y logcat sin
+  `layout state is not idle` ni `updateSize failed on metrics change`. También: `Popup` del popup,
+  repeat de flechas con el popup abierto, y las 4 claves especiales.
 - Opcionales: auto-desactivar sticky modifiers, lock por long-press, altura de barra configurable
   (`terminal-toolbar-height-scale-factor`), y borrar el Java muerto de `extrakeys/`.

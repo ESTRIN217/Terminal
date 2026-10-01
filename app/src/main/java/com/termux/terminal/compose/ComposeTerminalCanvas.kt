@@ -33,12 +33,10 @@ import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.isTertiaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalView
 import android.view.ViewTreeObserver
@@ -99,10 +97,16 @@ import kotlinx.coroutines.delay
  * The legacy view set via [TerminalViewHost] stays as the default fallback behind the
  * {@code native_compose_renderer} feature flag.
  *
- * Sizing mirrors {@link com.termux.view.TerminalView#updateSize()}: the canvas [onSizeChanged]
- * (post-layout, never during measure) derives columns/rows from the font metrics and calls
- * [TerminalSession.updateSize]. Repaints are driven by [TerminalViewRegistry] frame listeners
- * bumped from [ComposeTerminalSessionClient] on every emulator screen update.
+ * Sizing mirrors {@link com.termux.view.TerminalView#updateSize()}: the hidden
+ * [HiddenTerminalInputHost] view owns the grid (it derives columns/rows from its own layout and
+ * calls [TerminalSession.updateSize]) and publishes the pane size in
+ * [ComposeTerminalViewState.paneSize], which this canvas only reads. Nothing here derives
+ * geometry from a Compose measure callback: `Modifier.onSizeChanged` fires *during* measure, so
+ * writing the size from there re-enters measurement once a second pane shares the screen
+ * (`layout state is not idle before measure starts`) and can leave a pane painting nothing.
+ * Repaints are driven by [TerminalViewRegistry] frame listeners bumped from
+ * [ComposeTerminalSessionClient] on every emulator screen update, plus a tick on every pane
+ * geometry or font change so a resize always repaints with the new grid.
  *
  * @param session The terminal session to paint
  * @param fontSize Font size in pixels (same raw unit the legacy renderer receives)
@@ -203,6 +207,25 @@ internal fun ComposeTerminalCanvas(
     val density = LocalDensity.current
     val scrollBarWidthPx = with(density) { 3.dp.toPx() }
 
+    // Geometry tick bumped when the pane is resized or the font metrics change, so the frame
+    // is repainted with the grid the hidden input view derived from that same geometry. Read
+    // in the draw scope (see below). Output-driven repaints keep using frameTick.
+    var geometryTick by remember(session) { mutableIntStateOf(0) }
+    // Grid the scroll offset was last reconciled against, so a reflow can snap back to live.
+    var lastGrid by remember(session) { mutableStateOf(0 to 0) }
+
+    // Legacy updateSize() parity: it snaps mTopRow to 0 whenever the grid changes, so a pane
+    // resized into a reflowed transcript never stays scrolled at a stale offset. The hidden
+    // view owns the resize (it fires during its own layout); this only observes the result.
+    fun syncScrollToGridChange() {
+        val emulator = session.emulator ?: return
+        val grid = emulator.mColumns to emulator.mRows
+        if (grid != lastGrid) {
+            lastGrid = grid
+            state.scrollRows = 0
+        }
+    }
+
     // New output while scrolled back: mirror legacy onScreenUpdated(). While selecting, shift
     // the selection up with the scrolled rows so it stays glued to its text, aborting at the
     // transcript end (pinning at the oldest row when auto-scroll is disabled). Without a
@@ -231,6 +254,9 @@ internal fun ComposeTerminalCanvas(
                     isAutoScrollDisabled = emulator.isAutoScrollDisabled()
                 )
             }
+            // Output can be the first thing after a reflow (SIGWINCH redraw), so reconcile
+            // the offset against the grid here too.
+            syncScrollToGridChange()
         }
     }
 
@@ -251,9 +277,6 @@ internal fun ComposeTerminalCanvas(
         }
     }
 
-    // Last laid-out size, used to derive the grid before first paint.
-    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
-
     // Scrollbar thumb paint, created once instead of on every frame (the thumb is the only
     // thing the draw scope paints besides the terminal itself).
     val scrollBarPaint = remember {
@@ -263,27 +286,12 @@ internal fun ComposeTerminalCanvas(
         }
     }
 
-    // A layout or font-size / glyph metrics change must re-derive the grid even when the
-    // pixel size is unchanged, mirroring the legacy updateSize() on both onSizeChanged and
-    // setTextSize(). Runs after the layout pass, so canvasSize is populated before first use.
-    LaunchedEffect(canvasSize, metrics) {
-        if (canvasSize == IntSize.Zero) return@LaunchedEffect
-        // Grid sizing mirrors TerminalView.updateSize(), including the 4x4 minimum clamp.
-        val (columns, rows) = ComposeTerminalFrame.gridSize(
-            canvasSize.width, canvasSize.height,
-            metrics.fontWidth, metrics.lineSpacing, metrics.lineSpacingAndAscent
-        )
-        try {
-            val emulatorBefore = session.emulator
-            val gridChanged = emulatorBefore == null ||
-                emulatorBefore.mColumns != columns || emulatorBefore.mRows != rows
-            session.updateSize(columns, rows, metrics.fontWidth.toInt(), metrics.lineSpacing)
-            // Legacy updateSize() snaps mTopRow to 0 whenever the grid changes so the view
-            // never stays scrolled into a reflowed transcript at a stale offset.
-            if (gridChanged) state.scrollRows = 0
-        } catch (e: Exception) {
-            Logger.logStackTraceWithMessage(LOG_TAG, "updateSize failed on metrics change", e)
-        }
+    // A pane resize or a font-size / glyph metrics change repaints with the new grid, and
+    // runs after the layout pass (the hidden view published the size), so no state is
+    // written from inside the Compose measure pass.
+    LaunchedEffect(state.paneSize, metrics) {
+        geometryTick++
+        syncScrollToGridChange()
     }
 
     // Convert a point in canvas pixels to a 1-based terminal grid cell, mirroring the
@@ -431,7 +439,6 @@ internal fun ComposeTerminalCanvas(
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .onSizeChanged { canvasSize = it }
             // Touch gesture arbitration: mouse events (SOURCE_MOUSE) are consumed by the raw
             // pointer block below so touch detectors never see them; touch drags feed the
             // draggable (scroll + fling), taps/long-presses the tap detector, and two-finger
@@ -686,21 +693,19 @@ internal fun ComposeTerminalCanvas(
                 }
             )
     ) {
-        if (canvasSize == IntSize.Zero) return@Canvas
-        // State read inside the draw scope subscribes this canvas: every frame tick
-        // schedules a redraw of this session only.
+        // State read inside the draw scope subscribes this canvas: an output frame tick and a
+        // geometry/font change each schedule a redraw of this session only.
         @Suppress("UNUSED_EXPRESSION")
         frameTick
-        val emulator = session.emulator
-        if (emulator == null) {
-            // Before the hidden input view hands us an emulator there is nothing to paint,
-            // but the canvas is the pane's only renderer (the pane no longer paints its own
-            // background), so keep it opaque with the palette background.
-            drawIntoCanvas { drawCanvas ->
-                drawCanvas.nativeCanvas.drawColor(palette.background)
-            }
-            return@Canvas
+        @Suppress("UNUSED_EXPRESSION")
+        geometryTick
+        // The canvas is the pane's only renderer and the pane paints no background of its own,
+        // so every frame starts by filling the palette background: a pane must never end up
+        // transparent (neither while the emulator is still missing nor after a resize).
+        drawIntoCanvas { drawCanvas ->
+            drawCanvas.nativeCanvas.drawColor(palette.background)
         }
+        val emulator = session.emulator ?: return@Canvas
         // Display-time clamp covers transcript resizes between frames; the stored offset
         // is re-clamped in LaunchedEffect(frameTick) above.
         val topRow = ComposeTerminalFrame.clampScrollOffset(
@@ -720,21 +725,22 @@ internal fun ComposeTerminalCanvas(
         }
         // Vertical scrollbar (legacy setVerticalScrollBarEnabled + computeVerticalScroll*):
         // thumb over the full range when the transcript makes range > extent; only drawn
-        // while scrolled back (parity: no bar during normal typing at live).
+        // while scrolled back (parity: no bar during normal typing at live). Sized from the
+        // draw scope, so it needs no measured size of its own.
         val scrollRange = emulator.screen.activeRows
         val scrollExtent = emulator.mRows
         if (scrollRange > scrollExtent && topRow < 0) {
             // Legacy computeVerticalScrollOffset: activeRows + mTopRow - mRows.
             val scrollOffset = (scrollRange + topRow - scrollExtent)
                 .coerceIn(0, scrollRange - scrollExtent)
-            val viewHeight = canvasSize.height.toFloat()
+            val viewHeight = size.height
             val thumbHeight = (scrollExtent.toFloat() / scrollRange * viewHeight)
                 .coerceAtLeast(16f)
             val trackHeight = viewHeight - thumbHeight
             val thumbTop = trackHeight * scrollOffset / (scrollRange - scrollExtent)
             val barWidthPx = scrollBarWidthPx
             drawIntoCanvas { drawCanvas ->
-                val right = canvasSize.width.toFloat()
+                val right = size.width
                 drawCanvas.nativeCanvas.drawRoundRect(
                     right - barWidthPx, thumbTop, right, thumbTop + thumbHeight,
                     barWidthPx / 2f, barWidthPx / 2f, scrollBarPaint

@@ -171,10 +171,15 @@ class ComposeTerminalViewClient(
         // layout; re-apply the pending palette and enable the cursor blinker on each of them.
         // The blinker rate must be set first: setTerminalCursorBlinkerState() no-ops while the
         // rate stays at the default 0, so the legacy path never blinked until now.
+        // Native canvas panes are excluded: their hidden view sits at rate 0 on purpose and the
+        // canvas above runs the blink phase itself (only while the pane is focused), so giving
+        // the view a rate would just add a second, invisible blinker to every native pane.
         val blinkRate = mProperties.terminalCursorBlinkRate
         TerminalViewRegistry.forComposedViews { view ->
-            view.setTerminalCursorBlinkerRate(blinkRate)
-            view.setTerminalCursorBlinkerState(true, true)
+            if (!TerminalViewRegistry.canvasOwnsBlink(view)) {
+                view.setTerminalCursorBlinkerRate(blinkRate)
+                view.setTerminalCursorBlinkerState(true, true)
+            }
             TerminalViewRegistry.reapplyPendingPalette(view)
         }
     }

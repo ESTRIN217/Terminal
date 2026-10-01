@@ -451,29 +451,6 @@ public class ComposeTerminalFrameTest {
     }
 
     @Test
-    public void testGridSizeClampsToMinimumFour() {
-        // Legacy Math.max(4, ...) parity: a tiny canvas never collapses below 4 columns/rows.
-        kotlin.Pair<Integer, Integer> tiny = ComposeTerminalFrame.gridSize(10, 10, 20f, 20, 40);
-        Assert.assertEquals(4, (int) tiny.getFirst());
-        Assert.assertEquals(4, (int) tiny.getSecond());
-
-        kotlin.Pair<Integer, Integer> empty = ComposeTerminalFrame.gridSize(0, 0, 20f, 20, 40);
-        Assert.assertEquals(4, (int) empty.getFirst());
-        Assert.assertEquals(4, (int) empty.getSecond());
-
-        // Normal sizing truncates like TerminalView.updateSize (float width division,
-        // integer height division).
-        kotlin.Pair<Integer, Integer> normal = ComposeTerminalFrame.gridSize(2000, 1000, 10f, 20, 5);
-        Assert.assertEquals(200, (int) normal.getFirst());
-        Assert.assertEquals(49, (int) normal.getSecond());
-
-        // Degenerate metrics never divide by zero.
-        kotlin.Pair<Integer, Integer> degenerate = ComposeTerminalFrame.gridSize(500, 500, 0f, 0, 0);
-        Assert.assertEquals(4, (int) degenerate.getFirst());
-        Assert.assertEquals(4, (int) degenerate.getSecond());
-    }
-
-    @Test
     public void testScrollOffsetForNewOutput() {
         // Legacy onScreenUpdated: with auto-scroll enabled a scrolled-back view snaps to live
         // on the next screen update.

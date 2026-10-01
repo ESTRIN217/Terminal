@@ -592,34 +592,6 @@ object ComposeTerminalFrame {
         clampScrollOffset(offsetRows - dragRows, transcriptRows)
 
     /**
-     * Derive the terminal grid from an available pixel size, mirroring
-     * {@link com.termux.view.TerminalView#updateSize}: the grid is clamped to a minimum of
-     * 4 columns and 4 rows like the legacy `Math.max(4, ...)`, so a very small canvas never
-     * collapses the emulator to a single column/row.
-     *
-     * @param widthPx The available width in pixels
-     * @param heightPx The available height in pixels
-     * @param fontWidthPx The monospace glyph width in pixels (must be > 0)
-     * @param lineSpacingPx Pixels per terminal row (must be > 0)
-     * @param lineSpacingAndAscentPx [lineSpacingPx] plus the font ascent, the vertical pixel
-     * offset of the first text baseline
-     * @return The `(columns, rows)` grid
-     */
-    @JvmStatic
-    fun gridSize(
-        widthPx: Int,
-        heightPx: Int,
-        fontWidthPx: Float,
-        lineSpacingPx: Int,
-        lineSpacingAndAscentPx: Int
-    ): Pair<Int, Int> {
-        if (fontWidthPx <= 0f || lineSpacingPx <= 0) return 4 to 4
-        val columns = (widthPx / fontWidthPx).toInt().coerceAtLeast(4)
-        val rows = ((heightPx - lineSpacingAndAscentPx) / lineSpacingPx).coerceAtLeast(4)
-        return columns to rows
-    }
-
-    /**
      * Whether a cursor blink rate in milliseconds is valid, mirroring
      * {@link TerminalView#setTerminalCursorBlinkerRate}: a wrong rate silently disables the
      * blinker. The canvas uses this instead of the legacy in-view blinker, which stays inert
