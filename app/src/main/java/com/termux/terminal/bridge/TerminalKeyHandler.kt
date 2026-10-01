@@ -111,6 +111,56 @@ object TerminalKeyHandler {
     }
 
     /**
+     * A single key press of an extra keys macro, with the modifiers that were active for it.
+     *
+     * @param key The key name or literal character to send
+     * @param ctrlActive Whether Ctrl was held for this step
+     * @param altActive Whether Alt was held for this step
+     * @param shiftActive Whether Shift was held for this step
+     */
+    data class MacroStep(
+        val key: String,
+        val ctrlActive: Boolean = false,
+        val altActive: Boolean = false,
+        val shiftActive: Boolean = false
+    )
+
+    /**
+     * Expand an extra keys macro (a space-separated key sequence such as
+     * {@code "CTRL ALT f d"}) into the individual key presses to perform.
+     *
+     * A {@code CTRL}/{@code ALT}/{@code SHIFT} token applies to the next key only and is then
+     * cleared, mirroring what classic Termux does in
+     * `com.termux.shared.termux.terminal.io.TerminalExtraKeys`. {@code FN} is accepted and
+     * ignored: it has no effect on the generated escape sequences.
+     *
+     * @param macro The macro string
+     * @return The steps to perform, in order; empty for a blank macro
+     */
+    fun parseMacro(macro: String): List<MacroStep> {
+        val steps = mutableListOf<MacroStep>()
+        var ctrlActive = false
+        var altActive = false
+        var shiftActive = false
+        for (token in macro.split(" ")) {
+            when (token) {
+                "" -> Unit
+                "CTRL" -> ctrlActive = true
+                "ALT" -> altActive = true
+                "SHIFT" -> shiftActive = true
+                "FN" -> Unit
+                else -> {
+                    steps.add(MacroStep(token, ctrlActive, altActive, shiftActive))
+                    ctrlActive = false
+                    altActive = false
+                    shiftActive = false
+                }
+            }
+        }
+        return steps
+    }
+
+    /**
      * Apply Ctrl modifier to a character code point.
      *
      * @param codePoint The character code point

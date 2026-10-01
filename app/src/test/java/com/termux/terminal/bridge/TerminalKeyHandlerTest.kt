@@ -1,6 +1,8 @@
 package com.termux.terminal.bridge
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -44,6 +46,43 @@ class TerminalKeyHandlerTest {
         assertEquals(
             "\u001B[D",
             TerminalKeyHandler.getKeySequence("LEFT", keypadAppMode = true)
+        )
+    }
+
+    @Test
+    fun parseMacro_modifiersApplyToTheNextKeyOnly() {
+        val steps = TerminalKeyHandler.parseMacro("CTRL ALT f g")
+        assertEquals(2, steps.size)
+        assertEquals("f", steps[0].key)
+        assertTrue(steps[0].ctrlActive)
+        assertTrue(steps[0].altActive)
+        assertFalse(steps[0].shiftActive)
+        assertEquals("g", steps[1].key)
+        assertFalse(steps[1].ctrlActive)
+        assertFalse(steps[1].altActive)
+    }
+
+    @Test
+    fun parseMacro_singleStepAndFnIsIgnored() {
+        val steps = TerminalKeyHandler.parseMacro("FN UP")
+        assertEquals(1, steps.size)
+        assertEquals("UP", steps[0].key)
+        assertFalse(steps[0].ctrlActive)
+        assertFalse(steps[0].altActive)
+        assertFalse(steps[0].shiftActive)
+    }
+
+    @Test
+    fun parseMacro_blankMacroHasNoSteps() {
+        assertTrue(TerminalKeyHandler.parseMacro("").isEmpty())
+    }
+
+    @Test
+    fun macroStepProducesTheSameSequenceAsADirectSend() {
+        val step = TerminalKeyHandler.parseMacro("CTRL c").single()
+        assertEquals(
+            TerminalKeyHandler.getKeySequence("c", ctrlActive = true),
+            TerminalKeyHandler.getKeySequence(step.key, step.ctrlActive)
         )
     }
 }

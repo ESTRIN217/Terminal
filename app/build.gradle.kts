@@ -133,6 +133,9 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+        // Plain JUnit tests exercise code that logs through android.util.Log (Logger); without
+        // this the stubs throw instead of returning 0.
+        unitTests.isReturnDefaultValues = true
     }
 
     packaging {
@@ -168,6 +171,10 @@ androidComponents {
 dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
+    // Real org.json on the unit test classpath: the android.jar stubs only throw, and the
+    // extra-keys parser is exercised from plain JUnit tests (Robolectric's native runtime is
+    // not available on every host, e.g. Linux aarch64).
+    testImplementation(libs.org.json)
     add("coreLibraryDesugaring", libs.desugar.jdk.libs)
 
     // Compose

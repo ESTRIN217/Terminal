@@ -76,6 +76,7 @@ private const val MaxTerminalFontSizePx = 32f
  * @param onCreateSession Callback to create a new terminal session
  * @param onRemoveSession Callback to remove a terminal session
  * @param onToggleKeyboard Callback to toggle the soft keyboard
+ * @param onPasteFromClipboard Callback to paste the clipboard into the active terminal session
  * @param onOpenFileManager Callback to open the file manager
  * @param onOpenInTerminal Callback to open a terminal in a directory (file manager panes)
  * @param onEditFile Callback to open a file in a rootfs editor (file manager panes)
@@ -100,6 +101,7 @@ fun TermuxMainScreen(
     onCreateSession: () -> Unit,
     onRemoveSession: (TermuxSessionUiModel) -> Unit,
     onToggleKeyboard: () -> Unit,
+    onPasteFromClipboard: () -> Unit,
     onOpenFileManager: () -> Unit,
     onOpenInTerminal: (String) -> Unit,
     onEditFile: (String) -> Unit,
@@ -361,24 +363,26 @@ fun TermuxMainScreen(
                         is TermuxSessionUiModel.Terminal -> {
                             val session = activeModel.session
                             if (isMacro) {
-                                val keys = key.split(" ")
-                                var ctrlActive = false
-                                var altActive = false
-                                var shiftActive = false
-                                for (k in keys) {
-                                    when (k) {
-                                        "CTRL" -> ctrlActive = true
-                                        "ALT" -> altActive = true
-                                        "SHIFT" -> shiftActive = true
-                                        "FN" -> Unit
-                                        else -> {
-                                            sendKeyToSession(session, k, ctrlActive, altActive, shiftActive)
-                                            ctrlActive = false
-                                            altActive = false
-                                            shiftActive = false
-                                        }
-                                    }
+                                // Expand a macro ("CTRL f d") or a single key with a sticky
+                                // modifier prefix ("CTRL UP") into individual key presses.
+                                TerminalKeyHandler.parseMacro(key).forEach { step ->
+                                    sendKeyToSession(
+                                        session,
+                                        step.key,
+                                        step.ctrlActive,
+                                        step.altActive,
+                                        step.shiftActive
+                                    )
                                 }
+                            } else if (handleExtraKeysSpecialKey(
+                                    key,
+                                    onToggleKeyboard,
+                                    onPasteFromClipboard,
+                                    { viewModel.toggleDrawer() },
+                                    activeModel.session
+                                )
+                            ) {
+                                // KEYBOARD/DRAWER/PASTE/SCROLL are handled by the app itself.
                             } else {
                                 sendKeyToSession(session, key)
                             }
@@ -393,6 +397,7 @@ fun TermuxMainScreen(
                 config = uiState.extraKeysConfig,
                 activeModifiers = uiState.extraKeysModifiers,
                 onToggleModifier = viewModel::toggleExtraKeysModifier,
+                allCaps = uiState.extraKeysAllCaps,
                 callback = extraKeysCallback,
                 modifier = Modifier
             )
@@ -415,6 +420,10 @@ fun TermuxMainScreen(
 /**
  * Send a key to a terminal session using proper escape sequences.
  *
+ * The emulator cursor/keypad application modes (DECCKM/DECKPAM) are forwarded so navigation
+ * keys keep working inside full screen programs, exactly like
+ * `TerminalView.handleKeyCode()` does for hardware keys.
+ *
  * @param session The terminal session
  * @param key The key identifier (e.g., "UP", "ESC", "TAB")
  * @param ctrlActive Whether Ctrl modifier is active
@@ -428,8 +437,47 @@ private fun sendKeyToSession(
     altActive: Boolean = false,
     shiftActive: Boolean = false
 ) {
-    val sequence = TerminalKeyHandler.getKeySequence(key, ctrlActive, altActive, shiftActive)
+    val emulator = session.emulator
+    val sequence = TerminalKeyHandler.getKeySequence(
+        key,
+        ctrlActive = ctrlActive,
+        altActive = altActive,
+        shiftActive = shiftActive,
+        cursorAppMode = emulator?.isCursorKeysApplicationMode ?: false,
+        keypadAppMode = emulator?.isKeypadApplicationMode ?: false
+    )
     session.write(sequence)
+}
+
+/**
+ * Handle the extra keys that act on the app instead of on the terminal.
+ *
+ * Classic Termux supports these through the `KEYBOARD`, `DRAWER`, `PASTE` and `SCROLL` keys of
+ * the `extra-keys` matrix; they are intercepted here so they never reach the session as literal
+ * text. Modifiers are ignored for them, as in classic Termux.
+ *
+ * @param key The key identifier from the extra keys bar
+ * @param onToggleKeyboard Callback to toggle the soft keyboard
+ * @param onPasteFromClipboard Callback to paste the clipboard into the active session
+ * @param onToggleDrawer Callback to toggle the navigation drawer
+ * @param session The active terminal session
+ * @return True when the key was handled, false when it must be sent to the terminal
+ */
+private fun handleExtraKeysSpecialKey(
+    key: String,
+    onToggleKeyboard: () -> Unit,
+    onPasteFromClipboard: () -> Unit,
+    onToggleDrawer: () -> Unit,
+    session: TerminalSession
+): Boolean {
+    when (key) {
+        "KEYBOARD" -> onToggleKeyboard()
+        "DRAWER" -> onToggleDrawer()
+        "PASTE" -> onPasteFromClipboard()
+        "SCROLL" -> session.emulator?.toggleAutoScrollDisabled()
+        else -> return false
+    }
+    return true
 }
 
 /**

@@ -380,6 +380,20 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
+     * Set whether extra keys button labels are uppercased
+     * ({@code extra-keys-text-all-caps}).
+     *
+     * @param allCaps Whether the labels are uppercased
+     */
+    fun setExtraKeysAllCaps(allCaps: Boolean) {
+        viewModelScope.launch {
+            _uiState.update { state ->
+                state.copy(extraKeysAllCaps = allCaps)
+            }
+        }
+    }
+
+    /**
      * Show the Debian installer overlay.
      */
     fun showDebianInstaller() {

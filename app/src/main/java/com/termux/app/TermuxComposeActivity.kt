@@ -284,6 +284,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                         onCreateSession = { addNewSession(false, null) },
                         onRemoveSession = { session -> removeSession(session) },
                         onToggleKeyboard = { toggleKeyboard() },
+                        onPasteFromClipboard = { pasteFromClipboard() },
                         onOpenFileManager = {
                             if (mViewModel.uiState.value.sessions.size >= MAX_SESSIONS) {
                                 Toast.makeText(this, R.string.title_max_terminals_reached, Toast.LENGTH_SHORT).show()
@@ -978,10 +979,14 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             val extraKeysJson = mProperties.getInternalPropertyValue(
                 TermuxPropertyConstants.KEY_EXTRA_KEYS, true
             ) as? String
+            val extraKeysStyle = mProperties.getInternalPropertyValue(
+                TermuxPropertyConstants.KEY_EXTRA_KEYS_STYLE, true
+            ) as? String
             if (extraKeysJson != null) {
-                val config = ExtraKeysConfig.parse(extraKeysJson)
+                val config = ExtraKeysConfig.parse(extraKeysJson, extraKeysStyle ?: ExtraKeysConfig.DEFAULT_STYLE)
                 mViewModel.setExtraKeysConfig(config)
             }
+            mViewModel.setExtraKeysAllCaps(mProperties.shouldExtraKeysTextBeAllCaps())
         } catch (e: Exception) {
             Logger.logDebug(LOG_TAG, "Failed to load extra keys config: ${e.message}")
         }

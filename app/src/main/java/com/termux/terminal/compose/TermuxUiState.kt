@@ -14,6 +14,7 @@ import com.termux.terminal.TerminalSession
  * @param isDrawerOpen Whether the navigation drawer is open
  * @param isExtraKeysVisible Whether the extra keys bar is visible
  * @param extraKeysModifiers Sticky modifier keys active on the extra keys bar
+ * @param extraKeysAllCaps Whether extra keys button labels are uppercased
  * @param isSoftKeyboardVisible Whether the soft keyboard is visible
  * @param fontSize Font size for the terminal, in density-independent pixels
  * @param useNativeRenderer Whether the experimental Compose Canvas renderer is enabled
@@ -28,6 +29,7 @@ data class TermuxUiState(
     val isDrawerOpen: Boolean = false,
     val isExtraKeysVisible: Boolean = true,
     val extraKeysModifiers: Set<String> = emptySet(),
+    val extraKeysAllCaps: Boolean = true,
     val isSoftKeyboardVisible: Boolean = false,
     val fontSize: Float = 14f,
     val useNativeRenderer: Boolean = false,
