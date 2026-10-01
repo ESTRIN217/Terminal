@@ -1,4 +1,6 @@
 import java.util.regex.Pattern
+import java.util.Properties
+import java.io.FileInputStream
 
 plugins {
     id("com.android.application")
@@ -10,6 +12,11 @@ val appVersionName = System.getenv("TERMUX_APP_VERSION_NAME") ?: ""
 val apkVersionTag = System.getenv("TERMUX_APK_VERSION_TAG") ?: ""
 val splitAPKsForDebugBuilds = System.getenv("TERMUX_SPLIT_APKS_FOR_DEBUG_BUILDS") ?: "1"
 val splitAPKsForReleaseBuilds = System.getenv("TERMUX_SPLIT_APKS_FOR_RELEASE_BUILDS") ?: "0"
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+	keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
 
 android {
     namespace = "com.termux"
@@ -40,8 +47,8 @@ android {
         applicationId = "com.estrin217.terminal"
         minSdk = project.properties["minSdkVersion"]?.toString()?.toInt() ?: 24
         targetSdk = project.properties["targetSdkVersion"]?.toString()?.toInt() ?: 28
-        versionCode = 119
-        val verName = appVersionName.ifEmpty { "1.119.0" }
+        versionCode = 120
+        val verName = appVersionName.ifEmpty { "2.0.0" }
         versionName = verName
         validateVersionName(verName)
 
@@ -80,6 +87,12 @@ android {
     }
 
     signingConfigs {
+      create("release") {
+      storeFile = keystoreProperties.getProperty("storeFile")?.let{ rootProject.file(it) } 
+      storePassword = keystoreProperties.getProperty("storePassword")
+      keyAlias = keystoreProperties.getProperty("keyAlias")
+      keyPassword = keystoreProperties.getProperty("keyPassword")
+      }
         getByName("debug") {
             storeFile = file("testkey_untrusted.jks")
             keyAlias = "alias"
@@ -93,6 +106,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
 
         debug {

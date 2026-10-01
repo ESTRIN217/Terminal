@@ -48,3 +48,6 @@ Thumbs.db
 
 # Checkpoints de compilación probada (scripts/checkpoint.sh)
 /checkpoints/
+
+key.properties
+*.jks

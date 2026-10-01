@@ -40,6 +40,7 @@
     <application
         android:name=".app.TermuxApplication"
         android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true"
         android:banner="@drawable/banner"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/application_name"
