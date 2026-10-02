@@ -7,7 +7,7 @@
 - Build: `./gradlew assembleDebug`
 - Tests: `./gradlew test` (unit tests only; no instrumented tests in CI)
 - **No lint, detekt, ktlint, or formatter is configured.** The only CI quality gate is `./gradlew test`.
-- Gradle 9.7.0, AGP 9.3.1. Daemon enabled, parallel builds capped at 2 workers.
+- Gradle 9.7.1, AGP 9.4.1, Kotlin 2.4.20. Daemon enabled, parallel builds capped at 2 workers.
 - The file manager is its own module; its unit tests run via `./gradlew :filemanager:test`.
 
 ## Module Architecture
@@ -42,7 +42,9 @@ app  →  termux-shared  →  terminal-view  →  terminal-emulator
 
 ## Compose UI (app module only)
 
-- Compose stack: BOM (`2025.08.00`), Material3, ViewModel, coroutines, Ktor (HTTP), commons-compress (rootfs extraction).
+- Compose stack: BOM (`2026.09.00`), Material3, ViewModel, coroutines, Coil (imágenes remotas),
+  commons-compress (rootfs extraction). **No hay Ktor**: el HTTP del instalador es
+  `HttpURLConnection` a pelo.
 - Entry point: `TermuxComposeActivity.kt` — the main Compose activity.
 - `TerminalViewRegistry` holds the active `TerminalView` reference for Compose callbacks.
 - New Compose UI goes in `com.termux.terminal.compose`. New settings screens go in `com.termux.terminal.compose.settings`.
@@ -101,3 +103,7 @@ dejarlo en la memoria.
 
 ## Limites
 - ✅ Siempre: actualizar `MEMORY.md` al terminar cada tarea.
+
+## Reglas 
+- Lee `docs/constitution.md` y la spec activa (`specs/NNN-*/`) antes de tocar código.
+
