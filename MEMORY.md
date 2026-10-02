@@ -2,13 +2,12 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no 
 aporte. 
 ## Estado actual 
-- Rama `release/2.0`, versión 2.0.0 (versionCode 120). Signing release usa `key.properties`
-  (gitignored) para no exponer credenciales; `enableOnBackInvokedCallback` activo.
+- Rama `release/2.0`, versión 2.0.0 (versionCode 120). Fase 4 cerrada: firma release local con
+  `key.properties` (gitignored) + `key.properties.example`, `CHANGELOG.md`, docs 2.0 al día,
+  `119.md`/`120.md` archivados en `docs/archive/`. `enableOnBackInvokedCallback` activo.
 - Extra keys con paridad de Termux: macros, popup swipe-up, `extra-keys-style`,
   `extra-keys-text-all-caps`, claves especiales KEYBOARD/DRAWER/PASTE/SCROLL y DECCKM.
-- Split arreglado con el canvas nativo (panel en blanco + crash de measure); pendiente de
-  verificar en dispositivo.
-- `./gradlew test` y `:app:assembleDebug` en verde.
+- `./gradlew test`, `:app:assembleDebug` y `:app:assembleRelease` en verde.
 
 ## Decisiones (y por qué) 
 - El parser Kotlin de extra keys **reutiliza** `ExtraKeysConstants.CONTROL_CHARS_ALIASES` y
@@ -34,6 +33,13 @@ aporte.
   `DrawScope.size`). Motivo: dos dueños se peleaban y el tamaño se escribía desde measure.
 
 ## Aprendizajes y errores a evitar 
+- **`BUILD SUCCESSFUL` no significa APK válido**: `optimizeReleaseResources` (AGP 9.4.1) falla
+  en silencio y empaqueta el release sin manifest ni recursos. Causa: busca un `.ap_`/`.apk` en su
+  directorio de entrada, y si no hay ninguno hace `get(0)` sobre lista vacía y se salta aapt2.
+  Mitigado con `android.enableResourceOptimizations=false` en `gradle.properties`. **Antes de
+  distribuir un APK, comprobar que tiene `AndroidManifest.xml`** (`unzip -l ... | grep -c`).
+  Ojo: el build cache guarda el resultado vacío, así que hay que borrar
+  `app/build/intermediates/optimized_processed_res/release` además de `--rerun-tasks`.
 - **Nunca escribir estado de snapshot desde el measure de Compose**: `Modifier.onSizeChanged` (es
   `Modifier.layout`) y `BoxWithConstraints` (subcomposición en measure) lo hacen, y con dos panes
   Compose re-entra la medición → `IllegalStateException: layout state is not idle before measure
