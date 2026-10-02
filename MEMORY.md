@@ -6,8 +6,13 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   `key.properties` (gitignored) + `key.properties.example`, `CHANGELOG.md`, docs 2.0 al día,
   `119.md`/`120.md` en `docs/archive/`. `enableOnBackInvokedCallback` activo.
 - `docs/constitution.md` escrito (6 principios: stack mínimo, spec manda, lógica fuera de la UI,
-  tests primero, datos del usuario, idioma por capa). **`specs/` no existe todavía**: el proceso
-  real ha sido `docs/roadmap-2.0.md` + `docs/archive/119|120-*.md`.
+  tests primero, datos del usuario, idioma por capa). **`specs/` sigue sin existir**: hasta ahora
+  el proceso real ha sido `docs/roadmap-2.0.md` + `docs/archive/119|120-*.md`.
+- **El flujo SDD ya está en el repo** (commit `d628080a`): `.opencode/agents` (coordinator, planner,
+  implementer, reviewer), `.opencode/commands/sdd-*.md`, `.agents/skills/sdd/SKILL.md` y
+  `opencode.json` (LSP de Kotlin + MCP de Context7 con la key todavía como placeholder). Para
+  trabajar con spec: `/sdd-spec NNN-nombre` → `/sdd-plan` → `/sdd-tasks` → `/sdd-implement` →
+  `/sdd-validate`. Solo la constitution se escribe sin pasar por el ciclo.
 - Extra keys con paridad de Termux: macros, popup swipe-up, `extra-keys-style`,
   `extra-keys-text-all-caps`, claves especiales y DECCKM.
 - `./gradlew test`, `:app:assembleDebug` y `:app:assembleRelease` en verde.
