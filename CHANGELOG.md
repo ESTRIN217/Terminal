@@ -64,6 +64,11 @@ y no está afiliado al equipo de Termux.
 - Cero warnings de Kotlin en los módulos de la app.
 
 ### Corregido
+- **El split mostraba un solo panel con el renderer nativo**: con `native_compose_renderer`
+  activo, abrir el split dejaba el subárbol a medias (un pane sin pintar y sin el divisor
+  vertical). Mientras el canvas no esté verificado con dos panes, un split activo se pinta
+  siempre con el `TerminalView` legado (`TermuxUiState.useNativeCanvasRenderer`), que ya
+  soportaba panes; el canvas sigue activo en el pane único.
 - **Los toques ya llegan a las TUI**: con *mouse tracking* activo el canvas entrega el press
   al instante y ya no pide el teclado (lo que provocaba un `SIGWINCH` y un reflow de la TUI
   justo después del toque).

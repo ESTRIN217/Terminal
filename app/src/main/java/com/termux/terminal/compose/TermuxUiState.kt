@@ -71,6 +71,18 @@ data class TermuxUiState(
         get() = split != null
 
     /**
+     * Whether terminal panes are actually painted by the experimental Compose canvas, which is
+     * [useNativeRenderer] narrowed by the split: the canvas has no split support yet (activating
+     * the split with it enabled leaves the split subtree half-mounted: one pane without a frame
+     * and without the row divider), so a split always falls back to the legacy
+     * [com.termux.view.TerminalView] host, which has had panes since the split landed.
+     *
+     * File manager panes are never affected: they do not go through a terminal renderer.
+     */
+    val useNativeCanvasRenderer: Boolean
+        get() = useNativeRenderer && !isSplitActive
+
+    /**
      * Get the currently active terminal session, or null if no terminal session is active.
      *
      * Returns null when the active tab is not a terminal session (e.g. a file manager session).

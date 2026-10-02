@@ -45,6 +45,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.activity.compose.BackHandler
 import com.termux.app.TermuxComposeActivity
+import com.termux.shared.logger.Logger
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.bridge.TerminalKeyHandler
 import com.termux.view.TerminalViewClient
@@ -62,6 +63,8 @@ private const val MinTerminalFontSizePx = 8f
 
 /** Font-size clamp for pinch-zoom, matching the legacy `mSizePx` range. */
 private const val MaxTerminalFontSizePx = 32f
+
+private const val LOG_TAG = "TermuxMainScreen"
 
 /**
  * Main screen composable for the Termux app.
@@ -130,6 +133,18 @@ fun TermuxMainScreen(
     val isImeVisible = WindowInsets.isImeVisible
     LaunchedEffect(isImeVisible) {
         viewModel.setSoftKeyboardVisible(isImeVisible)
+    }
+
+    // The Compose canvas renderer is not split-safe yet, so an active split silently paints its
+    // panes with the legacy TerminalView host. Logged once per change (never per frame) so the
+    // fallback shows up in logcat instead of looking like the feature flag stopped working.
+    LaunchedEffect(uiState.useNativeRenderer, uiState.isSplitActive) {
+        if (uiState.useNativeRenderer && uiState.isSplitActive) {
+            Logger.logInfo(
+                LOG_TAG,
+                "Split active: falling back to the legacy TerminalView renderer"
+            )
+        }
     }
 
     Column(
@@ -286,7 +301,7 @@ fun TermuxMainScreen(
                                         enableLigatures = enableLigatures,
                                         viewClient = viewClient,
                                         palette = palette,
-                                        useNativeRenderer = uiState.useNativeRenderer,
+                                        useNativeRenderer = uiState.useNativeCanvasRenderer,
                                         hyperlinksEnabled = uiState.hyperlinksEnabled,
                                         imagesEnabled = uiState.imagesEnabled,
                                         onPaneFocused = { viewModel.focusSession(it) },
@@ -315,7 +330,7 @@ fun TermuxMainScreen(
                                         enableLigatures = enableLigatures,
                                         viewClient = viewClient,
                                         palette = palette,
-                                        useNativeRenderer = uiState.useNativeRenderer,
+                                        useNativeRenderer = uiState.useNativeCanvasRenderer,
                                         hyperlinksEnabled = uiState.hyperlinksEnabled,
                                         imagesEnabled = uiState.imagesEnabled,
                                         onPaneFocused = { viewModel.focusSession(it) },
@@ -340,7 +355,7 @@ fun TermuxMainScreen(
                                     enableLigatures = enableLigatures,
                                     viewClient = viewClient,
                                     palette = palette,
-                                    useNativeRenderer = uiState.useNativeRenderer,
+                                    useNativeRenderer = uiState.useNativeCanvasRenderer,
                                     hyperlinksEnabled = uiState.hyperlinksEnabled,
                                     imagesEnabled = uiState.imagesEnabled,
                                     onPaneFocused = { viewModel.focusSession(it) },
@@ -512,7 +527,9 @@ private fun handleExtraKeysSpecialKey(
  * @param viewClient The [TerminalViewClient] for terminal panes
  * @param palette The terminal palette for terminal panes
  * @param useNativeRenderer Whether terminal panes use the native Canvas plus a hidden
- * input view instead of the legacy view
+ * input view instead of the legacy view. This is the effective renderer
+ * ([TermuxUiState.useNativeCanvasRenderer]), so a split pane always arrives as false and
+ * renders with the legacy view.
  * @param hyperlinksEnabled Whether OSC 8 hyperlinks underline and open on tap
  * @param imagesEnabled Whether inline terminal images are painted
  * @param onPaneFocused Callback with the session id when the pane requests focus

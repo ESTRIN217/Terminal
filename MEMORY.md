@@ -30,6 +30,11 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - **Un solo dueño de la geometría: la `TerminalView` oculta** (deriva cols/rows, llama
   `updateSize`, publica `paneSize` en `addOnLayoutChangeListener`); el canvas no mide. Motivo: dos
   dueños se peleaban y el tamaño se escribía desde measure.
+- **El split solo se renderiza con el `TerminalViewHost` legado**: `TermuxUiState.useNativeCanvasRenderer`
+  (= `useNativeRenderer && !isSplitActive`) deja el canvas para pane único. Motivo: con el canvas,
+  abrir el split deja el subárbol a medias (un pane sin pintar y sin `VerticalDivider`, comprobado
+  píxel a píxel en la grabación del 2026-10-02); el fallback es determinista y barato, y el canvas
+  conserva toda la UI nueva en el caso de un solo pane. La **causa raíz sigue sin resolver**.
 
 ## Aprendizajes y errores a evitar
 - **`BUILD SUCCESSFUL` no significa APK válido**: `optimizeReleaseResources` (AGP 9.4.1) falla en
@@ -43,7 +48,11 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - **Renderer único de un pane = pintar su fondo en cada frame, siempre**: gatear el paint por un
   tamaño aún no recibido deja el panel en blanco.
 - El split se implementó solo para `TerminalViewHost`: un renderer nuevo hay que revisarlo contra
-  panes múltiples (foco, IME, flags, geometría, blink).
+  panes múltiples (foco, IME, flags, geometría, blink). Con el canvas el `Row` del split ni siquiera
+  llegaba a componerse, y el fondo del canvas es el mismo `surface` del Scaffold, así que un pane
+  sin pintar **no se distingue a ojo**: se deduce por la ausencia del `VerticalDivider`. Trazas por
+  pane (`Pane laid out`, `Pane draw`, `Pane grid`) en `logDebug` → hay que subir Ajustes → nivel
+  de log.
 - Compose 1.13: `ViewConfiguration.current` → `LocalViewConfiguration.current`; y
   `PointerInputChange.positionChange()` hay que importarla (si no, Kotlin resuelve un campo interno).
 - `optString("macro", "")` nunca devuelve `null`: no usarlo como bandera de presencia.
@@ -52,12 +61,14 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Los modificadores sticky nunca se desactivan solos (hay que pulsarlos otra vez).
 
 ## Próximos pasos
-- **Verificar en dispositivo** con `native_compose_renderer` + split: que los dos paneles pinten, el
-  tap cambie el foco, rotar y teclear en ambos, y logcat sin `layout state is not idle` ni
-  `updateSize failed`. También el `Popup`, el repeat de flechas y las 4 claves especiales.
-- **`docs/` y `AGENTS.md` se corrigen contra la fuente, no de memoria**: `AGENTS.md` arrastraba
-  Gradle 9.7.0, AGP 9.3.1 y BOM 2025.08.00 (real: 9.7.1, 9.4.1, 2026.09.00) y sobre todo **mencionaba
-  Ktor, una dependencia que no existe** en el proyecto. Antes de fiarse de un número de `AGENTS.md`,
-  comprobarlo en `gradle/wrapper/`, `libs.versions.toml` o `gradle.properties`.
+- **Verificar en dispositivo** el fallback del split con `native_compose_renderer` activo: dos panes
+  pintados, tap cambia el foco, teclear en ambos y que al cerrar el split vuelva el canvas. Luego,
+  el resto de la lista de paridad: `Popup`, repeat de flechas y las 4 claves especiales.
+- **Causa raíz del split con canvas nativo** (opcional, sin prisa): reproducir en landscape con el
+  log en nivel Debug y las tres trazas por pane. Ojo: la rotación no se puede forzar por adb en
+  este XOS (`wm user-rotation lock` no la aplica), hay que rotar el móvil a mano.
+- **`docs/` y `AGENTS.md` se corrigen contra la fuente, no de memoria** (regla permanente, candidata
+  a subir a `AGENTS.md`): un número de `AGENTS.md` puede venir obsoleto o de una dependencia que ya no
+  existe; comprobar en `gradle/wrapper/`, `libs.versions.toml` o `gradle.properties`.
 - Opcionales: crear `specs/` y migrar el roadmap; auto-desactivar sticky modifiers, lock por
   long-press, altura de barra configurable, y borrar el Java muerto de `extrakeys/`.
