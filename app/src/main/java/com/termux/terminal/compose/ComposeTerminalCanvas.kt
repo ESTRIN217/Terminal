@@ -221,10 +221,22 @@ internal fun ComposeTerminalCanvas(
         val emulator = session.emulator ?: return
         val grid = emulator.mColumns to emulator.mRows
         if (grid != lastGrid) {
+            // Only runs when the grid actually changed, so this stays a per-resize trace:
+            // session + grid + pane size is what tells a blank pane apart from an unpainted
+            // one (no grid here means the hidden view never laid the pane out).
+            Logger.logDebug(
+                LOG_TAG,
+                "Pane grid: session=${session.mHandle} grid=${grid.first}x${grid.second} " +
+                    "paneSize=${state.paneSize}"
+            )
             lastGrid = grid
             state.scrollRows = 0
         }
     }
+
+    // Last size this canvas actually drew at, kept in a plain array: a snapshot write is not
+    // allowed in the draw scope, and this only exists to throttle a debug trace.
+    val lastDrawSize = remember(session) { FloatArray(2) }
 
     // New output while scrolled back: mirror legacy onScreenUpdated(). While selecting, shift
     // the selection up with the scrolled rows so it stays glued to its text, aborting at the
@@ -699,6 +711,19 @@ internal fun ComposeTerminalCanvas(
         frameTick
         @Suppress("UNUSED_EXPRESSION")
         geometryTick
+        // The draw size is what the pane actually got: 0x0 means the pane's node tree measured
+        // to nothing (no Compose renderer can paint then), a real size with a missing grid means
+        // the hidden view never derived one.
+        if (lastDrawSize[0] != size.width || lastDrawSize[1] != size.height) {
+            lastDrawSize[0] = size.width
+            lastDrawSize[1] = size.height
+            Logger.logDebug(
+                LOG_TAG,
+                "Pane draw: session=${session.mHandle} size=${size.width.toInt()}x" +
+                    "${size.height.toInt()} grid=${session.emulator?.mColumns}" +
+                    "x${session.emulator?.mRows}"
+            )
+        }
         // The canvas is the pane's only renderer and the pane paints no background of its own,
         // so every frame starts by filling the palette background: a pane must never end up
         // transparent (neither while the emulator is still missing nor after a resize).

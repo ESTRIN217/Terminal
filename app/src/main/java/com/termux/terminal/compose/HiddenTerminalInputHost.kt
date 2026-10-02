@@ -14,9 +14,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
+import com.termux.shared.logger.Logger
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
+
+private const val LOG_TAG = "HiddenTerminalInputHost"
 
 /**
  * Hidden input delegate for [ComposeTerminalCanvas].
@@ -109,7 +112,16 @@ fun HiddenTerminalInputHost(
     // detached again when the view leaves composition.
     val layoutListener = remember {
         View.OnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
-            currentOnPaneSizeChanged(IntSize(right - left, bottom - top))
+            val size = IntSize(right - left, bottom - top)
+            // Throttled by the view itself: only fires when the bounds actually change. A pane
+            // that never logs this was never laid out, which is what a missing pane looks like.
+            Logger.logDebug(
+                LOG_TAG,
+                "Pane laid out: session=${session.mHandle} active=$isActivePane " +
+                    "size=$size emulator=${session.emulator?.mColumns}x" +
+                    "${session.emulator?.mRows}"
+            )
+            currentOnPaneSizeChanged(size)
         }
     }
 
