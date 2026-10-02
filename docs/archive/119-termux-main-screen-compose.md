@@ -1,3 +1,8 @@
+> **Archivo — plan completado.** Documento histórico del plan de migración de la UI a
+> Jetpack Compose (Fases 1-8). Todo lo previsto está implementado y superado por el
+> renderer nativo de la 2.0. Ver [`../../roadmap-2.0.md`](../roadmap-2.0.md) y
+> [`../../CHANGELOG.md`](../../CHANGELOG.md). No se actualiza.
+
 # Plan de Rediseño: Termux Main Screen + Terminal View
 
 ## Resumen Ejecutivo

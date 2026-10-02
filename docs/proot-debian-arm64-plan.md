@@ -8,7 +8,12 @@
 - **Fase 2 (Investigación PRoot):** COMPLETADA — binario compilado con NDK r30, clang 21, Android 28 arm64
 - **Compilación y Tests:** `./gradlew test` (PASS) | `./gradlew assembleDebug` (PASS)
 - **Tamaño APK ARM64:** Reducido de ~180 MB a 25 MB
-- **Próximo hito:** Fase 2 (integración) — Integrar fuentes PRoot/talloc en `app/src/main/cpp/` y escribir CMakeLists.txt
+- **Integración (Fase 3+) — COMPLETADA:** proot compilado con CMake y embebido en los assets;
+  rootfs Debian OCI descargado en el primer arranque (`DebianInstaller`), con verificación
+  SHA-256 en streaming; binds de proot cableados (`ProotShellEnvironment`).
+- **Estado actual:** versión 2.0.0. Ver [`roadmap-2.0.md`](roadmap-2.0.md) y
+  [`../CHANGELOG.md`](../CHANGELOG.md). Este documento conserva el diseño original como
+  referencia; ya no describe trabajo pendiente.
 
 ---
 
