@@ -37,7 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
@@ -119,8 +119,8 @@ fun TermuxMainScreen(
     var isSplitPickerVisible by remember { mutableStateOf(false) }
 
     // Track the available content width so the split button and the panes share the same
-    // "is there room for two panes" gate (see MinSplitContentWidth). Updated by the content
-    // Box's onSizeChanged below.
+    // "is there room for two panes" gate (see MinSplitContentWidth). Published by the content
+    // Box in the placement phase (see below), never in measure.
     var contentWidthPx by remember { mutableIntStateOf(0) }
     val minSplitContentWidthPx = with(LocalDensity.current) {
         MinSplitContentWidth.roundToPx()
@@ -242,17 +242,24 @@ fun TermuxMainScreen(
                 // Terminal content: either a single pane (as before) or, on wide screens
                 // when a split is active, the active (focused) session next to a secondary
                 // session of any kind (terminal or file manager).
-                // The width is tracked through onSizeChanged (post-layout) instead of a
-                // BoxWithConstraints so that panes are only added/removed in a regular
-                // recomposition. Removing a TerminalView inside BoxWithConstraints' measure
-                // subcomposition triggered a focus re-parenting that forced a synchronous
-                // remeasure during the measure pass ("performMeasureAndLayout called during
-                // measure layout").
+                // The width that gates the split is published in the *placement* phase
+                // (onGloballyPositioned), never in measure: it decides whether both panes
+                // exist, so writing it from onSizeChanged (which is Modifier.layout, i.e. the
+                // measure pass) swapped the branch — disposing and recreating every pane's
+                // AndroidView — from inside the frame that was measuring them, and the split
+                // could come back half-built (a pane that never painted and no divider). It is
+                // also why BoxWithConstraints was rejected originally: its measure subcomposition
+                // plus a TerminalView being removed triggered a focus re-parenting that forced a
+                // synchronous remeasure ("performMeasureAndLayout called during measure layout").
+                // The write is guarded so a re-placement with the same width cannot loop.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
-                        .onSizeChanged { contentWidthPx = it.width }
+                        .onGloballyPositioned { coords ->
+                            val width = coords.size.width
+                            if (width != contentWidthPx) contentWidthPx = width
+                        }
                 ) {
                     if (uiState.hasSessions) {
                         val activeModel = uiState.activeSessionModel
