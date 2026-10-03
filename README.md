@@ -17,6 +17,22 @@
 con UI moderna en Jetpack Compose y emulación de terminal nativa.
 
 Versión actual: **2.0.0** (`versionCode` 120). Ver el [CHANGELOG](CHANGELOG.md).
+## 📸 Capturas de Pantalla
+
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="assets/Terminal.png" width="220" alt="Vista Principal (Material 3)"/>
+      <br><b>Terminal</b>
+    </td>
+    <td align="center">
+      <img src="assets/Opencode.png" width="220" alt="Opencode"/>
+      <br><b>Opencode</b>
+    </td>
+  </tr>
+</table>
+
+---
 
 ## Características
 
