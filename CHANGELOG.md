@@ -102,9 +102,9 @@ y no está afiliado al equipo de Termux.
 - **Limitación conocida:** desde Android 8 (API 26), SELinux deniega a `untrusted_app` leer
   `/proc/stat`, así que `btop` y `htop` no muestran estadísticas de CPU en dispositivos stock
   con SELinux enforcing. El bind `-b /proc` está presente y es correcto.
-- La Release `v2.0.0` incluye dos tipos de APK: los `*+github-debug*` que adjunta la CI
-  (firmados con una clave de prueba **no oficial**, no distribuibles) y los
-  `terminal_release_*` firmados con la clave de release. **Instala los `terminal_release_*`.**
+- La Release `v2.0.0` incluye dos tipos de APK: los `terminal_v2.0.0+github-debug_*` que
+  adjunta la CI (firmados con una clave de prueba **no oficial**, no distribuibles) y el
+  `terminal_2.0.0_universal.apk` firmado con la clave de release. **Instala este último.**
 - Las imágenes del terminal soportan Kitty Graphics y OSC 1337, pero no Sixel ni animación.
 
 ## [1.119.0]
