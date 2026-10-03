@@ -7,7 +7,7 @@ Todos los cambios relevantes de Terminal. El formato sigue
 Este proyecto es un fork independiente de [termux/termux-app](https://github.com/termux/termux-app)
 y no está afiliado al equipo de Termux.
 
-## [2.0.0] — sin fecha
+## [2.0.0] — 2026-10-03
 
 ### Añadido
 
@@ -102,8 +102,9 @@ y no está afiliado al equipo de Termux.
 - **Limitación conocida:** desde Android 8 (API 26), SELinux deniega a `untrusted_app` leer
   `/proc/stat`, así que `btop` y `htop` no muestran estadísticas de CPU en dispositivos stock
   con SELinux enforcing. El bind `-b /proc` está presente y es correcto.
-- Los APK adjuntos a las Releases de GitHub están firmados con una clave de prueba **no
-  oficial** y no son distribuibles.
+- La Release `v2.0.0` incluye dos tipos de APK: los `*+github-debug*` que adjunta la CI
+  (firmados con una clave de prueba **no oficial**, no distribuibles) y los
+  `terminal_release_*` firmados con la clave de release. **Instala los `terminal_release_*`.**
 - Las imágenes del terminal soportan Kitty Graphics y OSC 1337, pero no Sixel ni animación.
 
 ## [1.119.0]
