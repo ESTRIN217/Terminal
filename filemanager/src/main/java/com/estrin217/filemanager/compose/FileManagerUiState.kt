@@ -1,5 +1,6 @@
 package com.estrin217.filemanager.compose
 
+import androidx.compose.runtime.Immutable
 import com.estrin217.filemanager.FileSortOption
 import java.io.File
 
@@ -16,6 +17,7 @@ import java.io.File
  * [focusedIndex] is the keyboard/extra-keys cursor into [files] (a negative
  * value means the list is empty).
  */
+@Immutable
 data class FileManagerUiState(
     val currentPath: String = "",
     val title: String = "Files",

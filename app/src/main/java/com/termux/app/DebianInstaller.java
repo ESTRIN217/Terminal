@@ -524,6 +524,9 @@ final class DebianInstaller {
         error = writeWelcomeMessage(staging);
         if (error != null) return error;
 
+        error = writePs1Config(staging);
+        if (error != null) return error;
+
         error = installLinkfixToRootfs(context, staging);
         if (error != null) return error;
 
@@ -548,6 +551,28 @@ final class DebianInstaller {
             StandardCharsets.UTF_8, TermuxConstants.DEBIAN_WELCOME_SHELL_SCRIPT + "\n", false);
         if (error != null) return error;
         chmodUnchecked(new File(root, TermuxConstants.DEBIAN_WELCOME_PROFILE_RELATIVE_PATH).getAbsolutePath(), 0644);
+        return null;
+    }
+
+    /**
+     * Write the login PS1 profile script into the rootfs.
+     *
+     * <p>Debian's {@code /etc/profile} sources every {@code *.sh} script in
+     * {@code /etc/profile.d/} after {@code /etc/bash.bashrc}, so bash
+     * {@code --login} sessions pick up
+     * {@link TermuxConstants#DEBIAN_PS1_SHELL_SCRIPT} on each start.</p>
+     *
+     * @param root The staging or live rootfs directory {@link File}.
+     * @return Returns the {@link Error} on failure, otherwise {@code null}.
+     */
+    private static Error writePs1Config(File root) {
+        Error error = FileUtils.createDirectoryFile(new File(root, "etc/profile.d").getAbsolutePath());
+        if (error != null) return error;
+        error = FileUtils.writeTextToFile("debian ps1 config",
+            new File(root, TermuxConstants.DEBIAN_PS1_PROFILE_RELATIVE_PATH).getAbsolutePath(),
+            StandardCharsets.UTF_8, TermuxConstants.DEBIAN_PS1_SHELL_SCRIPT + "\n", false);
+        if (error != null) return error;
+        chmodUnchecked(new File(root, TermuxConstants.DEBIAN_PS1_PROFILE_RELATIVE_PATH).getAbsolutePath(), 0644);
         return null;
     }
 
@@ -653,6 +678,10 @@ final class DebianInstaller {
             Error error = writeWelcomeMessage(root);
             if (error != null) return error;
         }
+        if (!isPs1ConfigInstalled()) {
+            Error error = writePs1Config(root);
+            if (error != null) return error;
+        }
         return enforceCriticalPermissions(root);
     }
 
@@ -714,6 +743,16 @@ final class DebianInstaller {
     static boolean isWelcomeMessageInstalled() {
         return new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH
             + "/" + TermuxConstants.DEBIAN_WELCOME_PROFILE_RELATIVE_PATH).isFile();
+    }
+
+    /**
+     * Whether the login PS1 profile script is present in the live rootfs.
+     *
+     * @return Returns {@code true} if the script exists in the installed rootfs.
+     */
+    static boolean isPs1ConfigInstalled() {
+        return new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH
+            + "/" + TermuxConstants.DEBIAN_PS1_PROFILE_RELATIVE_PATH).isFile();
     }
 
     private static String sha256OfFile(File file, long[] progressOut) throws Exception {

@@ -1,5 +1,6 @@
 package com.estrin217.filemanager;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -63,6 +64,7 @@ public class FileOperationsHelper {
      * @param file The file to check.
      * @return {@code true} if it is a symlink, {@code false} otherwise.
      */
+    @SuppressLint("NewApi") // java.nio.file guarded by try/catch; JVM unit-test fallback (minSdk 24 devices use Os.readlink first)
     public static boolean isSymlink(File file) {
         if (file == null) return false;
         if (readlinkViaOs(file.getAbsolutePath()) != null) return true;
@@ -79,6 +81,7 @@ public class FileOperationsHelper {
      * @param file The symlink to read.
      * @return The raw target, or {@code null} if not a symlink or unreadable.
      */
+    @SuppressLint("NewApi") // java.nio.file guarded by try/catch; JVM unit-test fallback (minSdk 24 devices use Os.readlink first)
     public static String readSymlinkTargetRaw(File file) {
         if (file == null) return null;
         String raw = readlinkViaOs(file.getAbsolutePath());
@@ -266,6 +269,7 @@ public class FileOperationsHelper {
      * @param target Raw target stored in the link.
      * @return {@code true} on success.
      */
+    @SuppressLint("NewApi") // java.nio.file guarded by try/catch; JVM unit-test fallback (minSdk 24 devices use Os.symlink first)
     private static boolean createSymlinkAt(File link, String target) {
         try {
             Class<?> osClass = Class.forName("android.system.Os");
@@ -434,7 +438,7 @@ public class FileOperationsHelper {
 
     public static String getMimeType(String fileName) {
         String ext = fileName.contains(".") ?
-            fileName.substring(fileName.lastIndexOf('.')).toLowerCase() : "";
+            fileName.substring(fileName.lastIndexOf('.')).toLowerCase(java.util.Locale.ROOT) : "";
         switch (ext) {
             case ".txt": case ".md": case ".log": case ".sh": case ".py":
             case ".java": case ".xml": case ".json": case ".yml": case ".yaml":

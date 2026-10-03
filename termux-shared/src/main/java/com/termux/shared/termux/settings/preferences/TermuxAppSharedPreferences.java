@@ -171,6 +171,38 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
 
 
 
+    /**
+     * Get the identifier of the terminal font. The empty string selects the default monospace
+     * font, {@code "fonts/<name>.ttf"} a font bundled in the app assets, and {@code "custom"} the
+     * {@code ~/.termux/font.ttf} file (custom font).
+     *
+     * @return The terminal font identifier.
+     */
+    public String getTerminalFont() {
+        return SharedPreferenceUtils.getString(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_FONT, TERMUX_APP.DEFAULT_VALUE_TERMINAL_FONT, false);
+    }
+
+    public void setTerminalFont(String value) {
+        SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_FONT, value, false);
+    }
+
+
+
+    /**
+     * Whether OpenType ligature shaping is enabled in the terminal renderer.
+     *
+     * @return {@code true} if ligatures should be rendered when the selected font supports them.
+     */
+    public boolean isTerminalFontLigaturesEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_FONT_LIGATURES, TERMUX_APP.DEFAULT_VALUE_TERMINAL_FONT_LIGATURES);
+    }
+
+    public void setTerminalFontLigaturesEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_FONT_LIGATURES, value, false);
+    }
+
+
+
     public String getCurrentSession() {
         return SharedPreferenceUtils.getString(mSharedPreferences, TERMUX_APP.KEY_CURRENT_SESSION, null, true);
     }
@@ -230,6 +262,124 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
 
     public void setTerminalViewKeyLoggingEnabled(boolean value) {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_VIEW_KEY_LOGGING_ENABLED, value, false);
+    }
+
+
+    /**
+     * Whether a custom terminal color scheme from the {@code colors.properties} file is enabled.
+     *
+     * @return {@code true} if the custom color scheme should be applied.
+     */
+    public boolean shouldUseCustomColorScheme() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_USE_CUSTOM_COLOR_SCHEME, TERMUX_APP.DEFAULT_VALUE_USE_CUSTOM_COLOR_SCHEME);
+    }
+
+    public void setUseCustomColorScheme(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_USE_CUSTOM_COLOR_SCHEME, value, false);
+    }
+
+
+
+    /**
+     * Whether the experimental native Compose Canvas terminal renderer is enabled.
+     *
+     * @return {@code true} if the Compose Canvas renderer should be used instead of the legacy view.
+     */
+    public boolean isNativeComposeRendererEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_NATIVE_COMPOSE_RENDERER, TERMUX_APP.DEFAULT_VALUE_NATIVE_COMPOSE_RENDERER);
+    }
+
+    public void setNativeComposeRendererEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_NATIVE_COMPOSE_RENDERER, value, false);
+    }
+
+
+
+    /**
+     * Whether OSC 8 hyperlinks (underlined cells that open on tap) are enabled.
+     *
+     * @return {@code true} if hyperlinks should be underlined and open on tap.
+     */
+    public boolean isTerminalHyperlinksEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_HYPERLINKS, TERMUX_APP.DEFAULT_VALUE_TERMINAL_HYPERLINKS);
+    }
+
+    public void setTerminalHyperlinksEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_HYPERLINKS, value, false);
+    }
+
+    /**
+     * Whether inline terminal images (OSC 1337 / kitty) are painted.
+     *
+     * @return true when images are enabled (default true)
+     */
+    public boolean isTerminalImagesEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_IMAGES, TERMUX_APP.DEFAULT_VALUE_TERMINAL_IMAGES);
+    }
+
+    /**
+     * Persist the terminal images kill-switch.
+     *
+     * @param value whether inline images should be shown
+     */
+    public void setTerminalImagesEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_IMAGES, value, false);
+    }
+
+
+
+    /**
+     * Whether the display is locked to 60 Hz instead of being switched to the maximum
+     * supported refresh rate at the current resolution.
+     *
+     * @return {@code true} to force the 60 Hz display mode (battery saving).
+     */
+    public boolean shouldForce60Hz() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_FORCE_60HZ, TERMUX_APP.DEFAULT_VALUE_FORCE_60HZ);
+    }
+
+    public void setForce60Hz(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_FORCE_60HZ, value, false);
+    }
+
+
+
+    /**
+     * Whether device-tier defaults were already evaluated for this install by the
+     * hardware defaults seeder.
+     *
+     * @return {@code true} once the first-run seed has run (fresh or existing install).
+     */
+    public boolean isHardwareDefaultsSeeded() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_HARDWARE_DEFAULTS_SEEDED, TERMUX_APP.DEFAULT_VALUE_HARDWARE_DEFAULTS_SEEDED);
+    }
+
+    /**
+     * Set the hardware defaults seeded marker. Committed synchronously so a crash cannot
+     * cause the first-run seed to run twice.
+     *
+     * @param value Whether the seed has been evaluated.
+     */
+    public void setHardwareDefaultsSeeded(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_HARDWARE_DEFAULTS_SEEDED, value, true);
+    }
+
+    /**
+     * Set the seeded fallback default for the {@code terminal-transcript-rows} property.
+     *
+     * @param value Scrollback rows computed for the device tier.
+     */
+    public void setSeededTerminalTranscriptRows(int value) {
+        SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_SEEDED_TERMINAL_TRANSCRIPT_ROWS, value, false);
+    }
+
+    /**
+     * Set the seeded fallback default for the {@code terminal-cursor-blink-rate} property.
+     *
+     * @param value Blink rate in milliseconds; {@code 0} disables blinking.
+     */
+    public void setSeededTerminalCursorBlinkRate(int value) {
+        SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_SEEDED_TERMINAL_CURSOR_BLINK_RATE, value, false);
     }
 
 

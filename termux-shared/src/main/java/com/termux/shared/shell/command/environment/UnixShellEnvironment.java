@@ -47,9 +47,25 @@ public abstract class UnixShellEnvironment implements IShellEnvironment {
      * to a terminal. The format and allowable values of this environment variable are unspecified. */
     public static final String ENV_TERM = "TERM";
 
+    /**
+     * Environment variable for the iTerm2 Feature Reporting string
+     * ({@code TERM_FEATURES}). Same encoding as {@code OSC 1337;Capabilities}:
+     * e.g. {@code TBMHF} (24-bit, bracketed paste, mouse, hyperlinks, OSC 1337 FILE).
+     * Kitty graphics are probed with APC {@code a=q}, not this variable.
+     */
+    public static final String ENV_TERM_FEATURES = "TERM_FEATURES";
+
     /** Environment variable for the path of a directory made available for programs that need a place
      * to create temporary files. */
     public static final String ENV_TMPDIR = "TMPDIR";
+
+    /** Environment variable used by yazi and other TUIs to detect the kitty terminal and select
+     * the KGP (Kitty Graphics Protocol) image adapter. */
+    public static final String ENV_KITTY_WINDOW_ID = "KITTY_WINDOW_ID";
+
+    /** Environment variable used by yazi and other TUIs to detect the kitty terminal via
+     * TERM_PROGRAM. */
+    public static final String ENV_TERM_PROGRAM = "TERM_PROGRAM";
 
 
     /** Names for common/supported login shell binaries. */

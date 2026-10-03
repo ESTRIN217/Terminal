@@ -46,6 +46,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 fontSize = p.getFontSize(),
                 minFontSize = sizes[1],
                 maxFontSize = sizes[2],
+                terminalFontId = p.getTerminalFont(),
+                terminalFontLigatures = p.isTerminalFontLigaturesEnabled(),
+                useCustomColorScheme = p.shouldUseCustomColorScheme(),
+                nativeComposeRenderer = p.isNativeComposeRendererEnabled(),
+                terminalHyperlinks = p.isTerminalHyperlinksEnabled(),
+                terminalImages = p.isTerminalImagesEnabled(),
+                force60Hz = p.shouldForce60Hz(),
                 logLevel = p.getLogLevel(),
                 terminalViewKeyLogging = p.isTerminalViewKeyLoggingEnabled(),
                 pluginErrorNotifications = p.arePluginErrorNotificationsEnabled(false),
@@ -94,6 +101,41 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setFontSize(value: Int) {
         prefs?.setFontSize(value)
         _uiState.update { it.copy(fontSize = value) }
+    }
+
+    fun setTerminalFont(value: String) {
+        prefs?.setTerminalFont(value)
+        _uiState.update { it.copy(terminalFontId = value) }
+    }
+
+    fun setTerminalFontLigatures(value: Boolean) {
+        prefs?.setTerminalFontLigaturesEnabled(value)
+        _uiState.update { it.copy(terminalFontLigatures = value) }
+    }
+
+    fun setUseCustomColorScheme(value: Boolean) {
+        prefs?.setUseCustomColorScheme(value)
+        _uiState.update { it.copy(useCustomColorScheme = value) }
+    }
+
+    fun setNativeComposeRenderer(value: Boolean) {
+        prefs?.setNativeComposeRendererEnabled(value)
+        _uiState.update { it.copy(nativeComposeRenderer = value) }
+    }
+
+    fun setTerminalHyperlinks(value: Boolean) {
+        prefs?.setTerminalHyperlinksEnabled(value)
+        _uiState.update { it.copy(terminalHyperlinks = value) }
+    }
+
+    fun setTerminalImages(value: Boolean) {
+        prefs?.setTerminalImagesEnabled(value)
+        _uiState.update { it.copy(terminalImages = value) }
+    }
+
+    fun setForce60Hz(value: Boolean) {
+        prefs?.setForce60Hz(value)
+        _uiState.update { it.copy(force60Hz = value) }
     }
 
     fun setLogLevel(value: Int) {

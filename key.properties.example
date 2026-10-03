@@ -1,0 +1,17 @@
+# Plantilla para firmar builds de release. Copia a `key.properties` (raíz del repo,
+# está en .gitignore) y rellena con los datos de tu keystore.
+#
+#   cp key.properties.example key.properties
+#   keytool -genkeypair -v -keystore mi-keystore.jks -keyalg RSA -keysize 4096 \
+#           -validity 10000 -alias mi-alias
+#
+# IMPORTANTE: nunca commitees `key.properties` ni el `.jks`. Si publicas APKs de
+# release, conserva una copia cifrada del keystore fuera del repo: perderlo impide
+# publicar actualizaciones de la misma app (Android exige la misma clave).
+#
+# Rutas relativas a la raíz del repo (rootProject.file()).
+
+storeFile=app/mi-keystore.jks
+storePassword=changeme
+keyAlias=mi-alias
+keyPassword=changeme

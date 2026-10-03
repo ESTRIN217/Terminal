@@ -12,7 +12,9 @@ import com.termux.shared.shell.command.environment.AndroidShellEnvironment;
 import com.termux.shared.shell.command.environment.ShellEnvironmentUtils;
 import com.termux.shared.shell.command.environment.ShellCommandShellEnvironment;
 import com.termux.shared.termux.TermuxConstants;
+import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.shared.termux.shell.TermuxShellUtils;
+import com.termux.shared.terminal.TerminalFeatureReport;
 
 import java.nio.charset.Charset;
 import java.util.HashMap;
@@ -77,6 +79,9 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
         environment.put(ENV_HOME, TermuxConstants.TERMUX_HOME_DIR_PATH);
         environment.put(ENV_PREFIX, TermuxConstants.TERMUX_PREFIX_DIR_PATH);
 
+        // TERM_FEATURES: same encoding as OSC 1337;Capabilities (live state via that query).
+        putTermFeatures(environment, currentPackageContext);
+
         // If failsafe is not enabled, then we keep default PATH and TMPDIR so that system binaries can be used
         if (!isFailSafe) {
             environment.put(ENV_TMPDIR, TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH);
@@ -86,6 +91,29 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
         }
 
         return environment;
+    }
+
+    /**
+     * Put {@link #ENV_TERM_FEATURES} from the current image/hyperlink kill-switch prefs.
+     * Falls back to both features on when preferences cannot be read.
+     *
+     * @param environment          shell environment to mutate
+     * @param currentPackageContext context used to resolve Termux preferences
+     */
+    private static void putTermFeatures(@NonNull HashMap<String, String> environment,
+                                        @NonNull Context currentPackageContext) {
+        boolean images = true;
+        boolean hyperlinks = true;
+        try {
+            TermuxAppSharedPreferences prefs = TermuxAppSharedPreferences.build(currentPackageContext);
+            if (prefs != null) {
+                images = prefs.isTerminalImagesEnabled();
+                hyperlinks = prefs.isTerminalHyperlinksEnabled();
+            }
+        } catch (RuntimeException e) {
+            Logger.logWarn(LOG_TAG, "Failed to read terminal feature prefs, using defaults: " + e.getMessage());
+        }
+        environment.put(ENV_TERM_FEATURES, TerminalFeatureReport.buildFeatureString(images, hyperlinks));
     }
 
 

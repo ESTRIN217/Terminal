@@ -1,27 +1,46 @@
 package com.termux.terminal.compose
 
+import androidx.compose.runtime.Immutable
 import com.termux.terminal.TerminalSession
 
 /**
  * UI state for the Termux main screen.
  *
  * @param sessions List of active terminal sessions
- * @param activeSessionIndex Index of the currently active session
+ * @param activeSessionIndex Index of the currently active (focused) session: the pane that
+ * receives input and is highlighted in the tab bar
+ * @param split The two stable panes of a split view, or null when no split is active. Unlike
+ * the active index, pane positions never move: focusing a pane keeps its session in place
  * @param isDrawerOpen Whether the navigation drawer is open
  * @param isExtraKeysVisible Whether the extra keys bar is visible
  * @param extraKeysModifiers Sticky modifier keys active on the extra keys bar
+ * @param extraKeysAllCaps Whether extra keys button labels are uppercased
  * @param isSoftKeyboardVisible Whether the soft keyboard is visible
  * @param fontSize Font size for the terminal, in density-independent pixels
+ * @param useNativeRenderer Whether the experimental Compose Canvas renderer is enabled
+ * (legacy TerminalView stays as fallback when false)
  * @param debianInstaller Debian rootfs installer overlay state
  */
+@Immutable
 data class TermuxUiState(
     val sessions: List<TermuxSessionUiModel> = emptyList(),
     val activeSessionIndex: Int = 0,
+    val split: SplitState? = null,
     val isDrawerOpen: Boolean = false,
     val isExtraKeysVisible: Boolean = true,
     val extraKeysModifiers: Set<String> = emptySet(),
+    val extraKeysAllCaps: Boolean = true,
     val isSoftKeyboardVisible: Boolean = false,
     val fontSize: Float = 14f,
+    val useNativeRenderer: Boolean = false,
+    /**
+     * Whether OSC 8 hyperlinks underline and open on tap (experimental).
+     */
+    val hyperlinksEnabled: Boolean = true,
+    /**
+     * Whether inline terminal images (OSC 1337 / kitty graphics) are painted.
+     */
+    val imagesEnabled: Boolean = true,
     val extraKeysConfig: ExtraKeysConfig = ExtraKeysConfig(pages = emptyList()),
     val debianInstaller: DebianInstallerUiState = DebianInstallerUiState()
 ) {
@@ -30,6 +49,38 @@ data class TermuxUiState(
      */
     val activeSessionModel: TermuxSessionUiModel?
         get() = sessions.getOrNull(activeSessionIndex)
+
+    /**
+     * Get the model of the session occupying the left split pane, or null when no split is
+     * active or the pane session was removed.
+     */
+    val splitPaneOneModel: TermuxSessionUiModel?
+        get() = split?.paneOneId?.let { id -> sessions.firstOrNull { it.id == id } }
+
+    /**
+     * Get the model of the session occupying the right split pane, or null when no split is
+     * active or the pane session was removed.
+     */
+    val splitPaneTwoModel: TermuxSessionUiModel?
+        get() = split?.paneTwoId?.let { id -> sessions.firstOrNull { it.id == id } }
+
+    /**
+     * Whether a split (two panes) is active.
+     */
+    val isSplitActive: Boolean
+        get() = split != null
+
+    /**
+     * Whether terminal panes are actually painted by the experimental Compose canvas, which is
+     * [useNativeRenderer] narrowed by the split: the canvas has no split support yet (activating
+     * the split with it enabled leaves the split subtree half-mounted: one pane without a frame
+     * and without the row divider), so a split always falls back to the legacy
+     * [com.termux.view.TerminalView] host, which has had panes since the split landed.
+     *
+     * File manager panes are never affected: they do not go through a terminal renderer.
+     */
+    val useNativeCanvasRenderer: Boolean
+        get() = useNativeRenderer && !isSplitActive
 
     /**
      * Get the currently active terminal session, or null if no terminal session is active.
@@ -47,12 +98,38 @@ data class TermuxUiState(
 }
 
 /**
+ * The two panes of a split view.
+ *
+ * The slots are positional and stable: [paneOneId] always occupies the left half and
+ * [paneTwoId] the right half. Changing which session is focused (see
+ * [TermuxUiState.activeSessionIndex]) never moves a session between slots; only switching to
+ * a session that is not visible replaces the slot that currently holds the focused session.
+ *
+ * @param paneOneId Stable id of the session in the left pane
+ * @param paneTwoId Stable id of the session in the right pane
+ */
+@Immutable
+data class SplitState(
+    val paneOneId: String,
+    val paneTwoId: String
+) {
+    /**
+     * Whether the given session id occupies either pane.
+     *
+     * @param id The session id to look up
+     * @return true when the session is one of the two panes
+     */
+    fun contains(id: String): Boolean = id == paneOneId || id == paneTwoId
+}
+
+/**
  * Session tab UI model: either a real terminal session or a file manager session.
  *
  * @param id Stable id used to identify the tab and key per-session state
  * @param name Display name for the tab
  * @param title Secondary title (terminal escape-sequence title)
  */
+@Immutable
 sealed class TermuxSessionUiModel {
     abstract val id: String
     abstract val name: String
@@ -96,6 +173,7 @@ sealed class TermuxSessionUiModel {
  * @param statusText Human-readable status line (already formatted by the activity)
  * @param error Error message when installation failed, {@code null} otherwise
  */
+@Immutable
 data class DebianInstallerUiState(
     val visible: Boolean = false,
     val progress: Float? = null,

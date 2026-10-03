@@ -49,6 +49,18 @@ public class ProotShellEnvironmentTest {
     }
 
     @Test
+    public void testBuildProotCommand_editorScriptAfterLogin() {
+        // File-manager "Edit" path: bash --login -c "<editor> '<guest>'; exec bash".
+        String script = "nano '/root/sdcard/notes.txt'; exec bash";
+        String[] command = ProotShellEnvironment.buildProotCommand(
+            "/root/sdcard", new String[]{"-c", script});
+        Assert.assertEquals("--login", command[21]);
+        Assert.assertEquals("-c", command[22]);
+        Assert.assertEquals(script, command[23]);
+        Assert.assertEquals("/root/sdcard", command[5]);
+    }
+
+    @Test
     public void testBuildProotCommand_withLinkfix_wrapsGuestInEnv() {
         String[] command = ProotShellEnvironment.buildProotCommand(null, true);
         Assert.assertEquals(24, command.length);
@@ -123,6 +135,30 @@ public class ProotShellEnvironmentTest {
     }
 
     @Test
+    public void testIsHostPathMappable_rootfsAndStorage() {
+        Assert.assertTrue(ProotShellEnvironment.isHostPathMappable(
+            TermuxConstants.DEBIAN_ROOTFS_DIR_PATH));
+        Assert.assertTrue(ProotShellEnvironment.isHostPathMappable(
+            TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH + "/notes.txt"));
+        Assert.assertTrue(ProotShellEnvironment.isHostPathMappable("/sdcard/Download/a.txt"));
+        Assert.assertTrue(ProotShellEnvironment.isHostPathMappable("/storage/emulated/0/x"));
+        Assert.assertTrue(ProotShellEnvironment.isHostPathMappable("/sdcard"));
+        Assert.assertTrue(ProotShellEnvironment.isHostPathMappable("/storage"));
+    }
+
+    @Test
+    public void testIsHostPathMappable_rejectsUnmappable() {
+        // Same inputs hostPathToGuestPath silently maps to /root — must be rejected
+        // before opening a file in a guest editor.
+        Assert.assertFalse(ProotShellEnvironment.isHostPathMappable(
+            TermuxConstants.TERMUX_HOME_DIR_PATH));
+        Assert.assertFalse(ProotShellEnvironment.isHostPathMappable("/"));
+        Assert.assertFalse(ProotShellEnvironment.isHostPathMappable("/data/local/tmp"));
+        Assert.assertFalse(ProotShellEnvironment.isHostPathMappable("/sdcardfoo"));
+        Assert.assertFalse(ProotShellEnvironment.isHostPathMappable("/storagefoo"));
+    }
+
+    @Test
     public void testGetNativeWorkingDirectoryPath_isGuestHomeHostDir() {
         // The native chdir target is the guest home on the host, so it always
         // exists after installation and never hits proot bind destinations.
@@ -184,5 +220,12 @@ public class ProotShellEnvironmentTest {
         HashMap<String, String> env = shellEnvironment.setupShellCommandEnvironment(null, executionCommand);
         Assert.assertEquals("/root", env.get("HOME"));
         Assert.assertEquals(TermuxConstants.TERMUX_HOME_DIR_PATH, env.get("PWD"));
+    }
+
+    @Test
+    public void testGetEnvironment_kittyBrandingForKgp() {
+        HashMap<String, String> env = new ProotShellEnvironment().getEnvironment(null, false);
+        Assert.assertEquals("1", env.get("KITTY_WINDOW_ID"));
+        Assert.assertEquals("kitty", env.get("TERM_PROGRAM"));
     }
 }

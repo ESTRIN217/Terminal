@@ -61,13 +61,19 @@ object TerminalKeyHandler {
      * @param ctrlActive Whether Ctrl modifier is active
      * @param altActive Whether Alt modifier is active
      * @param shiftActive Whether Shift modifier is active
+     * @param cursorAppMode Whether the terminal is in cursor application mode (DECCKM),
+     * like [getKeyCode]: control keys such as the arrows are then sent in their application
+     * (SS3) form instead of the CSI form
+     * @param keypadAppMode Whether the terminal is in keypad application mode (DECKPAM)
      * @return The escape sequence string, or the raw character if not a control key
      */
     fun getKeySequence(
         key: String,
         ctrlActive: Boolean = false,
         altActive: Boolean = false,
-        shiftActive: Boolean = false
+        shiftActive: Boolean = false,
+        cursorAppMode: Boolean = false,
+        keypadAppMode: Boolean = false
     ): String {
         val keyMod = (if (ctrlActive) KEYMOD_CTRL else 0) or
                 (if (altActive) KEYMOD_ALT else 0) or
@@ -76,7 +82,7 @@ object TerminalKeyHandler {
         val keyCode = KEY_CODE_MAP[key]
         if (keyCode != null) {
             val seq = com.termux.terminal.KeyHandler.getCode(
-                keyCode, keyMod, false, false
+                keyCode, keyMod, cursorAppMode, keypadAppMode
             )
             if (seq != null) return seq
         }
@@ -102,6 +108,56 @@ object TerminalKeyHandler {
         }
 
         return base
+    }
+
+    /**
+     * A single key press of an extra keys macro, with the modifiers that were active for it.
+     *
+     * @param key The key name or literal character to send
+     * @param ctrlActive Whether Ctrl was held for this step
+     * @param altActive Whether Alt was held for this step
+     * @param shiftActive Whether Shift was held for this step
+     */
+    data class MacroStep(
+        val key: String,
+        val ctrlActive: Boolean = false,
+        val altActive: Boolean = false,
+        val shiftActive: Boolean = false
+    )
+
+    /**
+     * Expand an extra keys macro (a space-separated key sequence such as
+     * {@code "CTRL ALT f d"}) into the individual key presses to perform.
+     *
+     * A {@code CTRL}/{@code ALT}/{@code SHIFT} token applies to the next key only and is then
+     * cleared, mirroring what classic Termux does in
+     * `com.termux.shared.termux.terminal.io.TerminalExtraKeys`. {@code FN} is accepted and
+     * ignored: it has no effect on the generated escape sequences.
+     *
+     * @param macro The macro string
+     * @return The steps to perform, in order; empty for a blank macro
+     */
+    fun parseMacro(macro: String): List<MacroStep> {
+        val steps = mutableListOf<MacroStep>()
+        var ctrlActive = false
+        var altActive = false
+        var shiftActive = false
+        for (token in macro.split(" ")) {
+            when (token) {
+                "" -> Unit
+                "CTRL" -> ctrlActive = true
+                "ALT" -> altActive = true
+                "SHIFT" -> shiftActive = true
+                "FN" -> Unit
+                else -> {
+                    steps.add(MacroStep(token, ctrlActive, altActive, shiftActive))
+                    ctrlActive = false
+                    altActive = false
+                    shiftActive = false
+                }
+            }
+        }
+        return steps
     }
 
     /**

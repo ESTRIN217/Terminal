@@ -46,6 +46,16 @@ private fun licenses(): List<LicenseInfo> = listOf(
         url = "https://opensource.org/license/mit"
     ),
     LicenseInfo(
+        name = stringResource(R.string.license_gplv2),
+        detail = stringResource(R.string.license_proot),
+        url = "https://github.com/proot-me/proot/blob/master/COPYING"
+    ),
+    LicenseInfo(
+        name = stringResource(R.string.license_debian),
+        detail = stringResource(R.string.license_debian_rootfs),
+        url = "https://www.debian.org/legal/licenses/"
+    ),
+    LicenseInfo(
         name = stringResource(R.string.license_gplv2_classpath),
         detail = stringResource(R.string.license_openjdk),
         url = "https://openjdk.org/legal/gplv2+ce.html"
@@ -94,8 +104,9 @@ fun LicensesScreen(
         ) {
             item {
                 SettingsSectionTitle(title = stringResource(R.string.open_source_licenses))
+                val licenses = licenses()
                 SettingsCardGroup {
-                    licenses().forEachIndexed { index, license ->
+                    licenses.forEachIndexed { index, license ->
                         SettingsListTile(
                             leadingIcon = Icons.Default.Description,
                             title = license.name,
@@ -103,7 +114,7 @@ fun LicensesScreen(
                             trailingIcon = Icons.Default.ChevronRight,
                             onClick = { ShareUtils.openUrl(context, license.url) }
                         )
-                        if (index < licenses().lastIndex) {
+                        if (index < licenses.lastIndex) {
                             HorizontalDivider(
                                 modifier = Modifier.padding(horizontal = 16.dp),
                                 color = MaterialTheme.colorScheme.outlineVariant

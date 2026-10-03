@@ -90,6 +90,31 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
     }
 
     /**
+     * Whether {@code hostPath} has a real guest equivalent (rootfs, {@code /sdcard} or
+     * {@code /storage} bind).
+     *
+     * <p>{@link #hostPathToGuestPath(String)} silently falls back to {@link #GUEST_HOME}
+     * for unmappable paths (fine as a proot working directory, wrong as a file to open in a
+     * guest editor). Callers that need a true mapping must check this first.</p>
+     *
+     * @param hostPath The Android (host) path to test.
+     * @return Returns {@code true} when the path maps into the guest filesystem.
+     */
+    public static boolean isHostPathMappable(@NonNull String hostPath) {
+        return hasPathPrefix(hostPath, TermuxConstants.DEBIAN_ROOTFS_DIR_PATH)
+            || hasPathPrefix(hostPath, "/sdcard")
+            || hasPathPrefix(hostPath, "/storage");
+    }
+
+    /**
+     * Whether {@code path} equals {@code prefix} or starts with {@code prefix + "/"}.
+     * Avoids false positives like {@code /sdcardfoo} for {@code /sdcard}.
+     */
+    private static boolean hasPathPrefix(@NonNull String path, @NonNull String prefix) {
+        return path.equals(prefix) || path.startsWith(prefix + "/");
+    }
+
+    /**
      * Host directory the native pty process chdirs into before exec'ing proot.
      *
      * <p>proot re-establishes the real guest working directory via {@code -w}, so
@@ -256,6 +281,11 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
         environment.put(ENV_LC_ALL, GUEST_LANG);
         environment.put(ENV_LANGUAGE, "C");
         environment.put(ENV_DEBIAN_FRONTEND, GUEST_DEBIAN_FRONTEND);
+
+        // Advertise kitty terminal branding so yazi and other KGP-aware TUIs select the
+        // Kitty Graphics Protocol image adapter without requiring manual env setup.
+        environment.put(ENV_KITTY_WINDOW_ID, "1");
+        environment.put(ENV_TERM_PROGRAM, "kitty");
 
         // termux-exec conflicts with proot: never propagate these. LD_PRELOAD
         // must also stay out of the host proot process environment (the host

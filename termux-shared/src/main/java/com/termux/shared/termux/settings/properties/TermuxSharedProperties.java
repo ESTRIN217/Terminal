@@ -1,14 +1,17 @@
 package com.termux.shared.termux.settings.properties;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 
 import androidx.annotation.NonNull;
 
 import com.termux.shared.logger.Logger;
 import com.termux.shared.data.DataUtils;
+import com.termux.shared.settings.preferences.SharedPreferenceUtils;
 import com.termux.shared.settings.properties.SharedProperties;
 import com.termux.shared.settings.properties.SharedPropertiesParser;
 import com.termux.shared.termux.TermuxConstants;
+import com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants;
 
 import java.io.File;
 import java.util.HashMap;
@@ -201,6 +204,7 @@ public abstract class TermuxSharedProperties {
         @NonNull
         @Override
         public Properties preProcessPropertiesOnReadFromDisk(@NonNull Context context, @NonNull Properties properties) {
+            injectSeededPropertyDefaults(context, properties);
             return replaceUseBlackUIProperty(properties);
         }
 
@@ -213,6 +217,49 @@ public abstract class TermuxSharedProperties {
         public Object getInternalPropertyValueFromValue(@NonNull Context context, String key, String value) {
             return getInternalTermuxPropertyValueFromValue(context, key, value);
         }
+    }
+
+    /**
+     * Fill in defaults seeded on first run for properties whose keys are absent from the
+     * user's {@code termux.properties} file. Seeds are written to SharedPreferences by the
+     * app's hardware defaults seeder on fresh installs only ({@code -1} = not seeded), so
+     * existing installs keep the compiled-in defaults and explicit file values always win.
+     *
+     * @param context    The {@link Context} to read the seeded preferences with.
+     * @param properties The {@link Properties} loaded from disk being pre-processed.
+     */
+    private static void injectSeededPropertyDefaults(@NonNull Context context, @NonNull Properties properties) {
+        SharedPreferences preferences = SharedPreferenceUtils.getPrivateSharedPreferences(context,
+            TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION);
+        injectSeededPropertyDefault(preferences, properties,
+            TermuxPropertyConstants.KEY_TERMINAL_TRANSCRIPT_ROWS,
+            TermuxPreferenceConstants.TERMUX_APP.KEY_SEEDED_TERMINAL_TRANSCRIPT_ROWS,
+            TermuxPreferenceConstants.TERMUX_APP.DEFAULT_VALUE_SEEDED_TERMINAL_TRANSCRIPT_ROWS);
+        injectSeededPropertyDefault(preferences, properties,
+            TermuxPropertyConstants.KEY_TERMINAL_CURSOR_BLINK_RATE,
+            TermuxPreferenceConstants.TERMUX_APP.KEY_SEEDED_TERMINAL_CURSOR_BLINK_RATE,
+            TermuxPreferenceConstants.TERMUX_APP.DEFAULT_VALUE_SEEDED_TERMINAL_CURSOR_BLINK_RATE);
+    }
+
+    /**
+     * Inject a single seeded default into {@code properties} when the property key is
+     * absent from the user's file and a non-negative seed exists in preferences.
+     *
+     * @param preferences  The app {@link SharedPreferences} holding the seeded values.
+     * @param properties   The {@link Properties} loaded from disk being pre-processed.
+     * @param propertyKey  The {@code termux.properties} key (e.g. {@code terminal-transcript-rows}).
+     * @param seededKey    The SharedPreferences key holding the seeded value.
+     * @param notSeededValue Sentinel meaning the value was never seeded.
+     */
+    private static void injectSeededPropertyDefault(@NonNull SharedPreferences preferences,
+                                                    @NonNull Properties properties,
+                                                    String propertyKey, String seededKey,
+                                                    int notSeededValue) {
+        if (properties.getProperty(propertyKey) != null) return;
+        int seeded = SharedPreferenceUtils.getInt(preferences, seededKey, notSeededValue);
+        if (seeded < 0) return;
+        Logger.logDebug(LOG_TAG, "Injecting seeded default for \"" + propertyKey + "\": " + seeded);
+        properties.setProperty(propertyKey, Integer.toString(seeded));
     }
 
     @NonNull

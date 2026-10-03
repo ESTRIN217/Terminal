@@ -76,6 +76,12 @@ public final class TerminalSession extends TerminalOutput {
     private final String[] mEnv;
     private final Integer mTranscriptRows;
 
+    /** Host roots for kitty file-media graphics (null = file media unsupported). */
+    private String mKittyImageMediaRootfs;
+    private String mKittyImageMediaShm;
+    private String mKittyImageMediaSdcard;
+    private String mKittyImageMediaStorage;
+
 
     private static final String LOG_TAG = "TerminalSession";
 
@@ -109,6 +115,26 @@ public final class TerminalSession extends TerminalOutput {
         }
     }
 
+    /**
+     * Configure the host roots the emulator uses to resolve kitty graphics file
+     * media ({@code t=f/t=t/t=s}) from guest paths. Call before
+     * {@link #initializeEmulator} (applied automatically on creation); if the
+     * emulator already exists the configuration is forwarded immediately.
+     *
+     * @param rootfsDir  host path of the Debian rootfs
+     * @param shmDir     host dir bound at guest {@code /dev/shm}
+     * @param sdcardDir  host dir bound at guest {@code /root/sdcard}
+     * @param storageDir host dir bound at guest {@code /root/storage}
+     */
+    public void configureKittyImageMedia(String rootfsDir, String shmDir, String sdcardDir, String storageDir) {
+        mKittyImageMediaRootfs = rootfsDir;
+        mKittyImageMediaShm = shmDir;
+        mKittyImageMediaSdcard = sdcardDir;
+        mKittyImageMediaStorage = storageDir;
+        if (mEmulator != null)
+            mEmulator.configureImageMedia(rootfsDir, shmDir, sdcardDir, storageDir);
+    }
+
     /** The terminal title as set through escape sequences or null if none set. */
     public String getTitle() {
         return (mEmulator == null) ? null : mEmulator.getTitle();
@@ -122,6 +148,9 @@ public final class TerminalSession extends TerminalOutput {
      */
     public void initializeEmulator(int columns, int rows, int cellWidthPixels, int cellHeightPixels) {
         mEmulator = new TerminalEmulator(this, columns, rows, cellWidthPixels, cellHeightPixels, mTranscriptRows, mClient);
+        if (mKittyImageMediaRootfs != null || mKittyImageMediaShm != null)
+            mEmulator.configureImageMedia(mKittyImageMediaRootfs, mKittyImageMediaShm,
+                mKittyImageMediaSdcard, mKittyImageMediaStorage);
 
         int[] processId = new int[1];
         mTerminalFileDescriptor = JNI.createSubprocess(mShellPath, mCwd, mArgs, mEnv, processId, rows, columns, cellWidthPixels, cellHeightPixels);

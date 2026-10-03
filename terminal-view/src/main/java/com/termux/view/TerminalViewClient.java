@@ -48,6 +48,13 @@ public interface TerminalViewClient {
 
     boolean onLongPress(MotionEvent event);
 
+    /**
+     * Request the "More" menu of the text selection toolbar (or a mouse right-click).
+     * The client shows its own menu (e.g. a Compose bottom sheet) instead of the legacy
+     * Android {@code ContextMenu}.
+     */
+    void onShowMoreMenu();
+
 
 
     boolean readControlKey();

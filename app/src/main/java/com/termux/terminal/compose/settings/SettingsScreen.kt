@@ -9,13 +9,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Monitor
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
@@ -58,6 +65,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onNavigateUp: () -> Unit,
     onAboutClick: () -> Unit,
+    onImportFont: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -115,6 +123,76 @@ fun SettingsScreen(
                     valueRange = state.minFontSize.toFloat()..state.maxFontSize.toFloat(),
                     valueLabel = state.fontSize.toString(),
                     onValueChangeFinished = { viewModel.setFontSize(it.toInt()) }
+                )
+                // Terminal font selector: default, bundled fonts, and the custom ~/.termux/font.ttf
+                // (custom ~/.termux/font.ttf) when present.
+                val customFontFile = com.termux.shared.termux.TermuxConstants.TERMUX_FONT_FILE
+                val fontOptionLabels = buildList {
+                    add(stringResource(R.string.font_default))
+                    com.termux.terminal.compose.TerminalFontCatalog.bundledFonts.forEach { add(stringResource(it.labelRes)) }
+                    if (customFontFile.isFile) add(stringResource(R.string.font_custom))
+                }
+                val fontOptionIds = buildList {
+                    add("")
+                    com.termux.terminal.compose.TerminalFontCatalog.bundledFonts.forEach { add(it.id) }
+                    if (customFontFile.isFile) add(com.termux.terminal.compose.TerminalFontCatalog.CUSTOM_FONT_ID)
+                }
+                val selectedFontIndex = fontOptionIds.indexOf(state.terminalFontId).coerceAtLeast(0)
+                SettingsDialogTile(
+                    leadingIcon = Icons.Default.Code,
+                    title = stringResource(R.string.terminal_font),
+                    options = fontOptionLabels,
+                    selectedIndex = selectedFontIndex,
+                    onSelected = { viewModel.setTerminalFont(fontOptionIds[it]) }
+                )
+                SettingsListTile(
+                    leadingIcon = Icons.Default.FileUpload,
+                    title = stringResource(R.string.font_import),
+                    subtitle = stringResource(R.string.font_import_desc),
+                    trailingIcon = Icons.Default.ChevronRight,
+                    onClick = onImportFont
+                )
+                SettingsSwitchTile(
+                    title = stringResource(R.string.terminal_font_ligatures),
+                    subtitle = stringResource(R.string.terminal_font_ligatures_desc),
+                    icon = Icons.Default.Code,
+                    checked = state.terminalFontLigatures,
+                    onCheckedChange = viewModel::setTerminalFontLigatures
+                )
+                SettingsSwitchTile(
+                    title = stringResource(R.string.use_custom_color_scheme),
+                    subtitle = stringResource(R.string.use_custom_color_scheme_desc),
+                    icon = Icons.Default.Palette,
+                    checked = state.useCustomColorScheme,
+                    onCheckedChange = viewModel::setUseCustomColorScheme
+                )
+                SettingsSwitchTile(
+                    title = stringResource(R.string.native_compose_renderer),
+                    subtitle = stringResource(R.string.native_compose_renderer_desc),
+                    icon = Icons.Default.Terminal,
+                    checked = state.nativeComposeRenderer,
+                    onCheckedChange = viewModel::setNativeComposeRenderer
+                )
+                SettingsSwitchTile(
+                    title = stringResource(R.string.terminal_hyperlinks),
+                    subtitle = stringResource(R.string.terminal_hyperlinks_desc),
+                    icon = Icons.Default.Link,
+                    checked = state.terminalHyperlinks,
+                    onCheckedChange = viewModel::setTerminalHyperlinks
+                )
+                SettingsSwitchTile(
+                    title = stringResource(R.string.terminal_images),
+                    subtitle = stringResource(R.string.terminal_images_desc),
+                    icon = Icons.Default.Image,
+                    checked = state.terminalImages,
+                    onCheckedChange = viewModel::setTerminalImages
+                )
+                SettingsSwitchTile(
+                    title = stringResource(R.string.force_60hz),
+                    subtitle = stringResource(R.string.force_60hz_desc),
+                    icon = Icons.Default.Refresh,
+                    checked = state.force60Hz,
+                    onCheckedChange = viewModel::setForce60Hz
                 )
             }
 

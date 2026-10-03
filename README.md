@@ -16,8 +16,33 @@
 **Terminal** es una aplicación Android de terminal + entorno Linux (Debian vía proot),
 con UI moderna en Jetpack Compose y emulación de terminal nativa.
 
+Versión actual: **2.0.0** (`versionCode` 120). Ver el [CHANGELOG](CHANGELOG.md).
+
+## Características
+
+- **Entorno Debian completo** vía proot, sin root. El rootfs se descarga y verifica en el
+  primer arranque.
+- **Renderer nativo en Compose** — el terminal se dibuja directamente sobre un `Canvas`
+  de Compose, con selección de texto nativa, handles arrastrables, pinch-zoom e inercia de
+  scroll. Detrás del flag `native_compose_renderer` (Ajustes → Experimental).
+- **Multipantalla** — dos sesiones simultáneas (terminal o gestor de archivos) en pantallas
+  de 600 dp o más.
+- **Tipografía a elegir** — Fira Code, Cascadia Code, JetBrains Mono, D2 Coding, Hack o tu
+  propia fuente (`~/.termux/font.ttf`, importable desde el almacenamiento), todas con Nerd
+  Fonts v3.5.1. Las ligaduras se pueden activar o desactivar.
+- **Color de 24 bits** — esquemas personalizados desde `~/.termux/colors.properties`.
+- **Imágenes en la terminal** — protocolo Kitty Graphics y OSC 1337 (iTerm2). Sixel no está
+  soportado.
+- **Hipervínculos OSC 8** — se subrayan y se abren con un toque.
+- **Gestor de archivos integrado** — funciona como pestaña más, con symlinks, papelera,
+  marcadores y edición de archivos con `nano`/`vim`.
+- **Refresco a 90/120 Hz**, con opción de forzar 60 Hz para ahorrar batería.
+- **Atribución de recursos** según el hardware del dispositivo (scrollback, parpadeo del
+  cursor y renderer por defecto).
+
 ## Contenido
 
+- [Características](#características)
 - [Instalación](#instalación)
 - [Desinstalación](#desinstalación)
 - [Enlaces](#enlaces)
@@ -79,6 +104,12 @@ dentro de la sesión Debian. No es un bug: el acceso a dispositivos concretos
 (`/dev/null`, `/dev/tty`, ...) sigue funcionando. Detalles en
 [`docs/proot-debian-arm64-plan.md`](docs/proot-debian-arm64-plan.md) (sección 7).
 
+Del mismo modo, desde Android 8 (API 26) SELinux deniega a las apps `untrusted_app`
+leer `/proc/stat`, así que los monitores de CPU (`btop`, `htop`) no mostrarán
+estadísticas de CPU en un dispositivo stock con SELinux enforcing (`btop` falla con
+`Failed to parse /proc/stat`). El bind `-b /proc` está presente y correcto; sin root
+o SELinux permissive no hay workaround.
+
 ## Mantenimiento y contribuciones
 
 - Java 17 requerido. NDK `30.0.14904198`, CMake `3.31.6`.
@@ -90,6 +121,32 @@ dentro de la sesión Debian. No es un bug: el acceso a dispositivos concretos
 - El `versionName` en `app/build.gradle.kts` debe seguir semver `major.minor.patch`.
 - La librería `termux-shared` centraliza constantes y utils compartidos. No uses
   valores hardcodeados si existe una constante.
+
+### Firma de release
+
+La build `release` se firma **en local**. Las credenciales se leen de `key.properties` en la
+raíz del repo, que está en `.gitignore` y **nunca debe commitearse**. Copia
+[`key.properties.example`](key.properties.example) como plantilla:
+
+```sh
+cp key.properties.example key.properties   # y rellena con los datos de tu keystore
+./gradlew assembleRelease
+```
+
+Sin ese fichero, `assembleRelease` falla al no encontrar la configuración de firma.
+
+Verifica el APK antes de distribuirlo: un fallo de empaquetado puede producir un archivo
+válido para el sistema de build pero inservible en Android.
+
+```sh
+unzip -l app/build/outputs/apk/release/terminal_release_universal.apk | grep -c AndroidManifest.xml
+```
+
+Debe devolver `1`. Si devuelve `0`, el APK se ha empaquetado sin manifest ni recursos.
+
+> **Aviso:** los APK que la CI adjunta a cada Release de GitHub son builds de **debug**
+> firmados con `app/testkey_untrusted.jks`. Son para pruebas y **no son distribuibles**: no
+> los instales desde fuentes de terceros ni los publiques como versión estable.
 
 ## Atribución
 

@@ -409,20 +409,6 @@ public final class TermuxConstants {
     public static final String TERMUX_FLOAT_FDROID_PACKAGE_URL = FDROID_PACKAGES_BASE_URL + "/" + TERMUX_FLOAT_PACKAGE_NAME; // Default: "https://f-droid.org/en/packages/com.estrin217.terminal.window"
 
 
-    /** Terminal:Styling app name */
-    public static final String TERMUX_STYLING_APP_NAME = "Terminal:Styling"; // Default: "Terminal:Styling"
-    /** Terminal:Styling app package name */
-    public static final String TERMUX_STYLING_PACKAGE_NAME = TERMUX_PACKAGE_NAME + ".styling"; // Default: "com.estrin217.terminal.styling"
-    /** Terminal:Styling GitHub repo name */
-    public static final String TERMUX_STYLING_GITHUB_REPO_NAME = "termux-styling"; // Default: "termux-styling"
-    /** Terminal:Styling GitHub repo url */
-    public static final String TERMUX_STYLING_GITHUB_REPO_URL = TERMUX_UPSTREAM_GITHUB_ORGANIZATION_URL + "/" + TERMUX_STYLING_GITHUB_REPO_NAME; // Upstream attribution: "https://github.com/termux/termux-styling"
-    /** Terminal:Styling GitHub issues repo url */
-    public static final String TERMUX_STYLING_GITHUB_ISSUES_REPO_URL = TERMUX_STYLING_GITHUB_REPO_URL + "/issues"; // Default: "https://github.com/termux/termux-styling/issues"
-    /** Terminal:Styling F-Droid package url */
-    public static final String TERMUX_STYLING_FDROID_PACKAGE_URL = FDROID_PACKAGES_BASE_URL + "/" + TERMUX_STYLING_PACKAGE_NAME; // Default: "https://f-droid.org/en/packages/com.estrin217.terminal.styling"
-
-
     /** Terminal:Tasker app name */
     public static final String TERMUX_TASKER_APP_NAME = "Terminal:Tasker"; // Default: "Terminal:Tasker"
     /** Terminal:Tasker app package name */
@@ -462,7 +448,6 @@ public final class TermuxConstants {
         TERMUX_API_APP_NAME,
         TERMUX_BOOT_APP_NAME,
         TERMUX_FLOAT_APP_NAME,
-        TERMUX_STYLING_APP_NAME,
         TERMUX_TASKER_APP_NAME,
         TERMUX_WIDGET_APP_NAME);
 
@@ -470,7 +455,6 @@ public final class TermuxConstants {
         TERMUX_API_PACKAGE_NAME,
         TERMUX_BOOT_PACKAGE_NAME,
         TERMUX_FLOAT_PACKAGE_NAME,
-        TERMUX_STYLING_PACKAGE_NAME,
         TERMUX_TASKER_PACKAGE_NAME,
         TERMUX_WIDGET_PACKAGE_NAME);
 
@@ -599,11 +583,40 @@ public final class TermuxConstants {
     /** Guest path of the link(2)-emulation shim inside the Debian rootfs. */
     public static final String LINKFIX_GUEST_SO_PATH = "/usr/libexec/termux-linkfix.so";
 
+    /**
+     * Editor candidates probed under {@code DEBIAN_ROOTFS_DIR_PATH/usr/bin} for the file
+     * manager "Edit" action (first match wins when several are installed).
+     * The minbase rootfs ships none of them; users install one via {@code apt install nano}.
+     */
+    public static final String[] DEBIAN_EDITOR_CANDIDATES = {
+        "nano", "vim", "vi", "vim.tiny", "mcedit", "ed"
+    };
+
     /** Guest-relative path of the login welcome-message profile script inside the Debian rootfs. */
     public static final String DEBIAN_WELCOME_PROFILE_RELATIVE_PATH = "etc/profile.d/00-termux-welcome.sh";
     /** Login welcome-message shell script written into the Debian rootfs, echoed by bash on every {@code --login} shell. */
     public static final String DEBIAN_WELCOME_SHELL_SCRIPT =
         "echo \"-> \u00a1Bienvenido a Debian Linux en la terminal!\n\nTrabajo con paquetes:\n\n - Buscar:     apt search <consulta>\n - Instalar:   apt install <paquete>\n - Desinstalar: apt remove <paquete>\n - Actualizar:  apt update && apt upgrade\"";
+
+    /**
+     * Guest-relative path of the login PS1 profile script inside the Debian rootfs.
+     *
+     * <p>Sourced after {@link #DEBIAN_WELCOME_PROFILE_RELATIVE_PATH} (lexicographic order in
+     * {@code /etc/profile.d/}) so the colored prompt overrides the plain non-color prompt set
+     * earlier by {@code /etc/bash.bashrc} via {@code /etc/profile}.</p>
+     */
+    public static final String DEBIAN_PS1_PROFILE_RELATIVE_PATH = "etc/profile.d/10-termux-ps1.sh";
+    /**
+     * Login PS1 shell script written into the Debian rootfs, sourced by bash on every
+     * {@code --login} shell. Sets a colored prompt using 256-color SGR sequences
+     * ({@code TERM=xterm-256color} is set by the shell environment).
+     *
+     * <p>The trailing dollar sign renders as {@code #} for root (always the case under proot)
+     * and as {@code $} otherwise; bracket escapes mark non-printing sequences so bash
+     * computes the prompt width correctly.</p>
+     */
+    public static final String DEBIAN_PS1_SHELL_SCRIPT =
+        "PS1='\\[\\e[38;5;118m\\]\\u@\\h\\[\\e[0m\\]:\\[\\e[38;5;39m\\]\\w\\[\\e[0m\\]\\$ '";
 
     /** Debian rootfs tarball download URL (official Debian OCI layer, debuerreotype, trixie arm64). */
     public static final String DEBIAN_ROOTFS_TARBALL_URL = "https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/f73bd086e8d0e5e1c8b838ccc442bf24eb3ea205/stable/oci/blobs/rootfs.tar.gz";
@@ -737,9 +750,6 @@ public final class TermuxConstants {
 
     /** Terminal:Float app default SharedPreferences file basename without extension */
     public static final String TERMUX_FLOAT_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION = TERMUX_FLOAT_PACKAGE_NAME + "_preferences"; // Default: "com.estrin217.terminal.window_preferences"
-
-    /** Terminal:Styling app default SharedPreferences file basename without extension */
-    public static final String TERMUX_STYLING_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION = TERMUX_STYLING_PACKAGE_NAME + "_preferences"; // Default: "com.estrin217.terminal.styling_preferences"
 
     /** Terminal:Tasker app default SharedPreferences file basename without extension */
     public static final String TERMUX_TASKER_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION = TERMUX_TASKER_PACKAGE_NAME + "_preferences"; // Default: "com.estrin217.terminal.tasker_preferences"
@@ -1286,24 +1296,6 @@ public final class TermuxConstants {
 
 
 
-
-
-    /**
-     * Terminal:Styling app constants.
-     */
-    public static final class TERMUX_STYLING_APP {
-
-        /** Terminal:Styling app core activity name. */
-        public static final String TERMUX_STYLING_ACTIVITY_NAME = TERMUX_STYLING_PACKAGE_NAME + ".TermuxStyleActivity"; // Default: "com.estrin217.terminal.styling.TermuxStyleActivity"
-
-
-        /** Terminal:Styling app main activity name. */
-        public static final String TERMUX_STYLING_MAIN_ACTIVITY_NAME = TERMUX_STYLING_PACKAGE_NAME + ".activities.TermuxStylingMainActivity"; // Default: "com.estrin217.terminal.styling.activities.TermuxStylingMainActivity"
-
-        /** Terminal:Styling app launcher activity name. This is an `activity-alias` for {@link #TERMUX_STYLING_MAIN_ACTIVITY_NAME} used for launchers with {@link Intent#CATEGORY_LAUNCHER}. */
-        public static final String TERMUX_STYLING_LAUNCHER_ACTIVITY_NAME = TERMUX_STYLING_PACKAGE_NAME + ".activities.TermuxStylingLauncherActivity"; // Default: "com.estrin217.terminal.styling.activities.TermuxStylingLauncherActivity"
-
-    }
 
 
 

@@ -1,8 +1,10 @@
 package com.termux.terminal.compose
 
 import androidx.compose.foundation.LocalIndication
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -17,11 +19,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,14 +32,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.delay
 
 /** Repeat interval in milliseconds. */
 private const val REPEAT_DELAY = 80L
+
+/** Keys rendered with the larger arrow glyphs. */
+private val ARROW_KEYS = setOf("UP", "DOWN", "LEFT", "RIGHT")
 
 /**
  * Callback interface for extra key button clicks.
@@ -48,8 +62,9 @@ fun interface ExtraKeysCallback {
     /**
      * Called when an extra key button is clicked.
      *
-     * @param key The key identifier (e.g., "ESC", "CTRL", "TAB")
-     * @param isMacro Whether this is a macro (space-separated key sequence)
+     * @param key The key identifier (e.g. "ESC", "CTRL", "TAB"), or the full macro sequence
+     * when [isMacro] is true (e.g. "CTRL f d")
+     * @param isMacro Whether [key] must be expanded as a space-separated key sequence
      */
     fun onKeyClick(key: String, isMacro: Boolean)
 }
@@ -61,19 +76,22 @@ fun interface ExtraKeysCallback {
  * page, and additional pages (e.g. special keys like F1-F12, INS, DEL) are reachable
  * by swiping sideways, with a dot indicator when more than one page exists.
  *
- * Supports long-press repeat for navigation and editing keys, and modifier lock on long-press.
+ * Supports long-press repeat for navigation and editing keys, and swipe up on a key
+ * configured with a `popup` to send the popup key instead.
  *
  * @param config The extra keys configuration
  * @param activeModifiers Sticky modifier keys currently active (e.g. "CTRL")
  * @param onToggleModifier Callback to toggle a sticky modifier key
+ * @param allCaps Whether button labels are uppercased ({@code extra-keys-text-all-caps})
  * @param callback Callback for key clicks
  * @param modifier Modifier to apply
  */
 @Composable
 fun ExtraKeysBar(
-    config: ExtraKeysConfig = ExtraKeysConfig.DEFAULT,
+    config: ExtraKeysConfig = ExtraKeysConfig.EMPTY,
     activeModifiers: Set<String> = emptySet(),
     onToggleModifier: (String) -> Unit = {},
+    allCaps: Boolean = true,
     callback: ExtraKeysCallback,
     modifier: Modifier = Modifier
 ) {
@@ -93,6 +111,7 @@ fun ExtraKeysBar(
                 rows = config.pages[page],
                 activeModifiers = activeModifiers,
                 onToggleModifier = onToggleModifier,
+                allCaps = allCaps,
                 callback = callback
             )
         }
@@ -130,6 +149,7 @@ fun ExtraKeysBar(
  * @param rows The key rows of the page
  * @param activeModifiers Sticky modifier keys currently active (e.g. "CTRL")
  * @param onToggleModifier Callback to toggle a sticky modifier key
+ * @param allCaps Whether button labels are uppercased
  * @param callback Callback for key clicks
  * @param modifier Modifier to apply
  */
@@ -138,6 +158,7 @@ private fun ExtraKeysPage(
     rows: List<List<ExtraKeyConfig>>,
     activeModifiers: Set<String>,
     onToggleModifier: (String) -> Unit,
+    allCaps: Boolean,
     callback: ExtraKeysCallback,
     modifier: Modifier = Modifier
 ) {
@@ -150,10 +171,12 @@ private fun ExtraKeysPage(
         return prefix.toString()
     }
 
-    fun onKeyAction(key: String) {
+    fun onKeyAction(config: ExtraKeyConfig) {
         val prefix = getModifierPrefix()
-        val fullKey = if (prefix.isNotEmpty()) "$prefix$key" else key
-        callback.onKeyClick(fullKey, prefix.isNotEmpty())
+        val fullKey = if (prefix.isEmpty()) config.key else prefix + config.key
+        // A sticky modifier turns every press into a (single step) macro; the key's own macro
+        // flag is preserved so a multi-key macro is always expanded.
+        callback.onKeyClick(fullKey, prefix.isNotEmpty() || config.isMacro)
     }
 
     Column(
@@ -170,18 +193,20 @@ private fun ExtraKeysPage(
                     ExtraKeyButton(
                         config = keyConfig,
                         isActive = keyConfig.key in activeModifiers,
+                        allCaps = allCaps,
                         onClick = {
                             if (keyConfig.isModifier) {
                                 onToggleModifier(keyConfig.key)
                             } else {
-                                onKeyAction(keyConfig.key)
+                                onKeyAction(keyConfig)
                             }
                         },
-                        onLongPressRepeat = {
+                        onRepeat = {
                             if (!keyConfig.isModifier) {
-                                onKeyAction(keyConfig.key)
+                                onKeyAction(keyConfig)
                             }
                         },
+                        onPopupClick = { popupConfig -> onKeyAction(popupConfig) },
                         modifier = Modifier.weight(1f).padding(horizontal = 2.dp)
                     )
                 }
@@ -191,20 +216,24 @@ private fun ExtraKeysPage(
 }
 
 /**
- * A single extra key button with long-press repeat support.
+ * A single extra key button with long-press repeat and swipe-up popup support.
  *
  * @param config The key configuration
  * @param isActive Whether the button is in active state (for modifiers)
- * @param onClick Callback when the button is clicked
- * @param onLongPressRepeat Callback for each repeat during long press
+ * @param allCaps Whether the label is uppercased
+ * @param onClick Callback when the button is tapped
+ * @param onRepeat Callback for each repeat while held down
+ * @param onPopupClick Callback for the popup key when the button is swiped up and released
  * @param modifier Modifier to apply
  */
 @Composable
 private fun ExtraKeyButton(
     config: ExtraKeyConfig,
     isActive: Boolean,
+    allCaps: Boolean,
     onClick: () -> Unit,
-    onLongPressRepeat: () -> Unit,
+    onRepeat: () -> Unit,
+    onPopupClick: (ExtraKeyConfig) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val contentColor = if (isActive) {
@@ -212,100 +241,164 @@ private fun ExtraKeyButton(
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
-
-    val displayFontSize = if (config.key in setOf("UP", "DOWN", "LEFT", "RIGHT")) 18.sp else 11.sp
-
-    if (config.isRepetitive && !config.isModifier) {
-        LongPressRepeatButton(
-            onClick = onClick,
-            onLongPressRepeat = onLongPressRepeat,
-            modifier = modifier.height(36.dp),
-            contentColor = contentColor
-        ) {
-            Text(
-                text = config.display,
-                fontSize = displayFontSize,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1
-            )
-        }
-    } else {
-        TextButton(
-            onClick = onClick,
-            modifier = modifier.height(36.dp),
-            colors = ButtonDefaults.textButtonColors(
-                contentColor = contentColor
-            ),
-            shape = MaterialTheme.shapes.small
-        ) {
-            Text(
-                text = config.display,
-                fontSize = displayFontSize,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1
-            )
-        }
-    }
-}
-
-/**
- * A text-style button that triggers [onLongPressRepeat] at regular intervals while held down.
- *
- * A tap fires [onClick] once. Holding past the platform long-press timeout starts
- * repeating [onLongPressRepeat] every [REPEAT_DELAY] until the finger is released.
- * Uses a single [androidx.compose.foundation.combinedClickable] detector so taps are
- * not swallowed by competing gesture handlers. Ripple is drawn via [LocalIndication]
- * and the text keeps the flat "TextButton" look through a transparent [Surface].
- *
- * @param onClick Callback for a single tap
- * @param onLongPressRepeat Callback for each repeat tick while held down
- * @param modifier Modifier to apply
- * @param contentColor Text/icon color
- * @param content Button content
- */
-@Composable
-private fun LongPressRepeatButton(
-    onClick: () -> Unit,
-    onLongPressRepeat: () -> Unit,
-    modifier: Modifier = Modifier,
-    contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    content: @Composable () -> Unit
-) {
+    val shape = MaterialTheme.shapes.small
+    val density = LocalDensity.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val latestRepeat by rememberUpdatedState(onLongPressRepeat)
-    val latestClick by rememberUpdatedState(onClick)
-    var isRepeating by remember { mutableStateOf(false) }
+    val touchSlopPx = LocalViewConfiguration.current.touchSlop
 
-    LaunchedEffect(isRepeating, isPressed) {
-        if (isRepeating && isPressed) {
-            while (isPressed) {
-                latestRepeat()
+    // Popup state: `shownPopup` is non-null while the popup key is previewed above the button,
+    // which also suspends the auto repeat.
+    val popupConfig = config.popup
+    var shownPopup by remember { mutableStateOf<ExtraKeyConfig?>(null) }
+    var isRepeating by remember { mutableStateOf(false) }
+    var anchor by remember { mutableStateOf<Rect?>(null) }
+
+    val latestOnClick by rememberUpdatedState(onClick)
+    val latestOnRepeat by rememberUpdatedState(onRepeat)
+    val latestOnPopupClick by rememberUpdatedState(onPopupClick)
+
+    LaunchedEffect(isRepeating, isPressed, shownPopup) {
+        if (isRepeating && isPressed && shownPopup == null) {
+            while (isPressed && shownPopup == null) {
+                latestOnRepeat()
                 delay(REPEAT_DELAY)
             }
             isRepeating = false
         }
     }
 
+    // Swipe up on a key with a popup to preview it, swipe back down to cancel. The movement is
+    // consumed so `combinedClickable` cancels both the tap and the long press, leaving this
+    // detector as the only resolver of the press; this mirrors the touch handling of the
+    // classic ExtraKeysView.
+    val popupGesture = if (popupConfig == null) {
+        Modifier
+    } else {
+        Modifier.pointerInput(popupConfig) {
+            awaitEachGesture {
+                val pointerId = awaitFirstDown(requireUnconsumed = false).id
+                var offsetY = 0f
+                var intercepted = false
+                var showing = false
+                while (true) {
+                    val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId } ?: break
+                    if (change.pressed) {
+                        offsetY += change.positionChange().y
+                        if (!showing && offsetY <= -touchSlopPx) {
+                            showing = true
+                            intercepted = true
+                            isRepeating = false
+                            shownPopup = popupConfig
+                            change.consume()
+                        } else if (showing && offsetY >= 0f) {
+                            showing = false
+                            intercepted = true
+                            shownPopup = null
+                            change.consume()
+                        }
+                    }
+                    if (!change.pressed) {
+                        if (intercepted) {
+                            if (showing) latestOnPopupClick(shownPopup ?: popupConfig)
+                            else latestOnClick()
+                        }
+                        shownPopup = null
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    val anchorModifier = if (popupConfig == null) {
+        Modifier
+    } else {
+        Modifier.onGloballyPositioned { coordinates ->
+            val position = coordinates.positionInWindow()
+            anchor = Rect(
+                offset = position,
+                size = Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())
+            )
+        }
+    }
+
+    val buttonModifier = modifier
+        .height(36.dp)
+        .clip(shape)
+        .then(anchorModifier)
+        .then(popupGesture)
+        .combinedClickable(
+            interactionSource = interactionSource,
+            indication = LocalIndication.current,
+            onLongClick = if (config.isRepetitive && !config.isModifier) {
+                { isRepeating = true }
+            } else {
+                null
+            },
+            onClick = { latestOnClick() }
+        )
+
     Surface(
-        modifier = modifier,
+        modifier = buttonModifier,
         color = Color.Transparent,
         contentColor = contentColor,
-        shape = MaterialTheme.shapes.small
+        shape = shape
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(MaterialTheme.shapes.small)
-                .combinedClickable(
-                    onClick = { latestClick() },
-                    onLongClick = { isRepeating = true },
-                    interactionSource = interactionSource,
-                    indication = LocalIndication.current
-                ),
-            contentAlignment = Alignment.Center
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                text = buttonLabel(config, allCaps),
+                fontSize = if (config.key in ARROW_KEYS) 18.sp else 11.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
+    }
+
+    // Popup key preview, shown right above the button while it is swiped up.
+    val popup = shownPopup
+    val popupAnchor = anchor
+    if (popup != null && popupAnchor != null) {
+        Popup(
+            alignment = Alignment.TopStart,
+            offset = IntOffset(
+                popupAnchor.left.toInt(),
+                (popupAnchor.top - popupAnchor.height).toInt()
+            ),
+            properties = PopupProperties(focusable = false)
         ) {
-            content()
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = shape
+            ) {
+                Box(
+                    modifier = Modifier.size(
+                        width = with(density) { popupAnchor.width.toDp() },
+                        height = with(density) { popupAnchor.height.toDp() }
+                    ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = buttonLabel(popup, allCaps),
+                        fontSize = if (popup.key in ARROW_KEYS) 18.sp else 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                }
+            }
         }
     }
 }
+
+/**
+ * The label shown on a button, honouring the {@code extra-keys-text-all-caps} property.
+ *
+ * @param config The key configuration
+ * @param allCaps Whether the label is uppercased
+ * @return The text to render
+ */
+private fun buttonLabel(config: ExtraKeyConfig, allCaps: Boolean): String =
+    if (allCaps) config.display.uppercase() else config.display

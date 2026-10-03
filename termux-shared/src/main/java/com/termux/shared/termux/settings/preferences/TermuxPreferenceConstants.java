@@ -1,7 +1,7 @@
 package com.termux.shared.termux.settings.preferences;
 
 /*
- * Version: v0.16.0
+ * Version: v0.18.0
  *
  * Changelog
  *
@@ -69,6 +69,15 @@ package com.termux.shared.termux.settings.preferences;
  * - 0.16.0 (2022-06-11)
  *      - Added following to `TERMUX_APP`:
  *          `KEY_APP_SHELL_NUMBER_SINCE_BOOT` and `KEY_TERMINAL_SESSION_NUMBER_SINCE_BOOT`.
+ *
+ * - 0.17.0 (2026-09-23)
+ *      - Added following to `TERMUX_APP`:
+ *          `KEY_FORCE_60HZ` and `DEFAULT_VALUE_FORCE_60HZ`.
+ *
+ * - 0.18.0 (2026-09-23)
+ *      - Added following to `TERMUX_APP`:
+ *          `KEY_HARDWARE_DEFAULTS_SEEDED`, `KEY_SEEDED_TERMINAL_TRANSCRIPT_ROWS` and
+ *          `KEY_SEEDED_TERMINAL_CURSOR_BLINK_RATE` (with their `DEFAULT_VALUE_*` constants).
  */
 
 import com.termux.shared.shell.command.ExecutionCommand;
@@ -132,6 +141,22 @@ public final class TermuxPreferenceConstants {
 
 
         /**
+         * Defines the identifier of the terminal font. The empty string selects the default
+         * monospace font, {@code "fonts/<name>.ttf"} selects a font bundled in the app assets,
+         * and {@code "custom"} selects {@code ~/.termux/font.ttf} (custom font).
+         */
+        public static final String KEY_TERMINAL_FONT = "terminal_font";
+        public static final String DEFAULT_VALUE_TERMINAL_FONT = "";
+
+
+        /**
+         * Defines the key for whether OpenType ligature shaping is enabled in the terminal renderer.
+         */
+        public static final String KEY_TERMINAL_FONT_LIGATURES = "terminal_font_ligatures";
+        public static final boolean DEFAULT_VALUE_TERMINAL_FONT_LIGATURES = true;
+
+
+        /**
          * Defines the key for current termux terminal session.
          */
         public static final String KEY_CURRENT_SESSION = "current_session";
@@ -141,6 +166,65 @@ public final class TermuxPreferenceConstants {
          * Defines the key for current log level.
          */
         public static final String KEY_LOG_LEVEL = "log_level";
+
+
+        /**
+         * Defines the key for whether to use a custom terminal color scheme loaded from the
+         * {@code colors.properties} file (Termux styling format, supports 24-bit colors).
+         */
+        public static final String KEY_USE_CUSTOM_COLOR_SCHEME = "use_custom_color_scheme";
+        public static final boolean DEFAULT_VALUE_USE_CUSTOM_COLOR_SCHEME = false;
+
+
+        /**
+         * Defines the key for whether the experimental native Compose Canvas terminal renderer
+         * is enabled. When disabled (default) the legacy {@code TerminalView} is used.
+         */
+        public static final String KEY_NATIVE_COMPOSE_RENDERER = "native_compose_renderer";
+        public static final boolean DEFAULT_VALUE_NATIVE_COMPOSE_RENDERER = false;
+
+
+        /**
+         * Defines the key for whether OSC 8 hyperlinks (underlined cells that open on tap)
+         * are enabled. Default on; acts as an experimental kill-switch.
+         */
+        public static final String KEY_TERMINAL_HYPERLINKS = "terminal_hyperlinks";
+        public static final boolean DEFAULT_VALUE_TERMINAL_HYPERLINKS = true;
+        public static final String KEY_TERMINAL_IMAGES = "terminal_images";
+        public static final boolean DEFAULT_VALUE_TERMINAL_IMAGES = true;
+
+
+        /**
+         * Defines the key for whether the display is locked to 60 Hz (battery saving)
+         * instead of being switched to the maximum supported refresh rate at the
+         * current resolution.
+         */
+        public static final String KEY_FORCE_60HZ = "force_60hz";
+        public static final boolean DEFAULT_VALUE_FORCE_60HZ = false;
+
+
+        /**
+         * Defines the key marking that device-tier defaults were already evaluated for this
+         * install by the hardware defaults seeder (written once, fresh and existing installs).
+         */
+        public static final String KEY_HARDWARE_DEFAULTS_SEEDED = "hardware_defaults_seeded";
+        public static final boolean DEFAULT_VALUE_HARDWARE_DEFAULTS_SEEDED = false;
+
+        /**
+         * Defines the seeded fallback default for the {@code terminal-transcript-rows}
+         * property, used when the key is absent from {@code termux.properties}. The value
+         * {@code -1} means "not seeded" (existing installs keep the compiled-in default).
+         */
+        public static final String KEY_SEEDED_TERMINAL_TRANSCRIPT_ROWS = "seeded_terminal_transcript_rows";
+        public static final int DEFAULT_VALUE_SEEDED_TERMINAL_TRANSCRIPT_ROWS = -1;
+
+        /**
+         * Defines the seeded fallback default for the {@code terminal-cursor-blink-rate}
+         * property (milliseconds; {@code 0} disables blinking), used when the key is absent
+         * from {@code termux.properties}. The value {@code -1} means "not seeded".
+         */
+        public static final String KEY_SEEDED_TERMINAL_CURSOR_BLINK_RATE = "seeded_terminal_cursor_blink_rate";
+        public static final int DEFAULT_VALUE_SEEDED_TERMINAL_CURSOR_BLINK_RATE = -1;
 
 
         /**
@@ -259,20 +343,6 @@ public final class TermuxPreferenceConstants {
          */
         public static final String KEY_TERMINAL_VIEW_KEY_LOGGING_ENABLED = "terminal_view_key_logging_enabled";
         public static final boolean DEFAULT_VALUE_TERMINAL_VIEW_KEY_LOGGING_ENABLED = false;
-
-    }
-
-
-
-    /**
-     * Terminal:Styling app constants.
-     */
-    public static final class TERMUX_STYLING_APP {
-
-        /**
-         * Defines the key for current log level.
-         */
-        public static final String KEY_LOG_LEVEL = "log_level";
 
     }
 

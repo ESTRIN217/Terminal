@@ -62,4 +62,51 @@ public class TextStyleTest extends TestCase {
 		assertTrue((TextStyle.decodeEffect(encoded) & TextStyle.CHARACTER_ATTRIBUTE_PROTECTED) != 0);
 	}
 
+	/** Palette with recognizable values at the indices the tests below rely on. */
+	private static int[] makePalette() {
+		int[] palette = new int[TextStyle.NUM_INDEXED_COLORS];
+		for (int i = 0; i < palette.length; i++) palette[i] = 0xFF000000 | (i << 16);
+		palette[TextStyle.COLOR_INDEX_BACKGROUND] = 0xFF112233;
+		palette[TextStyle.COLOR_INDEX_FOREGROUND] = 0xFF445566;
+		palette[1] = 0xFF0000FF; // blue
+		palette[7] = 0xFFFFFFFF; // white
+		palette[9] = 0xFFAAAAAA; // bright variant of index 1
+		return palette;
+	}
+
+	/** Default cell → the palette background (the color the frame/view fills with). */
+	public void testEffectiveBackgroundDefaultCell() {
+		int[] palette = makePalette();
+		long style = TextStyle.encode(TextStyle.COLOR_INDEX_FOREGROUND, TextStyle.COLOR_INDEX_BACKGROUND, 0);
+		assertEquals(0xFF112233, TextStyle.effectiveBackgroundColor(style, palette, false));
+	}
+
+	/** Indexed backgrounds resolve through the palette; 24-bit backgrounds pass through. */
+	public void testEffectiveBackgroundIndexedAndTruecolor() {
+		int[] palette = makePalette();
+		long style = TextStyle.encode(TextStyle.COLOR_INDEX_FOREGROUND, 1, 0);
+		assertEquals(0xFF0000FF, TextStyle.effectiveBackgroundColor(style, palette, false));
+		style = TextStyle.encode(TextStyle.COLOR_INDEX_FOREGROUND, 0xFFABCDEF, 0);
+		assertEquals(0xFFABCDEF, TextStyle.effectiveBackgroundColor(style, palette, false));
+	}
+
+	/** Inverse cell or reverse-video flag swap bg↔fg; both set swap twice (no change). */
+	public void testEffectiveBackgroundInvertsWithInverseOrReverse() {
+		int[] palette = makePalette();
+		long style = TextStyle.encode(7, 1, TextStyle.CHARACTER_ATTRIBUTE_INVERSE);
+		assertEquals(0xFFFFFFFF, TextStyle.effectiveBackgroundColor(style, palette, false));
+		style = TextStyle.encode(7, 1, 0);
+		assertEquals(0xFFFFFFFF, TextStyle.effectiveBackgroundColor(style, palette, true));
+		style = TextStyle.encode(7, 1, TextStyle.CHARACTER_ATTRIBUTE_INVERSE);
+		assertEquals(0xFF0000FF, TextStyle.effectiveBackgroundColor(style, palette, true));
+	}
+
+	/** Bold foregrounds brighten (0–7 → +8) before a reverse-video swap, like drawTextRun. */
+	public void testEffectiveBackgroundBoldBrightWhenInverted() {
+		int[] palette = makePalette();
+		long style = TextStyle.encode(1, 7,
+				TextStyle.CHARACTER_ATTRIBUTE_BOLD | TextStyle.CHARACTER_ATTRIBUTE_INVERSE);
+		assertEquals(0xFFAAAAAA, TextStyle.effectiveBackgroundColor(style, palette, false));
+	}
+
 }

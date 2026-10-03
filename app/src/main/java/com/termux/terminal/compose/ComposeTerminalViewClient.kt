@@ -21,7 +21,8 @@ import com.termux.view.TerminalViewClient
 class ComposeTerminalViewClient(
     private val mViewModel: TermuxViewModel,
     private val mProperties: TermuxAppSharedProperties,
-    private val mOnRemoveSession: (TerminalSession) -> Unit
+    private val mOnRemoveSession: (TerminalSession) -> Unit,
+    private val mOnShowMoreMenu: () -> Unit
 ) : TerminalViewClient {
 
     companion object {
@@ -48,7 +49,15 @@ class ComposeTerminalViewClient(
         showSoftKeyboard()
     }
 
+    /** Whether the last BACK key-down consumed a native-pane selection dismiss. */
+    private var mSelectionBackKeyUp = false
+
     override fun shouldBackButtonBeMappedToEscape(): Boolean {
+        // While the native pane has a text selection, force the escape-mapping branch in
+        // TerminalView.onKeyPreIme so BACK reaches onKeyDown, which dismisses the selection
+        // and consumes the event without writing ESC (legacy onKeyPreIme checks
+        // isSelectingText() on the view itself, which is always false for the hidden host).
+        if (TerminalViewRegistry.isActivePaneSelecting) return true
         return mProperties.isBackKeyTheEscapeKey()
     }
 
@@ -72,6 +81,13 @@ class ComposeTerminalViewClient(
             Logger.logDebug(LOG_TAG, "Ignoring fingerprint sensor key event: " + e)
             return true
         }
+        if (keyCode == KeyEvent.KEYCODE_BACK && TerminalViewRegistry.isActivePaneSelecting) {
+            // Legacy TerminalView.onKeyDown stops an active text selection on any key down
+            // before the escape branch; consume BACK so ESC is never written while selecting.
+            TerminalViewRegistry.dismissActivePaneSelection()
+            mSelectionBackKeyUp = true
+            return true
+        }
         val s = session ?: return handleVirtualKeys(keyCode, e, true)
         if (keyCode == KeyEvent.KEYCODE_ENTER && !s.isRunning()) {
             // Enter on a finished session removes it, instead of writing to the
@@ -83,12 +99,23 @@ class ComposeTerminalViewClient(
     }
 
     override fun onKeyUp(keyCode: Int, e: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK && mSelectionBackKeyUp) {
+            // Pair for the selection-dismiss key-down: consume the UP too so it does not
+            // fall through to the activity as a real back press.
+            mSelectionBackKeyUp = false
+            return true
+        }
         return handleVirtualKeys(keyCode, e, false)
     }
 
     override fun onLongPress(event: MotionEvent?): Boolean {
         // Let TerminalView start its default text selection mode
         return false
+    }
+
+    override fun onShowMoreMenu() {
+        // Legacy selection-toolbar MORE / mouse right-click: open the Compose more-menu sheet.
+        mOnShowMoreMenu()
     }
 
     override fun readControlKey(): Boolean {
@@ -122,6 +149,12 @@ class ComposeTerminalViewClient(
     }
 
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession?): Boolean {
+        // Legacy TerminalView.sendTextToTerminal() calls stopTextSelectionMode() before
+        // writing IME text; soft-IME commitText never hits the OnKeyListener, so clear the
+        // native pane selection here (also reached for hardware-produced code points, where
+        // a second clear is a no-op) and re-show the cursor like setCursorBlinkState(true).
+        TerminalViewRegistry.dismissActivePaneSelection()
+        TerminalViewRegistry.fireNativeTextInput()
         val s = session ?: return false
         if (ctrlDown && codePoint == 106 /* Ctrl+j or \n */ && !s.isRunning()) {
             // Remove a finished session on Ctrl+j.
@@ -134,9 +167,21 @@ class ComposeTerminalViewClient(
     }
 
     override fun onEmulatorSet() {
-        TerminalViewRegistry.activeView?.setTerminalCursorBlinkerState(true, true)
-        // The view palette could not be applied when the emulator did not exist yet.
-        TerminalViewRegistry.reapplyPendingPalette()
+        // The emulator of any composed view (focused or secondary pane) may be created after
+        // layout; re-apply the pending palette and enable the cursor blinker on each of them.
+        // The blinker rate must be set first: setTerminalCursorBlinkerState() no-ops while the
+        // rate stays at the default 0, so the legacy path never blinked until now.
+        // Native canvas panes are excluded: their hidden view sits at rate 0 on purpose and the
+        // canvas above runs the blink phase itself (only while the pane is focused), so giving
+        // the view a rate would just add a second, invisible blinker to every native pane.
+        val blinkRate = mProperties.terminalCursorBlinkRate
+        TerminalViewRegistry.forComposedViews { view ->
+            if (!TerminalViewRegistry.canvasOwnsBlink(view)) {
+                view.setTerminalCursorBlinkerRate(blinkRate)
+                view.setTerminalCursorBlinkerState(true, true)
+            }
+            TerminalViewRegistry.reapplyPendingPalette(view)
+        }
     }
 
     override fun logError(tag: String?, message: String?) {

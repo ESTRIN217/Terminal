@@ -3,11 +3,14 @@ package com.termux.view;
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -21,7 +24,6 @@ import android.view.HapticFeedbackConstants;
 import android.view.InputDevice;
 import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
-import android.view.Menu;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -54,6 +56,13 @@ public final class TerminalView extends View {
     public TerminalEmulator mEmulator;
 
     public TerminalRenderer mRenderer;
+    /** Whether OSC 8 hyperlink tap-to-open and underlines are enabled. */
+    private boolean mHyperlinksEnabled = true;
+    /** Whether inline images (OSC 1337 / kitty) are painted. */
+    private boolean mImagesEnabled = true;
+
+    /** Whether OpenType ligature shaping is enabled in the terminal renderer. */
+    public boolean mEnableLigatures = true;
 
     public TerminalViewClient mClient;
 
@@ -159,6 +168,13 @@ public final class TerminalView extends View {
 
                 if (isSelectingText()) {
                     stopTextSelectionMode();
+                    return true;
+                }
+                // OSC 8: open the hyperlink under the finger before the normal tap path.
+                // Mouse-tracking apps keep the click (TUIs own button 1 themselves).
+                if (mHyperlinksEnabled && !mEmulator.isMouseTrackingActive()
+                    && openHyperlinkAt(event)) {
+                    requestFocus();
                     return true;
                 }
                 requestFocus();
@@ -498,11 +514,24 @@ public final class TerminalView extends View {
         if (mAccessibilityEnabled) setContentDescription(getText());
     }
 
-    /** This must be called by the hosting activity in {@link Activity#onContextMenuClosed(Menu)}
-     * when context menu for the {@link TerminalView} is started by
-     * {@link TextSelectionCursorController#ACTION_MORE} is closed. */
-    public void onContextMenuClosed(Menu menu) {
-        // Unset the stored text since it shouldn't be used anymore and should be cleared from memory
+    /**
+     * Request the "More" menu for this view (selection-toolbar MORE and mouse right-click).
+     * Forwards to {@link TerminalViewClient#onShowMoreMenu()} so the client can show its own
+     * menu surface; falls back to the legacy Android context menu when no client is set.
+     */
+    public void requestMoreMenu() {
+        if (mClient != null) {
+            mClient.onShowMoreMenu();
+        } else {
+            showContextMenu();
+        }
+    }
+
+    /**
+     * Clear the selected text stored before the "More" menu was shown.
+     * Called by the hosting activity when its more-menu surface is dismissed.
+     */
+    public void clearMoreMenuSelection() {
         unsetStoredSelectedText();
     }
 
@@ -512,14 +541,83 @@ public final class TerminalView extends View {
      * @param textSize the new font size, in density-independent pixels.
      */
     public void setTextSize(int textSize) {
-        mRenderer = new TerminalRenderer(textSize, mRenderer == null ? Typeface.MONOSPACE : mRenderer.mTypeface);
+        mRenderer = new TerminalRenderer(textSize, mRenderer == null ? Typeface.MONOSPACE : mRenderer.mTypeface, mEnableLigatures);
+        mRenderer.setHyperlinksEnabled(mHyperlinksEnabled);
+        mRenderer.setImagesEnabled(mImagesEnabled);
         updateSize();
     }
 
     public void setTypeface(Typeface newTypeface) {
-        mRenderer = new TerminalRenderer(mRenderer.mTextSize, newTypeface);
+        mRenderer = new TerminalRenderer(mRenderer.mTextSize, newTypeface, mEnableLigatures);
+        mRenderer.setHyperlinksEnabled(mHyperlinksEnabled);
+        mRenderer.setImagesEnabled(mImagesEnabled);
         updateSize();
         invalidate();
+    }
+
+    /**
+     * Sets whether OpenType ligature shaping is enabled in the terminal renderer.
+     *
+     * @param enableLigatures Whether fonts with ligature tables (e.g. Fira Code) may render
+     *                        ligatures, or whether every code point must be shaped on its own.
+     */
+    public void setLigaturesEnabled(boolean enableLigatures) {
+        if (mEnableLigatures == enableLigatures) return;
+        mEnableLigatures = enableLigatures;
+        mRenderer = new TerminalRenderer(mRenderer.mTextSize, mRenderer.mTypeface, mEnableLigatures);
+        mRenderer.setHyperlinksEnabled(mHyperlinksEnabled);
+        mRenderer.setImagesEnabled(mImagesEnabled);
+        updateSize();
+        invalidate();
+    }
+
+    /**
+     * Enable or disable OSC 8 hyperlink underlines and tap-to-open.
+     *
+     * @param enabled whether hyperlinks are interactive
+     */
+    public void setHyperlinksEnabled(boolean enabled) {
+        if (mHyperlinksEnabled == enabled) return;
+        mHyperlinksEnabled = enabled;
+        if (mEmulator != null) mEmulator.setHyperlinksEnabled(enabled);
+        if (mRenderer != null) {
+            mRenderer.setHyperlinksEnabled(enabled);
+            invalidate();
+        }
+    }
+
+    /**
+     * Enable or disable inline image painting (and the emulator's parse gate).
+     *
+     * @param enabled whether inline images are shown
+     */
+    public void setImagesEnabled(boolean enabled) {
+        if (mImagesEnabled == enabled) return;
+        mImagesEnabled = enabled;
+        if (mEmulator != null) mEmulator.setTerminalImagesEnabled(enabled);
+        if (mRenderer != null) {
+            mRenderer.setImagesEnabled(enabled);
+            invalidate();
+        }
+    }
+
+    /**
+     * Look up an OSC 8 hyperlink under the tap and open it with {@code ACTION_VIEW}.
+     *
+     * @param event the tap event (relative to this view)
+     * @return {@code true} when a hyperlink was opened (the tap is consumed)
+     */
+    private boolean openHyperlinkAt(MotionEvent event) {
+        if (mEmulator == null || mRenderer == null) return false;
+        int[] columnAndRow = getColumnAndRow(event, true);
+        String uri = mEmulator.getHyperlinkUriAt(columnAndRow[1], columnAndRow[0]);
+        if (!TerminalEmulator.isAllowedHyperlinkUri(uri)) return false;
+        try {
+            getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(uri)));
+            return true;
+        } catch (ActivityNotFoundException | SecurityException e) {
+            return false;
+        }
     }
 
     @Override
@@ -613,7 +711,7 @@ public final class TerminalView extends View {
             return true;
         } else if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
             if (event.isButtonPressed(MotionEvent.BUTTON_SECONDARY)) {
-                if (action == MotionEvent.ACTION_DOWN) showContextMenu();
+                if (action == MotionEvent.ACTION_DOWN) requestMoreMenu();
                 return true;
             } else if (event.isButtonPressed(MotionEvent.BUTTON_TERTIARY)) {
                 ClipboardManager clipboardManager = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
@@ -993,6 +1091,10 @@ public final class TerminalView extends View {
         if (mEmulator == null || (newColumns != mEmulator.mColumns || newRows != mEmulator.mRows)) {
             mTermSession.updateSize(newColumns, newRows, (int) mRenderer.getFontWidth(), mRenderer.getFontLineSpacing());
             mEmulator = mTermSession.getEmulator();
+            if (mEmulator != null) {
+                mEmulator.setTerminalImagesEnabled(mImagesEnabled);
+                mEmulator.setHyperlinksEnabled(mHyperlinksEnabled);
+            }
             mClient.onEmulatorSet();
 
             // Update mTerminalCursorBlinkerRunnable inner class mEmulator on session change

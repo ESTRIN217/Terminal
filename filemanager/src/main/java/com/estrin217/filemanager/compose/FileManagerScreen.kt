@@ -31,7 +31,9 @@ import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
@@ -83,6 +85,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import com.estrin217.filemanager.FileOperationsHelper
 import com.estrin217.filemanager.FileSortOption
 import com.estrin217.filemanager.R
@@ -109,7 +114,8 @@ fun FileManagerScreen(
     onEnsureStorageAccess: (File, () -> Unit) -> Unit,
     modifier: Modifier = Modifier,
     contentWindowInsets: WindowInsets = ScaffoldDefaults.contentWindowInsets,
-    onOpenInTerminal: ((File) -> Unit)? = null
+    onOpenInTerminal: ((File) -> Unit)? = null,
+    onEditFile: ((File) -> Unit)? = null
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -138,6 +144,20 @@ fun FileManagerScreen(
 
     fun executeKeyAction(action: FileManagerKeyAction): Boolean =
         FileManagerActions.execute(action, viewModel, onEnsureStorageAccess, onOpenFile)
+
+    fun copyPathsToClipboard(paths: List<File>) {
+        if (paths.isEmpty()) return
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(
+            ClipData.newPlainText("paths", paths.joinToString("\n") { it.absolutePath })
+        )
+        scope.launch {
+            snackbarHostState.showSnackbar(
+                if (paths.size == 1) context.getString(R.string.msg_path_copied)
+                else context.getString(R.string.msg_paths_copied, paths.size)
+            )
+        }
+    }
 
     fun hardwareKeyAction(key: Key): FileManagerKeyAction = when (key) {
         Key.DirectionUp -> FileManagerKeyAction.FOCUS_UP
@@ -265,8 +285,22 @@ fun FileManagerScreen(
                     IconButton(onClick = { viewModel.cutSelection() }, enabled = !state.busy) {
                         Icon(Icons.Default.ContentCut, contentDescription = stringResource(R.string.action_cut))
                     }
+                    IconButton(onClick = { copyPathsToClipboard(viewModel.selectedFiles()) }, enabled = !state.busy) {
+                        Icon(Icons.Default.FileCopy, contentDescription = stringResource(R.string.action_copy_path))
+                    }
                     IconButton(onClick = { onShareFiles(viewModel.selectedFiles()) }, enabled = !state.busy) {
                         Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
+                    }
+                    // Edit: single selected file only (one editor tab per invocation).
+                    if (onEditFile != null) {
+                        val editSelection = viewModel.selectedFiles()
+                        if (editSelection.size == 1 && !editSelection[0].isDirectory) {
+                            IconButton(onClick = {
+                                onEditFile(viewModel.resolveForOpen(editSelection[0]))
+                            }, enabled = !state.busy) {
+                                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.action_edit))
+                            }
+                        }
                     }
                     IconButton(onClick = {
                         dialogFile = null
@@ -385,6 +419,8 @@ fun FileManagerScreen(
                     val linkTarget = state.symlinkTargets[file.absolutePath]
                     val isLink = linkTarget != null
                     val isBroken = state.brokenLinks.contains(file.absolutePath)
+                    val isDir = remember(file.absolutePath) { file.isDirectory }
+                    val fileSize = remember(file.absolutePath) { file.length() }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -419,12 +455,12 @@ fun FileManagerScreen(
                         }
                         Icon(
                             if (isLink) Icons.Default.Link
-                            else if (file.isDirectory) Icons.Default.Folder
+                            else if (isDir) Icons.Default.Folder
                             else Icons.Default.Description,
                             contentDescription = null,
                             tint = if (isBroken) MaterialTheme.colorScheme.error
                             else if (isLink) MaterialTheme.colorScheme.tertiary
-                            else if (file.isDirectory) MaterialTheme.colorScheme.primary
+                            else if (isDir) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(28.dp)
                         )
@@ -437,10 +473,10 @@ fun FileManagerScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = if (isBroken) stringResource(R.string.filemanager_broken_link, linkTarget!!)
-                                else if (isLink) stringResource(R.string.filemanager_link_target, linkTarget!!)
-                                else if (file.isDirectory) stringResource(R.string.filemanager_folder)
-                                else FileOperationsHelper.formatSize(file.length()),
+                                text = if (isBroken) stringResource(R.string.filemanager_broken_link, linkTarget ?: file.absolutePath)
+                                else if (isLink) stringResource(R.string.filemanager_link_target, linkTarget)
+                                else if (isDir) stringResource(R.string.filemanager_folder)
+                                else FileOperationsHelper.formatSize(fileSize),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (isBroken) MaterialTheme.colorScheme.error
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -563,7 +599,7 @@ fun FileManagerScreen(
                         ?.let { FileOperationsHelper.formatSize(it) }
                         ?: stringResource(R.string.filemanager_calculating)
                 } else {
-                    FileOperationsHelper.formatSize(f.length())
+                    FileOperationsHelper.formatSize(remember(f.absolutePath) { f.length() })
                 }
                 AlertDialog(
                     onDismissRequest = { dialog = DialogKind.NONE },
@@ -602,9 +638,20 @@ fun FileManagerScreen(
                     dismissButton = {
                         Row {
                             TextButton(onClick = {
+                                copyPathsToClipboard(listOf(f))
+                                dialog = DialogKind.NONE
+                            }) { Text(stringResource(R.string.action_copy_path)) }
+                            TextButton(onClick = {
                                 nameInput = f.name
                                 dialog = DialogKind.RENAME
                             }) { Text(stringResource(R.string.action_rename)) }
+                            if (onEditFile != null && !f.isDirectory) {
+                                TextButton(onClick = {
+                                    val target = viewModel.resolveForOpen(f)
+                                    dialog = DialogKind.NONE
+                                    onEditFile(target)
+                                }) { Text(stringResource(R.string.action_edit)) }
+                            }
                             TextButton(onClick = { dialog = DialogKind.NONE }) { Text(stringResource(R.string.filemanager_close)) }
                         }
                     }
@@ -653,12 +700,13 @@ fun FileManagerScreen(
             )
         }
         DialogKind.BOOKMARKS -> {
+            val bookmarks = remember { viewModel.bookmarkDirs() }
             AlertDialog(
                 onDismissRequest = { dialog = DialogKind.NONE },
                 title = { Text(stringResource(R.string.action_bookmarks)) },
                 text = {
                     Column {
-                        viewModel.bookmarkDirs().forEach { (label, dir) ->
+                        bookmarks.forEach { (label, dir) ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()

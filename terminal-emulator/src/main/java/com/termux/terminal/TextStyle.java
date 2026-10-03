@@ -87,4 +87,42 @@ public final class TextStyle {
         return (int) (style & 0b11111111111);
     }
 
+    /**
+     * Resolve the effective background color of a cell, mirroring the legacy
+     * renderer's color logic in {@code TerminalRenderer.drawTextRun} (palette
+     * lookup, bold-bright foreground, reverse-video swap).
+     * <p>
+     * Used to blank a cell before painting an image over it (kitty graphics spec:
+     * transparent image regions must show the cell background, never the text
+     * glyph underneath).
+     * </p>
+     *
+     * @param style         the cell style ({@link TerminalRow#mStyle} encoding)
+     * @param paletteColors the emulator indexed colors ({@link #NUM_INDEXED_COLORS} entries)
+     * @param reverseVideo  whether the emulator is in reverse-video mode (or the cell is
+     *                      inside the selection / block cursor — the combined flag the
+     *                      legacy renderer passes to {@code drawTextRun})
+     * @return the resolved background color as ARGB (never a palette index)
+     */
+    public static int effectiveBackgroundColor(long style, int[] paletteColors, boolean reverseVideo) {
+        int foreColor = decodeForeColor(style);
+        int backColor = decodeBackColor(style);
+        final int effect = decodeEffect(style);
+        final boolean bold = (effect & (CHARACTER_ATTRIBUTE_BOLD | CHARACTER_ATTRIBUTE_BLINK)) != 0;
+
+        if ((foreColor & 0xff000000) != 0xff000000) {
+            // Let bold have bright colors if applicable (one of the first 8).
+            if (bold && foreColor >= 0 && foreColor < 8) foreColor += 8;
+            foreColor = paletteColors[foreColor];
+        }
+
+        if ((backColor & 0xff000000) != 0xff000000) {
+            backColor = paletteColors[backColor];
+        }
+
+        // Reverse video here if _one and only one_ of the reverse flags are set.
+        final boolean reverseVideoHere = reverseVideo ^ ((effect & CHARACTER_ATTRIBUTE_INVERSE) != 0);
+        return reverseVideoHere ? foreColor : backColor;
+    }
+
 }

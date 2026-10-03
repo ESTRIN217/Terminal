@@ -6,7 +6,6 @@
     <!ENTITY TERMUX_API_APP_NAME "Terminal:API">
     <!ENTITY TERMUX_BOOT_APP_NAME "Terminal:Boot">
     <!ENTITY TERMUX_FLOAT_APP_NAME "Terminal:Float">
-    <!ENTITY TERMUX_STYLING_APP_NAME "Terminal:Styling">
     <!ENTITY TERMUX_TASKER_APP_NAME "Terminal:Tasker">
     <!ENTITY TERMUX_WIDGET_APP_NAME "Terminal:Widget">
     ]>
@@ -56,6 +55,11 @@
     <string name="title_max_terminals_reached">Máximo de terminales alcanzado</string>
     <string name="msg_max_terminals_reached">Cierre las existentes antes de crear una nueva.</string>
 
+    <!-- Vista dividida de dos paneles -->
+    <string name="split_view">Vista dividida</string>
+    <string name="close_split">Cerrar división</string>
+    <string name="split_picker_title">Seleccionar sección secundaria</string>
+
     <string name="title_rename_session">Establecer nombre de sesión</string>
     <string name="action_rename_session_confirm">Establecer</string>
     <string name="title_create_named_session">Nueva sesión con nombre</string>
@@ -96,14 +100,12 @@
     <string name="action_toggle_keep_screen_on_desc">Para que nunca se apague la pantalla durante una sesión.</string>
     <string name="action_open_help">Ayuda</string>
     <string name="action_open_settings">Configuración</string>
+    <string name="action_more_menu">Más</string>
         <string name="action_open_file_manager">Archivos</string>
         <string name="title_activity_file_manager">Gestor de archivos</string>
     <string name="action_report_issue">Reportar problema</string>
     <string name="msg_generating_report">Generando reporte</string>
     <string name="msg_add_termux_debug_info">¿Agregar información de depuración de &TERMUX_APP_NAME; al reporte?</string>
-
-    <string name="error_styling_not_installed">La aplicación complemento &TERMUX_STYLING_APP_NAME; no está instalada.</string>
-    <string name="action_styling_install">Instalar</string>
 
 
 
@@ -312,6 +314,31 @@
     
     <string name="font_size">Tamaño de fuente</string>
     <string name="font_size_desc">Tamaño del texto de la terminal</string>
+    <string name="terminal_font">Fuente de la terminal</string>
+    <string name="terminal_font_desc">Fuente monospace usada por la terminal</string>
+    <string name="font_default">Predeterminada</string>
+    <string name="font_custom">Personalizada (~/.termux/font.ttf)</string>
+    <string name="font_fira_code">Fira Code</string>
+    <string name="font_cascadia_code">Cascadia Code</string>
+    <string name="font_jetbrains_mono">JetBrains Mono</string>
+    <string name="font_d2_coding">D2 Coding</string>
+    <string name="font_hack">Hack</string>
+    <string name="font_import">Importar fuente del almacenamiento…</string>
+    <string name="font_import_desc">Copia un fichero .ttf/.otf a ~/.termux/font.ttf</string>
+    <string name="font_import_ok">Fuente importada</string>
+    <string name="font_import_failed">No se pudo importar el fichero de fuente</string>
+    <string name="terminal_font_ligatures">Ligaduras</string>
+    <string name="terminal_font_ligatures_desc">Dibuja ligaduras de programación (fuentes como Fira Code)</string>
+    <string name="use_custom_color_scheme">Esquema de colores personalizado</string>
+    <string name="use_custom_color_scheme_desc">Aplica la paleta de ~/.termux/colors.properties (soporta colores 24-bit)</string>
+    <string name="native_compose_renderer">Renderizado Compose nativo [Experimental]</string>
+    <string name="native_compose_renderer_desc">Pinta la terminal con un prototipo Canvas de Compose. La vista clásica sigue como respaldo</string>
+    <string name="terminal_hyperlinks">Hipervínculos de terminal [Experimental]</string>
+    <string name="terminal_hyperlinks_desc">Subraya los enlaces OSC 8 y ábrelos al tocarlos</string>
+    <string name="terminal_images">Imágenes de terminal [Experimental]</string>
+    <string name="terminal_images_desc">Muestra imágenes en línea (OSC 1337 / kitty graphics)</string>
+    <string name="force_60hz">Forzar 60 Hz (batería)</string>
+    <string name="force_60hz_desc">Limita la pantalla a 60 Hz en lugar de la tasa de refresco máxima</string>
     <string name="toggle_keyboard">Alternar teclado</string>
 
     <!-- About Screen -->
@@ -353,6 +380,10 @@
     <string name="license_termux_constants">TermuxConstants y TermuxPropertyConstants</string>
     <string name="license_gplv2_classpath">GPLv2 con excepción Classpath</string>
     <string name="license_openjdk">OpenJDK y librerías de clase</string>
+    <string name="license_gplv2">GPLv2</string>
+    <string name="license_proot">Entorno de usuario aislado PRoot</string>
+    <string name="license_debian">Debian</string>
+    <string name="license_debian_rootfs">Paquetes del sistema rootfs Debian GNU/Linux</string>
     <string name="licenses_footer">Terminal se distribuye bajo GPLv3 e incluye componentes de terceros con sus respectivas licencias.</string>
 
     <!-- Settings Screen -->

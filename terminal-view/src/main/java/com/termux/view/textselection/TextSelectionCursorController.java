@@ -147,10 +147,10 @@ public class TextSelectionCursorController implements CursorController {
                         // selected text before MORE button was pressed since we are going to
                         // stop selection mode
                         mStoredSelectedText = getSelectedText();
-                        // The text selection needs to be stopped before showing context menu,
-                        // otherwise handles will show above popup
+                        // The text selection needs to be stopped before showing the more menu,
+                        // otherwise handles will show above the menu surface.
                         terminalView.stopTextSelectionMode();
-                        terminalView.showContextMenu();
+                        terminalView.requestMoreMenu();
                         break;
                 }
 

@@ -6,7 +6,6 @@
     <!ENTITY TERMUX_API_APP_NAME "Terminal:API">
     <!ENTITY TERMUX_BOOT_APP_NAME "Terminal:Boot">
     <!ENTITY TERMUX_FLOAT_APP_NAME "Terminal:Float">
-    <!ENTITY TERMUX_STYLING_APP_NAME "Terminal:Styling">
     <!ENTITY TERMUX_TASKER_APP_NAME "Terminal:Tasker">
     <!ENTITY TERMUX_WIDGET_APP_NAME "Terminal:Widget">
     <!ENTITY TERMUX_PREFIX_DIR_PATH "/data/data/com.estrin217.terminal/files/usr">

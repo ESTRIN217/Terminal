@@ -7,7 +7,7 @@
 - Build: `./gradlew assembleDebug`
 - Tests: `./gradlew test` (unit tests only; no instrumented tests in CI)
 - **No lint, detekt, ktlint, or formatter is configured.** The only CI quality gate is `./gradlew test`.
-- Gradle 9.7.0, AGP 9.3.1. Daemon enabled, parallel builds capped at 2 workers.
+- Gradle 9.7.1, AGP 9.4.1, Kotlin 2.4.20. Daemon enabled, parallel builds capped at 2 workers.
 - The file manager is its own module; its unit tests run via `./gradlew :filemanager:test`.
 
 ## Module Architecture
@@ -42,7 +42,9 @@ app  →  termux-shared  →  terminal-view  →  terminal-emulator
 
 ## Compose UI (app module only)
 
-- Compose stack: BOM (`2025.08.00`), Material3, ViewModel, coroutines, Ktor (HTTP), commons-compress (rootfs extraction).
+- Compose stack: BOM (`2026.09.00`), Material3, ViewModel, coroutines, Coil (imágenes remotas),
+  commons-compress (rootfs extraction). **No hay Ktor**: el HTTP del instalador es
+  `HttpURLConnection` a pelo.
 - Entry point: `TermuxComposeActivity.kt` — the main Compose activity.
 - `TerminalViewRegistry` holds the active `TerminalView` reference for Compose callbacks.
 - New Compose UI goes in `com.termux.terminal.compose`. New settings screens go in `com.termux.terminal.compose.settings`.
@@ -88,3 +90,20 @@ app  →  termux-shared  →  terminal-view  →  terminal-emulator
 - Package: `com.estrin217.terminal`. App name: "Terminal". Not affiliated with the Termux team.
 - README and docs are in Spanish (repository language). Code comments are in Spanish or English.
 - This fork bundles proot + Debian rootfs instead of the upstream Termux bootstrap packages.
+
+## Memoria 
+- Al empezar, lee `MEMORY.md` para conocer el estado del proyecto y las decisiones 
+tomadas. 
+- Al terminar una tarea, actualízalo: estado actual, decisiones importantes (con su 
+porqué) y errores a evitar. 
+- Mantenlo breve (máximo ~50 líneas): resume o elimina lo que ya no aporte. 
+- Si algo se convierte en una regla permanente, propón moverlo a `AGENTS.md` en lugar de 
+dejarlo en la memoria. 
+- No guardes nunca datos sensibles (claves, tokens, datos personales).
+
+## Limites
+- ✅ Siempre: actualizar `MEMORY.md` al terminar cada tarea.
+
+## Reglas 
+- Lee `docs/constitution.md` y la spec activa (`specs/NNN-*/`) antes de tocar código.
+

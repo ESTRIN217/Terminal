@@ -13,6 +13,7 @@ import android.os.Binder;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.PowerManager;
 
 import androidx.annotation.NonNull;
@@ -78,7 +79,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
     private final IBinder mBinder = new LocalBinder();
 
-    private final Handler mHandler = new Handler();
+    private final Handler mHandler = new Handler(Looper.getMainLooper());
 
 
     /** The basic implementation of the {@link TerminalSessionClient} interface to be used by {@link TerminalSession}
@@ -316,12 +317,12 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         Logger.logDebug(LOG_TAG, "Acquiring WakeLocks");
 
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-        mWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TermuxConstants.TERMUX_APP_NAME.toLowerCase() + ":service-wakelock");
+        mWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TermuxConstants.TERMUX_APP_NAME.toLowerCase(java.util.Locale.ROOT) + ":service-wakelock");
         mWakeLock.acquire();
 
         // http://tools.android.com/tech-docs/lint-in-studio-2-3#TOC-WifiManager-Leak
         WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        mWifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, TermuxConstants.TERMUX_APP_NAME.toLowerCase());
+        mWifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, TermuxConstants.TERMUX_APP_NAME.toLowerCase(java.util.Locale.ROOT));
         mWifiLock.acquire();
 
         if (!PermissionUtils.checkIfBatteryOptimizationsDisabled(this)) {
@@ -818,7 +819,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         // Set pending intent to be launched when notification is clicked
         Intent notificationIntent = TermuxComposeActivity.newInstance(this);
-        PendingIntent contentIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
+        PendingIntent contentIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE);
 
 
         // Set notification text
@@ -861,7 +862,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         // Set Exit button action
         Intent exitIntent = new Intent(this, TermuxService.class).setAction(TERMUX_SERVICE.ACTION_STOP_SERVICE);
-        builder.addAction(android.R.drawable.ic_delete, res.getString(R.string.notification_action_exit), PendingIntent.getService(this, 0, exitIntent, 0));
+        builder.addAction(android.R.drawable.ic_delete, res.getString(R.string.notification_action_exit), PendingIntent.getService(this, 0, exitIntent, PendingIntent.FLAG_IMMUTABLE));
 
 
         // Set Wakelock button actions
@@ -869,7 +870,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         Intent toggleWakeLockIntent = new Intent(this, TermuxService.class).setAction(newWakeAction);
         String actionTitle = res.getString(wakeLockHeld ? R.string.notification_action_wake_unlock : R.string.notification_action_wake_lock);
         int actionIcon = wakeLockHeld ? android.R.drawable.ic_lock_idle_lock : android.R.drawable.ic_lock_lock;
-        builder.addAction(actionIcon, actionTitle, PendingIntent.getService(this, 0, toggleWakeLockIntent, 0));
+        builder.addAction(actionIcon, actionTitle, PendingIntent.getService(this, 0, toggleWakeLockIntent, PendingIntent.FLAG_IMMUTABLE));
 
 
         return builder.build();

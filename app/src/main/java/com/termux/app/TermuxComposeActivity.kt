@@ -1,7 +1,6 @@
 package com.termux.app
 
 import android.app.AlertDialog
-import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -9,27 +8,25 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.content.res.Configuration
-import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.os.IBinder
-import android.view.ContextMenu
 import android.view.InputDevice
 import android.view.KeyEvent
-import android.view.Menu
-import android.view.MenuItem
-import android.view.View
 import android.view.WindowManager
 import android.widget.ListView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
@@ -59,6 +56,7 @@ import com.termux.shared.termux.data.TermuxUrlUtils
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties
 import com.termux.shared.termux.settings.properties.TermuxPropertyConstants
+import com.termux.shared.termux.shell.command.environment.ProotShellEnvironment
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession
 import com.termux.shared.termux.theme.TermuxThemeUtils
 import com.termux.shared.view.KeyboardUtils
@@ -67,6 +65,12 @@ import com.termux.terminal.compose.ComposeTerminalSessionClient
 import com.termux.terminal.compose.ComposeTerminalViewClient
 import com.termux.terminal.compose.DebianInstallerScreen
 import com.termux.terminal.compose.ExtraKeysConfig
+import com.termux.terminal.compose.TerminalColorSchemeLoader
+import com.termux.terminal.compose.TerminalFontCatalog
+import com.termux.terminal.compose.TerminalFontImporter
+import com.termux.terminal.compose.TerminalFontLoader
+import com.termux.terminal.compose.TerminalMoreAction
+import com.termux.terminal.compose.TerminalMoreMenuUiState
 import com.termux.terminal.compose.TerminalPalette
 import com.termux.terminal.compose.TermuxExpressiveTheme
 import com.termux.terminal.compose.TermuxMainScreen
@@ -75,6 +79,7 @@ import com.termux.terminal.compose.TermuxViewModel
 import com.termux.terminal.compose.TerminalViewRegistry
 import androidx.activity.enableEdgeToEdge
 import java.io.File
+import kotlin.math.abs
 
 /**
  * A terminal emulator activity using Jetpack Compose.
@@ -93,18 +98,8 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         private const val LOG_TAG = "TermuxComposeActivity"
         private const val MAX_SESSIONS = 8
 
-        private const val CONTEXT_MENU_SELECT_URL_ID = 0
-        private const val CONTEXT_MENU_SHARE_TRANSCRIPT_ID = 1
-        private const val CONTEXT_MENU_SHARE_SELECTED_TEXT = 10
-        private const val CONTEXT_MENU_AUTOFILL_USERNAME = 11
-        private const val CONTEXT_MENU_AUTOFILL_PASSWORD = 2
-        private const val CONTEXT_MENU_RESET_TERMINAL_ID = 3
-        private const val CONTEXT_MENU_KILL_PROCESS_ID = 4
-        private const val CONTEXT_MENU_STYLING_ID = 5
-        private const val CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON = 6
-        private const val CONTEXT_MENU_HELP_ID = 7
-        private const val CONTEXT_MENU_SETTINGS_ID = 8
-        private const val CONTEXT_MENU_REPORT_ID = 9
+        /** Refresh rate targeted by the "force 60 Hz" battery preference, in Hz. */
+        private const val FORCE_60HZ_TARGET_REFRESH_RATE = 60f
 
         /**
          * Build a launch intent for the Compose activity.
@@ -151,6 +146,24 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
     /** Compose state mirror of the keep-screen-on preference so the menu checkmark updates. */
     private var mIsKeepScreenOnEnabled by mutableStateOf(false)
 
+    /**
+     * Non-null while the terminal "More" bottom sheet is open. Built by [showMoreMenu] with
+     * the item visibility/labels (parity with the legacy `onCreateContextMenu` conditions).
+     */
+    private var mMoreMenuState by mutableStateOf<TerminalMoreMenuUiState?>(null)
+
+    /**
+     * Incremented on every resume. Reading it from composition makes the terminal palette
+     * recompute when returning from the Settings screen (custom color scheme toggle).
+     */
+    private var mPaletteRevision by mutableIntStateOf(0)
+
+    /**
+     * Incremented on every resume. Reading it from composition makes the terminal font and the
+     * ligature setting reload when returning from the Settings screen (font selector).
+     */
+    private var mFontRevision by mutableIntStateOf(0)
+
     private lateinit var mProperties: TermuxAppSharedProperties
     private lateinit var mPreferences: TermuxAppSharedPreferences
 
@@ -170,6 +183,22 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
     /** Receiver for style-reload, crash and storage-permission broadcasts while visible. */
     private var mTermuxActivityBroadcastReceiver: BroadcastReceiver? = null
 
+    /** System file picker for importing a font from shared storage into ~/.termux/font.ttf. */
+    private val mFontPickerLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            val error = TerminalFontImporter.importFont(this, uri)
+            if (error != null) {
+                Logger.logErrorExtended(LOG_TAG, "Font import failed\n" + error)
+                Toast.makeText(this, R.string.font_import_failed, Toast.LENGTH_LONG).show()
+            } else {
+                mPreferences.setTerminalFont(TerminalFontCatalog.CUSTOM_FONT_ID)
+                // Reload the Typeface in the active terminal via the composition.
+                mFontRevision++
+                Toast.makeText(this, R.string.font_import_ok, Toast.LENGTH_SHORT).show()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -178,11 +207,14 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
 
         mIsActivityRecreated = savedInstanceState?.getBoolean("activity_recreated", false) ?: false
 
+        // Delete ReportInfo serialized object files from cache older than 14 days
+        ReportActivity.deleteReportInfoFilesOlderThanXDays(this, 14, false)
+
         mProperties = TermuxAppSharedProperties.getProperties()
         mPreferences = TermuxAppSharedPreferences.build(this, true)
         mViewModel = ViewModelProvider(this)[TermuxViewModel::class.java]
         mTerminalSessionClient = ComposeTerminalSessionClient(mViewModel, ::removeSession)
-        mTerminalViewClient = ComposeTerminalViewClient(mViewModel, mProperties, ::removeSession)
+        mTerminalViewClient = ComposeTerminalViewClient(mViewModel, mProperties, ::removeSession, ::showMoreMenu)
 
         // Apply keep screen on flag if previously enabled via the more options menu
         mIsKeepScreenOnEnabled = mPreferences.shouldKeepScreenOn()
@@ -190,18 +222,36 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
 
+        // Switch to the maximum refresh rate at the current resolution (or 60 Hz if forced)
+        applyPreferredRefreshRate()
+
         // Load configurations from preferences into the ViewModel
         loadExtraKeysConfig()
         mViewModel.setExtraKeysVisible(mPreferences.shouldShowTerminalToolbar())
         mViewModel.setFontSize(mPreferences.getFontSize().toFloat())
+        mViewModel.setNativeRenderer(mPreferences.isNativeComposeRendererEnabled())
+        mViewModel.setHyperlinksEnabled(mPreferences.isTerminalHyperlinksEnabled())
+        mViewModel.setImagesEnabled(mPreferences.isTerminalImagesEnabled())
 
         val serviceIntent = Intent(this, TermuxService::class.java)
         startService(serviceIntent)
         bindService(serviceIntent, this, BIND_AUTO_CREATE)
 
         setContent {
-            TermuxExpressiveTheme {
-                val palette = TerminalPalette.fromTheme()
+            // Disk-backed font/palette loads are keyed on revision + pref values so unrelated
+            // recompositions (menu state, uiState) do not re-read assets or colors.properties;
+            // mFontRevision/mPaletteRevision still force a reload after Settings.
+            val fontId = mPreferences.getTerminalFont()
+            val terminalTypeface = remember(mFontRevision, fontId) {
+                TerminalFontLoader.resolve(this@TermuxComposeActivity, fontId)
+            }
+            TermuxExpressiveTheme(terminalTypeface = terminalTypeface) {
+                val useCustomColorScheme = mPreferences.shouldUseCustomColorScheme()
+                val customColorScheme = remember(mPaletteRevision, useCustomColorScheme) {
+                    if (useCustomColorScheme) TerminalColorSchemeLoader.load() else null
+                }
+                val palette = TerminalPalette.fromTheme(customColorScheme)
+                val enableLigatures = mPreferences.isTerminalFontLigaturesEnabled()
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -221,6 +271,8 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                         viewModel = mViewModel,
                         viewClient = mTerminalViewClient,
                         palette = palette,
+                        typeface = terminalTypeface,
+                        enableLigatures = enableLigatures,
                         isKeepScreenOnEnabled = mIsKeepScreenOnEnabled,
                         onSetKeepScreenOn = { enabled -> setKeepScreenOn(enabled) },
                         onOpenHelp = {
@@ -232,6 +284,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                         onCreateSession = { addNewSession(false, null) },
                         onRemoveSession = { session -> removeSession(session) },
                         onToggleKeyboard = { toggleKeyboard() },
+                        onPasteFromClipboard = { pasteFromClipboard() },
                         onOpenFileManager = {
                             if (mViewModel.uiState.value.sessions.size >= MAX_SESSIONS) {
                                 Toast.makeText(this, R.string.title_max_terminals_reached, Toast.LENGTH_SHORT).show()
@@ -240,12 +293,17 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                             }
                         },
                         onOpenInTerminal = { openTerminalIn(it) },
+                        onEditFile = { openFileInEditor(it) },
                         onOpenSettings = {
                             ActivityUtils.startActivity(
                                 this@TermuxComposeActivity,
                                 Intent(this@TermuxComposeActivity, SettingsComposeActivity::class.java)
                             )
-                        }
+                        },
+                        moreMenuState = mMoreMenuState,
+                        onShowMoreMenu = { showMoreMenu() },
+                        onMoreMenuAction = { action -> onMoreMenuAction(action) },
+                        onDismissMoreMenu = { dismissMoreMenu() }
                     )
                     }
                 }
@@ -272,6 +330,19 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         // Sync SharedPreferences → TermuxViewModel (bridge from Settings screen)
         mViewModel.setExtraKeysVisible(mPreferences.shouldShowTerminalToolbar())
         mViewModel.setFontSize(mPreferences.getFontSize().toFloat())
+        mViewModel.setNativeRenderer(mPreferences.isNativeComposeRendererEnabled())
+        mViewModel.setHyperlinksEnabled(mPreferences.isTerminalHyperlinksEnabled())
+        mViewModel.setImagesEnabled(mPreferences.isTerminalImagesEnabled())
+        // Recompute the terminal palette (custom color scheme may have changed in Settings).
+        mPaletteRevision++
+        // Reload the terminal font and ligature setting (may have changed in Settings).
+        mFontRevision++
+        // Re-apply the display refresh rate (the 60 Hz preference may have changed in Settings).
+        applyPreferredRefreshRate()
+
+        // Check if a crash happened on last run of the app or if a plugin crashed and show a
+        // notification with the crash details if it did
+        TermuxCrashUtils.notifyAppCrashFromCrashLogFile(this, LOG_TAG)
     }
 
     override fun onPause() {
@@ -689,6 +760,93 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
     }
 
     /**
+     * Open a file from the file manager in a Debian rootfs editor (nano, vim, …).
+     *
+     * The editor runs as `bash --login -c "<editor> '<guest>'; exec bash"` inside proot so the
+     * tab stays as an interactive shell after leaving the editor. Does **not** use
+     * RUN_COMMAND/`ACTION_SERVICE_EXECUTE` (those validate a host executable and disable the
+     * proot branch for plugin commands).
+     *
+     * @param hostPath Absolute host path of the file to edit
+     */
+    private fun openFileInEditor(hostPath: String) {
+        val service = mTermuxService ?: return
+
+        if (mViewModel.uiState.value.sessions.size >= MAX_SESSIONS) {
+            Toast.makeText(this, R.string.title_max_terminals_reached, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!DebianInstaller.isInstalled()) {
+            Logger.logError(LOG_TAG, "Edit in terminal: Debian rootfs not installed")
+            Toast.makeText(this, R.string.debian_installer_title, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val file = File(hostPath)
+        if (!file.isFile) {
+            Logger.logError(LOG_TAG, "Edit in terminal: not a file: $hostPath")
+            return
+        }
+        // hostPathToGuestPath falls back to /root for unmappable paths; open the wrong
+        // guest path silently, so reject before mapping.
+        if (!ProotShellEnvironment.isHostPathMappable(hostPath)) {
+            Logger.logError(LOG_TAG, "Edit in terminal: unmappable path: $hostPath")
+            Toast.makeText(
+                this, com.estrin217.filemanager.R.string.filemanager_unmappable_path,
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+
+        val editors = TermuxConstants.DEBIAN_EDITOR_CANDIDATES
+            .map { name -> File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/usr/bin/" + name) }
+            .filter { it.canExecute() }
+            .map { it.name }
+
+        when (editors.size) {
+            0 -> {
+                AlertDialog.Builder(this)
+                    .setMessage(com.estrin217.filemanager.R.string.filemanager_no_editor)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+            1 -> launchEditorSession(editors[0], file)
+            else -> {
+                AlertDialog.Builder(this)
+                    .setTitle(com.estrin217.filemanager.R.string.filemanager_choose_editor)
+                    .setItems(editors.toTypedArray()) { _, which ->
+                        launchEditorSession(editors[which], file)
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
+        }
+    }
+
+    /**
+     * Spawn a proot session that runs [editor] on [file] and drops back to a login shell.
+     *
+     * @param editor Editor binary name found under the rootfs `usr/bin`
+     * @param file Host file to open (must already be path-mapped and exist)
+     */
+    private fun launchEditorSession(editor: String, file: File) {
+        val service = mTermuxService ?: return
+        val guestPath = ProotShellEnvironment.hostPathToGuestPath(file.absolutePath)
+        val escapedGuest = guestPath.replace("'", "'\\''")
+        val script = "$editor '$escapedGuest'; exec bash"
+        val parentDir = file.parent ?: TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH
+
+        val termuxSession = service.createTermuxSession(
+            null, arrayOf("-c", script), null, parentDir, false, null
+        ) ?: return
+
+        mViewModel.addSession(
+            termuxSession.getTerminalSession(),
+            "$editor: ${file.name}"
+        )
+    }
+
+    /**
      * Remove a terminal session from the UI and the service.
      *
      * Delegates from the typed overload [removeSession] via
@@ -753,6 +911,51 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         }
     }
 
+    /**
+     * Apply the display mode with the highest refresh rate among the supported modes that
+     * match the current resolution, or the mode closest to [FORCE_60HZ_TARGET_REFRESH_RATE]
+     * when [TermuxAppSharedPreferences.shouldForce60Hz] is set. Keeps text sharp by never
+     * changing the panel resolution. Any failure falls back silently to the default mode.
+     */
+    @Suppress("DEPRECATION")
+    private fun applyPreferredRefreshRate() {
+        try {
+            val display = windowManager.defaultDisplay
+            val currentMode = display.mode
+            val sameResolutionModes = display.supportedModes.filter {
+                it.physicalWidth == currentMode.physicalWidth &&
+                    it.physicalHeight == currentMode.physicalHeight
+            }
+            if (sameResolutionModes.isEmpty()) return
+
+            val force60Hz = mPreferences.shouldForce60Hz()
+            val targetMode = if (force60Hz) {
+                sameResolutionModes.minByOrNull { abs(it.refreshRate - FORCE_60HZ_TARGET_REFRESH_RATE) }
+            } else {
+                sameResolutionModes.maxByOrNull { it.refreshRate }
+            } ?: return
+
+            val shouldApply = if (force60Hz) {
+                targetMode.refreshRate < currentMode.refreshRate
+            } else {
+                targetMode.refreshRate > currentMode.refreshRate
+            }
+            if (!shouldApply) return
+
+            val attributes = window.attributes
+            attributes.preferredDisplayModeId = targetMode.modeId
+            attributes.preferredRefreshRate = targetMode.refreshRate
+            window.attributes = attributes
+            Logger.logDebug(
+                LOG_TAG,
+                "Applied display mode ${targetMode.modeId} at ${targetMode.refreshRate} Hz"
+            )
+        } catch (e: Exception) {
+            // Optional optimization: display mode selection must never crash startup.
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to apply preferred refresh rate", e)
+        }
+    }
+
     private fun pasteFromClipboard() {
         val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
         val clip = clipboard.primaryClip
@@ -776,10 +979,14 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             val extraKeysJson = mProperties.getInternalPropertyValue(
                 TermuxPropertyConstants.KEY_EXTRA_KEYS, true
             ) as? String
+            val extraKeysStyle = mProperties.getInternalPropertyValue(
+                TermuxPropertyConstants.KEY_EXTRA_KEYS_STYLE, true
+            ) as? String
             if (extraKeysJson != null) {
-                val config = ExtraKeysConfig.parse(extraKeysJson)
+                val config = ExtraKeysConfig.parse(extraKeysJson, extraKeysStyle ?: ExtraKeysConfig.DEFAULT_STYLE)
                 mViewModel.setExtraKeysConfig(config)
             }
+            mViewModel.setExtraKeysAllCaps(mProperties.shouldExtraKeysTextBeAllCaps())
         } catch (e: Exception) {
             Logger.logDebug(LOG_TAG, "Failed to load extra keys config: ${e.message}")
         }
@@ -847,6 +1054,9 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             loadExtraKeysConfig()
             mViewModel.setExtraKeysVisible(mPreferences.shouldShowTerminalToolbar())
             mViewModel.setFontSize(mPreferences.getFontSize().toFloat())
+            // Reload the terminal font and ligature setting (the in-app font selector or an
+            // external ~/.termux/font.ttf may have changed).
+            mFontRevision++
         }
 
         FileReceiverActivity.updateFileReceiverActivityComponentsState(this)
@@ -885,6 +1095,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
         Logger.logVerbose(LOG_TAG, "onActivityResult: requestCode: $requestCode")
         if (requestCode == PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION) {
@@ -892,7 +1103,9 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         }
     }
 
+    @Deprecated("Deprecated in Java")
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        @Suppress("DEPRECATION")
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         Logger.logVerbose(LOG_TAG, "onRequestPermissionsResult: requestCode: $requestCode")
         if (requestCode == PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION) {
@@ -900,96 +1113,75 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         }
     }
 
-    /** Build the "More" context menu of the text selection toolbar. */
-    override fun onCreateContextMenu(menu: ContextMenu, v: View, menuInfo: ContextMenu.ContextMenuInfo?) {
-        val currentSession = getCurrentSession()
-        if (currentSession == null) return
+    /**
+     * Open the terminal "More" bottom sheet.
+     *
+     * Computes the item visibility/labels once (parity with the conditions previously built
+     * in `onCreateContextMenu`): stored selection text, autofill availability, kill-process
+     * label/enabled for the active session.
+     */
+    private fun showMoreMenu() {
+        val currentSession = getCurrentSession() ?: return
 
         val terminalView = TerminalViewRegistry.activeView
         val autoFillEnabled = terminalView?.isAutoFillEnabled == true
+        // The Compose selection overlay stores its text on the registry (the hidden input
+        // view keeps no selection); fall back to the view field for the legacy selection.
+        val storedText = TerminalViewRegistry.storedSelectedText ?: terminalView?.storedSelectedText
 
-        menu.add(Menu.NONE, CONTEXT_MENU_SELECT_URL_ID, Menu.NONE, R.string.action_select_url)
-        menu.add(Menu.NONE, CONTEXT_MENU_SHARE_TRANSCRIPT_ID, Menu.NONE, R.string.action_share_transcript)
-        if (!DataUtils.isNullOrEmpty(terminalView?.storedSelectedText))
-            menu.add(Menu.NONE, CONTEXT_MENU_SHARE_SELECTED_TEXT, Menu.NONE, R.string.action_share_selected_text)
-        if (autoFillEnabled)
-            menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_USERNAME, Menu.NONE, R.string.action_autofill_username)
-        if (autoFillEnabled)
-            menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_PASSWORD, Menu.NONE, R.string.action_autofill_password)
-        menu.add(Menu.NONE, CONTEXT_MENU_RESET_TERMINAL_ID, Menu.NONE, R.string.action_reset_terminal)
-        menu.add(Menu.NONE, CONTEXT_MENU_KILL_PROCESS_ID, Menu.NONE,
-            getResources().getString(R.string.action_kill_process, currentSession.getPid()))
-            .setEnabled(currentSession.isRunning())
-        menu.add(Menu.NONE, CONTEXT_MENU_STYLING_ID, Menu.NONE, R.string.action_style_terminal)
-        menu.add(Menu.NONE, CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, Menu.NONE, R.string.action_toggle_keep_screen_on)
-            .setCheckable(true).setChecked(mPreferences.shouldKeepScreenOn())
-        menu.add(Menu.NONE, CONTEXT_MENU_HELP_ID, Menu.NONE, R.string.action_open_help)
-        menu.add(Menu.NONE, CONTEXT_MENU_SETTINGS_ID, Menu.NONE, R.string.action_open_settings)
-        menu.add(Menu.NONE, CONTEXT_MENU_REPORT_ID, Menu.NONE, R.string.action_report_issue)
+        mMoreMenuState = TerminalMoreMenuUiState(
+            showShareSelectedText = !DataUtils.isNullOrEmpty(storedText),
+            showAutofill = autoFillEnabled,
+            killProcessLabel = getString(R.string.action_kill_process, currentSession.getPid()),
+            killProcessEnabled = currentSession.isRunning()
+        )
     }
 
-    /** Handle items of the "More" context menu of the text selection toolbar. */
-    override fun onContextItemSelected(item: MenuItem): Boolean {
+    /**
+     * Dismiss the terminal "More" sheet and clear the stored selection text
+     * (parity with the legacy `onContextMenuClosed` cleanup).
+     *
+     * Note: callers that need the stored selection (share selected text) must capture it
+     * before invoking this.
+     */
+    private fun dismissMoreMenu() {
+        mMoreMenuState = null
+        TerminalViewRegistry.activeView?.clearMoreMenuSelection()
+        TerminalViewRegistry.setStoredSelectedText(null)
+    }
+
+    /**
+     * Dispatch a selected "More" menu action to the same handlers previously wired in
+     * `onContextItemSelected`.
+     *
+     * @param action The [TerminalMoreAction] chosen in the sheet
+     */
+    private fun onMoreMenuAction(action: TerminalMoreAction) {
         val session = getCurrentSession()
+        // Capture before dismiss: closing the sheet clears the stored selection text.
+        val selectedText = TerminalViewRegistry.storedSelectedText
+            ?: TerminalViewRegistry.activeView?.storedSelectedText
+        // Close first so dialogs/share intents are not stacked under the sheet.
+        dismissMoreMenu()
 
-        return when (item.itemId) {
-            CONTEXT_MENU_SELECT_URL_ID -> {
-                showUrlSelection()
-                true
-            }
-            CONTEXT_MENU_SHARE_TRANSCRIPT_ID -> {
-                shareSessionTranscript()
-                true
-            }
-            CONTEXT_MENU_SHARE_SELECTED_TEXT -> {
-                shareSelectedText()
-                true
-            }
-            CONTEXT_MENU_AUTOFILL_USERNAME -> {
+        when (action) {
+            TerminalMoreAction.SELECT_URL -> showUrlSelection()
+            TerminalMoreAction.SHARE_TRANSCRIPT -> shareSessionTranscript()
+            TerminalMoreAction.SHARE_SELECTED_TEXT -> shareSelectedText(selectedText)
+            TerminalMoreAction.AUTOFILL_USERNAME ->
                 TerminalViewRegistry.activeView?.requestAutoFillUsername()
-                true
-            }
-            CONTEXT_MENU_AUTOFILL_PASSWORD -> {
+            TerminalMoreAction.AUTOFILL_PASSWORD ->
                 TerminalViewRegistry.activeView?.requestAutoFillPassword()
-                true
-            }
-            CONTEXT_MENU_RESET_TERMINAL_ID -> {
-                onResetTerminalSession(session)
-                true
-            }
-            CONTEXT_MENU_KILL_PROCESS_ID -> {
-                showKillSessionDialog(session)
-                true
-            }
-            CONTEXT_MENU_STYLING_ID -> {
-                showStylingDialog()
-                true
-            }
-            CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON -> {
-                setKeepScreenOn(!mIsKeepScreenOnEnabled)
-                true
-            }
-            CONTEXT_MENU_HELP_ID -> {
+            TerminalMoreAction.RESET_TERMINAL -> onResetTerminalSession(session)
+            TerminalMoreAction.KILL_PROCESS -> showKillSessionDialog(session)
+            TerminalMoreAction.STYLE -> showTerminalFontDialog()
+            TerminalMoreAction.TOGGLE_KEEP_SCREEN_ON -> setKeepScreenOn(!mIsKeepScreenOnEnabled)
+            TerminalMoreAction.HELP ->
                 ActivityUtils.startActivity(this, Intent(this, HelpActivity::class.java))
-                true
-            }
-            CONTEXT_MENU_SETTINGS_ID -> {
+            TerminalMoreAction.SETTINGS ->
                 ActivityUtils.startActivity(this, Intent(this, SettingsComposeActivity::class.java))
-                true
-            }
-            CONTEXT_MENU_REPORT_ID -> {
-                reportIssueFromTranscript()
-                true
-            }
-            else -> super.onContextItemSelected(item)
+            TerminalMoreAction.REPORT -> reportIssueFromTranscript()
         }
-    }
-
-    override fun onContextMenuClosed(menu: Menu) {
-        super.onContextMenuClosed(menu)
-        // onContextMenuClosed() is triggered twice if back button is pressed to dismiss instead
-        // of tap for some reason
-        TerminalViewRegistry.activeView?.onContextMenuClosed(menu)
     }
 
     private fun showKillSessionDialog(session: TerminalSession?) {
@@ -998,11 +1190,11 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         AlertDialog.Builder(this)
             .setIcon(android.R.drawable.ic_dialog_alert)
             .setMessage(R.string.title_confirm_kill_process)
-            .setPositiveButton(android.R.string.yes) { dialog, _ ->
+            .setPositiveButton(getString(com.termux.shared.R.string.action_yes)) { dialog, _ ->
                 dialog.dismiss()
                 session.finishIfRunning()
             }
-            .setNegativeButton(android.R.string.no, null)
+            .setNegativeButton(getString(com.termux.shared.R.string.action_no), null)
             .show()
     }
 
@@ -1013,30 +1205,36 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         }
     }
 
-    private fun showStylingDialog() {
-        val stylingIntent = Intent().apply {
-            setClassName(
-                TermuxConstants.TERMUX_STYLING_PACKAGE_NAME,
-                TermuxConstants.TERMUX_STYLING_APP.TERMUX_STYLING_ACTIVITY_NAME
-            )
+    /** Show a dialog to pick the terminal font. Mirrors the font selector in Settings. */
+    private fun showTerminalFontDialog() {
+        val fontOptionIds = mutableListOf("")
+        val fontOptionLabels = mutableListOf(getString(R.string.font_default))
+        for (entry in TerminalFontCatalog.bundledFonts) {
+            fontOptionIds.add(entry.id)
+            fontOptionLabels.add(getString(entry.labelRes))
         }
-        try {
-            startActivity(stylingIntent)
-        } catch (e: ActivityNotFoundException) {
-            showStylingNotInstalledDialog()
-        } catch (e: IllegalArgumentException) {
-            showStylingNotInstalledDialog()
+        if (TermuxConstants.TERMUX_FONT_FILE.isFile) {
+            fontOptionIds.add(TerminalFontCatalog.CUSTOM_FONT_ID)
+            fontOptionLabels.add(getString(R.string.font_custom))
         }
-    }
+        val selectedIndex = fontOptionIds.indexOf(mPreferences.getTerminalFont()).coerceAtLeast(0)
 
-    private fun showStylingNotInstalledDialog() {
+        val selectedFont = arrayOf(fontOptionIds[selectedIndex])
         AlertDialog.Builder(this)
-            .setMessage(R.string.error_styling_not_installed)
-            .setPositiveButton(R.string.action_styling_install) { _, _ ->
-                ActivityUtils.startActivity(
-                    this,
-                    Intent(Intent.ACTION_VIEW, Uri.parse(TermuxConstants.TERMUX_STYLING_FDROID_PACKAGE_URL))
-                )
+            .setTitle(R.string.terminal_font)
+            .setSingleChoiceItems(fontOptionLabels.toTypedArray(), selectedIndex) { _, which ->
+                selectedFont[0] = fontOptionIds[which]
+            }
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val fontId = selectedFont[0]
+                if (fontId != mPreferences.getTerminalFont()) {
+                    mPreferences.setTerminalFont(fontId)
+                    // Reload the Typeface in the active terminal via the composition.
+                    mFontRevision++
+                }
+            }
+            .setNeutralButton(R.string.font_import) { _, _ ->
+                mFontPickerLauncher.launch(TerminalFontImporter.PICKER_MIME_TYPES)
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -1055,8 +1253,12 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             transcriptText, getString(R.string.title_share_transcript_with))
     }
 
-    private fun shareSelectedText() {
-        val selectedText = TerminalViewRegistry.activeView?.storedSelectedText
+    /**
+     * Share the text stored by the selection toolbar "More…" button.
+     *
+     * @param selectedText Text captured before the more menu dismissed, or null when empty
+     */
+    private fun shareSelectedText(selectedText: String?) {
         if (DataUtils.isNullOrEmpty(selectedText)) return
         ShareUtils.shareText(this, getString(R.string.title_share_selected_text),
             selectedText, getString(R.string.title_share_selected_text_with))

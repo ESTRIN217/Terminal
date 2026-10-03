@@ -12,9 +12,11 @@
     <string name="action_rename">Rename</string>
     <string name="action_delete">Delete</string>
     <string name="action_copy">Copy</string>
+    <string name="action_copy_path">Copy path</string>
     <string name="action_cut">Cut</string>
     <string name="action_paste">Paste</string>
     <string name="action_share">Share information</string>
+    <string name="action_edit">Edit</string>
     <string name="action_details">Details</string>
     <string name="action_select_all">Select all</string>
     <string name="action_undo">Undo</string>
@@ -26,6 +28,8 @@
     <!-- File Manager Messages -->
     <string name="msg_paste_success">Pasted %1$d item(s)</string>
     <string name="msg_error_rename">Failed to rename</string>
+    <string name="msg_path_copied">Path copied to clipboard</string>
+    <string name="msg_paths_copied">%1$d paths copied to clipboard</string>
 
     <!-- File Manager UI -->
     <string name="filemanager_more">More</string>
@@ -55,6 +59,9 @@
     <string name="filemanager_link_name">Link name</string>
     <string name="filemanager_target_path">Target path</string>
     <string name="filemanager_ok">OK</string>
+    <string name="filemanager_no_editor">No editor found in the Debian rootfs.\nInstall one with: apt install nano</string>
+    <string name="filemanager_choose_editor">Choose editor</string>
+    <string name="filemanager_unmappable_path">This path cannot be opened in the Debian terminal</string>
 
     <!-- File Details -->
     <string name="detail_name">Name</string>
