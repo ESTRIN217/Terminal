@@ -25,6 +25,11 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - El popup usa un `pointerInput` propio que **consume el `move`**: cancela tap y long-press de
   `combinedClickable`, así que no hay doble disparo y se conserva TalkBack. Alternativa si el offset
   se desfasara en dispositivo: overlay en la `Box` de `ExtraKeysBar` con `localBoundingBoxOf`.
+- **Las lecturas por fila externa de `TerminalBuffer` no lanzan**: `getHyperlinkAt`,
+  `getImageAt` y `getStyleAt` devuelven "nada" (`0` / `TextStyle.NORMAL`) fuera de
+  `[-mActiveTranscriptRows, mScreenRows-1]`; `externalToInternalRow` sigue lanzando porque las
+  escrituras sí consideran eso un error de programación. Motivo: un tap con coordenadas obsoletas
+  reventaba la app (crash `extRow=77, mScreenRows=66`).
 - `ExtraKeyConfig.isMacro` lo decide el config (`key` ausente + `macro` presente); antes se infería
   de `prefix.isNotEmpty()` y por eso `{macro: ...}` se escribía literal en el terminal.
 - El split de macros vive en `TerminalKeyHandler.parseMacro()` (función pura) para testearlo sin
@@ -43,6 +48,11 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   conserva toda la UI nueva en el caso de un solo pane. La **causa raíz sigue sin resolver**.
 
 ## Aprendizajes y errores a evitar
+- **Una fila de tap o long-press sale de píxeles y llega obsoleta**: `GestureDetector` confirma el
+  single tap ~300 ms después del `ACTION_UP` con las mismas coordenadas, así que si el panel se
+  encogió entre medias (animación del IME, split, rotación) la fila cae fuera de la rejilla. Antes
+  de tocar un accessor del buffer, validar contra `emulator.mRows` / `screen.activeTranscriptRows`
+  (`getColumnAndRow(event, true)` no clampa). Fuera de rejilla se **ignora** el tap, no se clampa.
 - **`BUILD SUCCESSFUL` no significa APK válido**: `optimizeReleaseResources` (AGP 9.4.1) falla en
   silencio y empaqueta el release sin manifest. Mitigado con
   `android.enableResourceOptimizations=false`. Antes de distribuir, comprobar `AndroidManifest.xml`

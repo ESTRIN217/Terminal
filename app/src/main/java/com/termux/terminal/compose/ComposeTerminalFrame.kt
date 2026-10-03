@@ -202,10 +202,17 @@ object ComposeTerminalFrame {
      * @param column The tapped column
      * @param row The tapped (external) row
      * @param columns Number of grid columns
+     * @param rows Number of screen rows ([TerminalEmulator.mRows])
      * @return The word (or single cell) selection, or null when the cell is outside the buffer
      */
     @JvmStatic
-    fun selectWord(screen: TerminalBuffer, column: Int, row: Int, columns: Int): TextSelection? {
+    fun selectWord(screen: TerminalBuffer, column: Int, row: Int, columns: Int, rows: Int): TextSelection? {
+        // The row comes from pixels and a long press resolves after the double-tap timeout, so it
+        // can sit outside the grid when the pane shrank in between (IME animation, pane split,
+        // rotation). The legacy path clamps such a row through getSelectedText() and ends up
+        // selecting nothing; returning null here keeps that outcome instead of leaving a phantom
+        // selection on a row that no longer exists.
+        if (row < -screen.activeTranscriptRows || row >= rows) return null
         val cell = screen.getSelectedText(column, row, column, row) ?: return null
         var x1 = column
         var x2 = column

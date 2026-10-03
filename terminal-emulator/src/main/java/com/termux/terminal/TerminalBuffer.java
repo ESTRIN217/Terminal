@@ -180,6 +180,24 @@ public final class TerminalBuffer {
         return (internalRow < 0) ? (mTotalRows + internalRow) : (internalRow % mTotalRows);
     }
 
+    /**
+     * Whether an external row still addresses a live line, that is
+     * {@code [-mActiveTranscriptRows, mScreenRows-1]}.
+     * <p>
+     * Rows derived from pixels (a tap, a drag) can fall outside that range when the grid changed
+     * between the event and the code reading it — the gesture detector confirms a single tap some
+     * 300ms after the ACTION_UP, reusing coordinates that an IME animation, a pane split or a
+     * rotation may have already invalidated. Reads must answer "nothing here"; only the write
+     * paths treat an out-of-range row as the programming error that
+     * {@link #externalToInternalRow(int)} throws on.
+     *
+     * @param externalRow a row in the external coordinate system.
+     * @return {@code true} when the row maps to a line of the screen or of the transcript.
+     */
+    private boolean isLiveExternalRow(int externalRow) {
+        return externalRow >= -mActiveTranscriptRows && externalRow < mScreenRows;
+    }
+
     public void setLineWrap(int row) {
         mLines[externalToInternalRow(row)].mLineWrap = true;
     }
@@ -480,7 +498,17 @@ public final class TerminalBuffer {
         allocateFullLineIfNecessary(externalToInternalRow(row)).setHyperlink(column, hyperlinkId);
     }
 
+    /**
+     * Style at a cell of the screen or of the transcript.
+     *
+     * @param externalRow external (transcript-aware) row
+     * @param column      screen column (0-based)
+     * @return the style, or {@link TextStyle#NORMAL} when the row is outside the grid. Unlike the
+     * other reads, a live row allocates its line if the buffer has not written it yet.
+     */
     public long getStyleAt(int externalRow, int column) {
+        // An out-of-grid row must not allocate the line it would map to.
+        if (!isLiveExternalRow(externalRow)) return TextStyle.NORMAL;
         return allocateFullLineIfNecessary(externalToInternalRow(externalRow)).getStyle(column);
     }
 
@@ -489,9 +517,11 @@ public final class TerminalBuffer {
      *
      * @param externalRow external (transcript-aware) row
      * @param column      screen column (0-based)
-     * @return the URI index, or {@code 0} when the cell is not a hyperlink
+     * @return the URI index, or {@code 0} when the cell is not a hyperlink or the row is outside
+     * the grid
      */
     public int getHyperlinkAt(int externalRow, int column) {
+        if (!isLiveExternalRow(externalRow)) return 0;
         TerminalRow row = mLines[externalToInternalRow(externalRow)];
         if (row == null || column < 0 || column >= mColumns) return 0;
         return row.getHyperlink(column);
@@ -515,9 +545,11 @@ public final class TerminalBuffer {
      *
      * @param externalRow external (transcript-aware) row
      * @param column      screen column (0-based)
-     * @return the image index, or {@code 0} when the cell has no image
+     * @return the image index, or {@code 0} when the cell has no image or the row is outside the
+     * grid
      */
     public int getImageAt(int externalRow, int column) {
+        if (!isLiveExternalRow(externalRow)) return 0;
         TerminalRow row = mLines[externalToInternalRow(externalRow)];
         if (row == null || column < 0 || column >= mColumns) return 0;
         return row.getImage(column);

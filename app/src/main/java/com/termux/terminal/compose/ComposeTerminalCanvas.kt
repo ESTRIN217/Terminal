@@ -626,7 +626,14 @@ internal fun ComposeTerminalCanvas(
                             // apps keep the click; selection is handled above.
                             if (hyperlinksEnabled && emulator != null) {
                                 val (linkCol, linkRow) = gridColumnAndRow(offset.x, offset.y)
-                                val uri = emulator.getHyperlinkUriAt(linkRow, linkCol)
+                                // Same stale-row race as TerminalView.openHyperlinkAt: onTap
+                                // fires after the double-tap timeout, so the row computed from the
+                                // touch can sit outside the grid if the pane shrank in between.
+                                // A row out of the grid opens nothing.
+                                val uri = if (
+                                    linkRow >= -emulator.screen.activeTranscriptRows &&
+                                    linkRow < emulator.mRows
+                                ) emulator.getHyperlinkUriAt(linkRow, linkCol) else null
                                 if (TerminalEmulator.isAllowedHyperlinkUri(uri)) {
                                     ShareUtils.openUrl(context, uri)
                                     return@detectTapGestures
@@ -657,7 +664,7 @@ internal fun ComposeTerminalCanvas(
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         val (column, row) = gridColumnAndRow(offset.x, offset.y)
                         state.selection =
-                            ComposeTerminalFrame.selectWord(emulator.screen, column, row, emulator.mColumns)
+                            ComposeTerminalFrame.selectWord(emulator.screen, column, row, emulator.mColumns, emulator.mRows)
                         state.selectionStartedAt = SystemClock.uptimeMillis()
                     }
                 )

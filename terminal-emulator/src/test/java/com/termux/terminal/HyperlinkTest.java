@@ -83,6 +83,28 @@ public class HyperlinkTest extends TerminalTestCase {
 		assertNull(mTerminal.getHyperlinkUriAt(0, 2));
 	}
 
+	/**
+	 * The row of a tap is derived from pixels, and the gesture detector confirms the single tap
+	 * ~300ms after the ACTION_UP reusing those (by then stale) coordinates: when the pane shrank
+	 * in between (IME animation, pane split, rotation) the row lands outside the grid. Reads must
+	 * answer "no link" instead of throwing out of externalToInternalRow()
+	 * (crash: extRow=77, mScreenRows=66, mActiveTranscriptRows=0).
+	 */
+	public void testRowOutsideGridHasNoHyperlink() {
+		withTerminalSized(20, 4);
+		enterString("\033]8;;" + URL + "\007");
+		enterString("ab");
+		enterString("\033]8;;\007");
+		assertEquals(URL, mTerminal.getHyperlinkUriAt(0, 0));
+
+		// The reported crash: eleven rows past the bottom of the screen.
+		assertNull(mTerminal.getHyperlinkUriAt(4 + 11, 0));
+		// One row past the bottom used to read a transcript line as if it were the screen.
+		assertNull(mTerminal.getHyperlinkUriAt(4, 0));
+		// And above the transcript, which a stale scroll offset can produce too.
+		assertNull(mTerminal.getHyperlinkUriAt(-1, 0));
+	}
+
 	public void testUnknownOscStillNotBroken() {
 		// Sanity: unknown OSC codes still finish without eating following text.
 		withTerminalSized(20, 4);

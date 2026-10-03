@@ -80,6 +80,21 @@ public class KittyGraphicsTest extends TerminalTestCase {
 		assertCursorAt(0, 0);
 	}
 
+	/**
+	 * Same stale-pixel-row race as {@link HyperlinkTest}: a row outside the grid must read as
+	 * "no image" instead of throwing out of externalToInternalRow().
+	 */
+	public void testImageLookupOutsideGridIsEmpty() {
+		withTerminalSized(20, 6);
+		enterString(kg("a=T,i=1,f=100,s=1,v=1,w=2,h=2", PNG_1x1_B64));
+		mOutput.getOutputAndClear();
+		assertEquals(1, mTerminal.getScreen().getImageAt(0, 0));
+
+		assertEquals(0, mTerminal.getScreen().getImageAt(6, 0));
+		assertEquals(0, mTerminal.getScreen().getImageAt(6 + 11, 0));
+		assertEquals(0, mTerminal.getScreen().getImageAt(-1, 0));
+	}
+
 	public void testTransmitOnlyDoesNotStamp() {
 		withTerminalSized(20, 6);
 		enterString(kg("a=t,i=7,f=100,s=1,v=1,w=2,h=2", PNG_1x1_B64));

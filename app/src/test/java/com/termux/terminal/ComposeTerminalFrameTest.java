@@ -364,15 +364,17 @@ public class ComposeTerminalFrameTest {
 
         // Whitespace cell is selected alone.
         ComposeTerminalFrame.TextSelection space =
-            ComposeTerminalFrame.selectWord(screen, 5, 0, 6);
+            ComposeTerminalFrame.selectWord(screen, 5, 0, 6, 6);
         Assert.assertEquals(5, space.getX1());
         Assert.assertEquals(5, space.getX2());
         // Non-space expands while neighbors read back non-empty; the trailing space
         // cells read back "" so the word stops at the used text.
         ComposeTerminalFrame.TextSelection word =
-            ComposeTerminalFrame.selectWord(screen, 1, 0, 6);
+            ComposeTerminalFrame.selectWord(screen, 1, 0, 6, 6);
         Assert.assertEquals(0, word.getX1());
         Assert.assertEquals(1, word.getX2());
+        // A row outside the grid (stale tap coordinates after a resize) selects nothing.
+        Assert.assertNull(ComposeTerminalFrame.selectWord(screen, 1, 6, 6, 6));
     }
 
     @Test

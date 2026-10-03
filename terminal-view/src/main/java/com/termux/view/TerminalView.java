@@ -610,7 +610,17 @@ public final class TerminalView extends View {
     private boolean openHyperlinkAt(MotionEvent event) {
         if (mEmulator == null || mRenderer == null) return false;
         int[] columnAndRow = getColumnAndRow(event, true);
-        String uri = mEmulator.getHyperlinkUriAt(columnAndRow[1], columnAndRow[0]);
+        int row = columnAndRow[1];
+        int column = columnAndRow[0];
+        // The row is pixels at the time of the ACTION_UP, but the gesture detector only confirms
+        // the single tap after the double-tap timeout, and an IME animation, a pane split or a
+        // rotation may have resized the view in between: a row past the grid (or above the
+        // transcript) must open nothing instead of walking off the buffer. TerminalBuffer rejects
+        // it too; this keeps the reason next to the tap that produces it.
+        if (row < -mEmulator.getScreen().getActiveTranscriptRows() || row >= mEmulator.mRows
+            || column < 0 || column >= mEmulator.mColumns)
+            return false;
+        String uri = mEmulator.getHyperlinkUriAt(row, column);
         if (!TerminalEmulator.isAllowedHyperlinkUri(uri)) return false;
         try {
             getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(uri)));
