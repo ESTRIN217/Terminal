@@ -2,9 +2,10 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-- Rama `release/2.0`, versión 2.0.0 (versionCode 120). Fase 4 cerrada: firma release local con
-  `key.properties` (gitignored) + `key.properties.example`, `CHANGELOG.md`, docs 2.0 al día,
-  `119.md`/`120.md` en `docs/archive/`. `enableOnBackInvokedCallback` activo.
+- **Terminal 2.0.0 PUBLICADA** (2026-10-03): tag `v2.0.0` sobre el merge a `master`, Release con
+  los APK debug de la CI + `terminal_2.0.0_universal.apk` firmado (subido a mano, opción C).
+  `master` = `release/2.0` + merge; se trabaja sobre `release/2.0`. Firma release local con
+  `key.properties` (gitignored) + `key.properties.example`. `enableOnBackInvokedCallback` activo.
 - `docs/constitution.md` escrito (6 principios: stack mínimo, spec manda, lógica fuera de la UI,
   tests primero, datos del usuario, idioma por capa). **`specs/` sigue sin existir**: hasta ahora
   el proceso real ha sido `docs/roadmap-2.0.md` + `docs/archive/119|120-*.md`.
@@ -66,6 +67,8 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Los modificadores sticky nunca se desactivan solos (hay que pulsarlos otra vez).
 
 ## Próximos pasos
+- **Cada release hay que subir el APK firmado a mano** (opción C): la CI solo adjunta debug. Es el
+  precio de no meter el keystore en GitHub; si molesta, la alternativa es la opción B (secrets).
 - **Verificar en dispositivo** el fallback del split con `native_compose_renderer` activo: dos panes
   pintados, tap cambia el foco, teclear en ambos y que al cerrar el split vuelva el canvas. Luego,
   el resto de la lista de paridad: `Popup`, repeat de flechas y las 4 claves especiales.
