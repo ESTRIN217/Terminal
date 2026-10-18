@@ -8,7 +8,7 @@ android {
     compileSdk { version = release(37) { minorApiLevel = 1 } }
 
     defaultConfig {
-        minSdk = project.properties["minSdkVersion"]?.toString()?.toInt() ?: 21
+        minSdk = providers.gradleProperty("minSdkVersion").orNull?.toInt() ?: 21
         testInstrumentationRunner = "android.support.test.runner.AndroidJUnitRunner"
     }
 

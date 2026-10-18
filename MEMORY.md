@@ -23,6 +23,8 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   `.agents/skills/sdd/SKILL.md` y `opencode.json` (la key de Context7 sigue siendo placeholder).
   Orden: `/sdd-spec` → `/sdd-plan` → `/sdd-tasks` → `/sdd-implement` → `/sdd-validate`.
 - `./gradlew test`, `:app:assembleDebug` y `:app:assembleRelease` en verde.
+  Build sin warnings de Kotlin DSL: los `project.properties["x"]` de los 5 `build.gradle.kts`
+  pasaron a `providers.gradleProperty("x").orNull` (Gradle 9 deprecó `Project.getProperties()`).
 
 ## Decisiones (y por qué)
 - **La web de `public/` es HTML/CSS/JS puro**: Firebase Hosting sirve estáticos sin build y así no

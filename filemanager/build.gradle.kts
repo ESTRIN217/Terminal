@@ -7,10 +7,10 @@ android {
     namespace = "com.estrin217.filemanager"
 
     compileSdk { version = release(37) { minorApiLevel = 1 } }
-    ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties["ndkVersion"]?.toString() ?: ""
+    ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: providers.gradleProperty("ndkVersion").orNull ?: ""
 
     defaultConfig {
-        minSdk = project.properties["minSdkVersion"]?.toString()?.toInt() ?: 24
+        minSdk = providers.gradleProperty("minSdkVersion").orNull?.toInt() ?: 24
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
