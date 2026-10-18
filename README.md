@@ -5,7 +5,7 @@
 [![Build status](https://github.com/ESTRIN217/Terminal/workflows/Build/badge.svg)](https://github.com/ESTRIN217/Terminal/actions)
 [![Testing status](https://github.com/ESTRIN217/Terminal/workflows/Unit%20tests/badge.svg)](https://github.com/ESTRIN217/Terminal/actions)
 
-<img src="assets/banner.png" width="720" alt="Banner de Terminal: emulador de terminal con entorno Debian completo en Android sin root"/>
+<img src="public/img/banner.png" width="720" alt="Banner de Terminal: emulador de terminal con entorno Debian completo en Android sin root"/>
 
 > **ES — Aviso de fork independiente:** este repositorio (`ESTRIN217/Terminal`) es un fork
 > independiente y **no está afiliado, respaldado ni soportado por el equipo de Termux**.
@@ -26,13 +26,13 @@ Versión actual: **2.0.0** (`versionCode` 120). Ver el [CHANGELOG](CHANGELOG.md)
 <table align="center">
   <tr>
     <td align="center">
-      <img src="assets/captura-terminal.png" width="220" alt="Consola de Terminal con el mensaje de bienvenida a Debian Linux y el cheat sheet de apt"/>
+      <img src="public/img/captura-terminal.png" width="220" alt="Consola de Terminal con el mensaje de bienvenida a Debian Linux y el cheat sheet de apt"/>
     </td>
     <td align="center">
-      <img src="assets/captura-cli.png" width="220" alt="Ejecutando opencode, un agente de IA, dentro de la terminal de Terminal"/>
+      <img src="public/img/captura-cli.png" width="220" alt="Ejecutando opencode, un agente de IA, dentro de la terminal de Terminal"/>
     </td>
     <td align="center">
-      <img src="assets/captura-archivos.png" width="220" alt="Pestaña Gestor de archivos de Terminal mostrando la carpeta Home con sdcard y storage"/>
+      <img src="public/img/captura-archivos.png" width="220" alt="Pestaña Gestor de archivos de Terminal mostrando la carpeta Home con sdcard y storage"/>
     </td>
   </tr>
 </table>

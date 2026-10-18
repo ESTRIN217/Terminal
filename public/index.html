@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Terminal 2.0.0 — Un Debian real en el bolsillo, sin root</title>
+    <meta name="description" content="Terminal es una app de Android con emulador de terminal y un entorno Debian completo vía proot, sin root. UI en Jetpack Compose, gestor de archivos, fuentes e imágenes en la terminal.">
+    <meta name="theme-color" content="#15122a">
+    <meta name="color-scheme" content="dark">
+    <link rel="icon" href="img/icon-192.png" type="image/png">
+    <link rel="apple-touch-icon" href="img/icon-192.png">
+
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Terminal">
+    <meta property="og:url" content="https://terminal-gnulinux.web.app/">
+    <meta property="og:title" content="Terminal 2.0.0 — Un Debian real en el bolsillo">
+    <meta property="og:description" content="Terminal + entorno Linux Debian vía proot en Android. Sin root, con interfaz Jetpack Compose.">
+    <!-- Imagen social servida por el propio sitio. Si el dominio cambia, hay que
+         cambiar a la vez og:url, og:image y el canonical de abajo. -->
+    <meta property="og:image" content="https://terminal-gnulinux.web.app/img/banner.png">
+    <meta property="og:image:alt" content="Banner de Terminal: emulador de terminal con entorno Debian completo en Android sin root">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="canonical" href="https://terminal-gnulinux.web.app/">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+    <header class="site-header" id="top">
+        <div class="wrap header-inner">
+            <a class="brand" href="#top">
+                <img class="brand-icon" src="img/icon-192.png" alt="" width="32" height="32">
+                <span class="brand-name">Terminal</span>
+                <span class="badge badge-version" data-site="version">2.0.0</span>
+            </a>
+
+            <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-principal">
+                <span class="nav-toggle-bars" aria-hidden="true"></span>
+                Menú
+            </button>
+
+            <nav class="site-nav" id="nav-principal" aria-label="Principal">
+                <ul>
+                    <li><a href="#caracteristicas">Características</a></li>
+                    <li><a href="#capturas">Capturas</a></li>
+                    <li><a href="#descargas">Descargas</a></li>
+                    <li><a href="#faq">Preguntas</a></li>
+                    <li>
+                        <a class="btn btn-primary btn-sm" href="https://github.com/ESTRIN217/Terminal/releases/download/v2.0.0/terminal_2.0.0_universal.apk">
+                            Descargar APK
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main id="contenido">
+        <section class="hero">
+            <div class="wrap hero-inner">
+                <div class="hero-copy">
+                    <p class="eyebrow">Terminal 2.0.0 · GPLv3 · fork independiente</p>
+                    <h1>Tu terminal, con Debian de verdad</h1>
+                    <p class="lead">
+                        Emulador de terminal y un entorno Linux completo con <code>proot</code>,
+                        sin root. Interfaz en Jetpack Compose, gestor de archivos integrado,
+                        imágenes en la terminal y fuentes a elegir.
+                    </p>
+
+                    <div class="cta-row">
+                        <a class="btn btn-primary" href="https://github.com/ESTRIN217/Terminal/releases/download/v2.0.0/terminal_2.0.0_universal.apk">
+                            Descargar 2.0.0 <span class="btn-note">APK · <span data-site="apk-size">14 MB</span></span>
+                        </a>
+                        <a class="btn btn-ghost" href="https://github.com/ESTRIN217/Terminal">Ver en GitHub</a>
+                    </div>
+
+                    <ul class="chips" aria-label="Requisitos resumidos">
+                        <li>arm64-v8a</li>
+                        <li>Android 7.0+</li>
+                        <li>Sin root</li>
+                        <li>Sin ads</li>
+                    </ul>
+
+                    <p class="hero-foot">
+                        Paquete <code>com.estrin217.terminal</code> · publicado el <span data-site="published">3 de octubre de 2026</span>
+                    </p>
+                </div>
+
+                <div class="hero-shot">
+                    <figure class="phone">
+                        <img src="img/captura-terminal.png" width="1080" height="1920" loading="eager" decoding="async"
+                             alt="Consola de Terminal con el mensaje de bienvenida a Debian Linux, el cheat sheet de apt y el prompt root@localhost">
+                        <figcaption>Consola con <code>apt</code> listo para usar</figcaption>
+                    </figure>
+                </div>
+            </div>
+        </section>
+
+        <section class="wrap">
+            <aside class="notice" aria-labelledby="aviso-titulo">
+                <h2 id="aviso-titulo">Fork independiente</h2>
+                <p>
+                    Este proyecto es un fork de
+                    <a href="https://github.com/termux/termux-app">termux/termux-app</a> y
+                    <strong>no está afiliado, respaldado ni soportado por el equipo de Termux</strong>.
+                    No reportes incidencias al proyecto Termux ni uses sus canales de soporte o donación:
+                    todo se reporta en los
+                    <a href="https://github.com/ESTRIN217/Terminal/issues">issues de este fork</a>.
+                </p>
+            </aside>
+        </section>
+
+        <section class="section" id="caracteristicas">
+            <div class="wrap">
+                <header class="section-head">
+                    <h2>Características</h2>
+                    <p>Lo que hace la app, sin adornos.</p>
+                </header>
+
+                <ul class="grid grid-3">
+                    <li class="card">
+                        <h3>Debian completo, sin root</h3>
+                        <p>Entorno Linux vía <code>proot</code>. El rootfs se descarga y verifica con SHA-256 en el primer arranque.</p>
+                    </li>
+                    <li class="card">
+                        <h3>Renderer nativo en Compose</h3>
+                        <p>El terminal se dibuja sobre un <code>Canvas</code> de Compose, con selección de texto nativa, handles arrastrables, pinch-zoom e inercia de scroll. Tras el flag <code>native_compose_renderer</code> (Ajustes → Experimental).</p>
+                    </li>
+                    <li class="card">
+                        <h3>Multipantalla</h3>
+                        <p>Dos sesiones simultáneas —terminal o gestor de archivos— en pantallas de 600 dp o más.</p>
+                    </li>
+                    <li class="card">
+                        <h3>Tipografía a elegir</h3>
+                        <p>Fira Code, Cascadia Code, JetBrains Mono, D2 Coding, Hack o tu propia fuente (<code>~/.termux/font.ttf</code>), todas con Nerd Fonts v3.5.1 y ligaduras opcionales.</p>
+                    </li>
+                    <li class="card">
+                        <h3>Color de 24 bits</h3>
+                        <p>Esquemas personalizados desde <code>~/.termux/colors.properties</code>.</p>
+                    </li>
+                    <li class="card">
+                        <h3>Imágenes en la terminal</h3>
+                        <p>Protocolo Kitty Graphics y OSC 1337 (iTerm2). Sixel no está soportado.</p>
+                    </li>
+                    <li class="card">
+                        <h3>Hipervínculos OSC 8</h3>
+                        <p>Se subrayan y se abren con un toque.</p>
+                    </li>
+                    <li class="card">
+                        <h3>Gestor de archivos integrado</h3>
+                        <p>Funciona como pestaña más: symlinks, papelera, marcadores y edición de archivos con <code>nano</code> o <code>vim</code>.</p>
+                    </li>
+                    <li class="card">
+                        <h3>Teclas extra y macros</h3>
+                        <p>Barra de teclas extra con macros, popup de teclas especiales y los estilos <code>extra-keys-style</code> de Termux.</p>
+                    </li>
+                    <li class="card">
+                        <h3>Refresco a 90/120 Hz</h3>
+                        <p>Con opción de forzar 60 Hz para ahorrar batería.</p>
+                    </li>
+                    <li class="card">
+                        <h3>Atribución por hardware</h3>
+                        <p>Scrollback, parpadeo del cursor y renderer por defecto según la RAM, los núcleos y el tipo de dispositivo.</p>
+                    </li>
+                    <li class="card">
+                        <h3>Privacidad</h3>
+                        <p>Sin telemetría ni anuncios. Todo el entorno vive en el almacenamiento de la app, en tu dispositivo.</p>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="section section-alt" id="capturas">
+            <div class="wrap">
+                <header class="section-head">
+                    <h2>Capturas</h2>
+                    <p>La app tal cual, en un dispositivo real.</p>
+                </header>
+
+                <div class="gallery">
+                    <figure class="phone">
+                        <img src="img/captura-terminal.png" width="1080" height="1920" loading="lazy" decoding="async"
+                             alt="Consola de Terminal con el mensaje de bienvenida a Debian Linux y el cheat sheet de apt">
+                        <figcaption><code>apt</code>, Python y el resto de tu distribución</figcaption>
+                    </figure>
+                    <figure class="phone">
+                        <img src="img/captura-cli.png" width="1080" height="1920" loading="lazy" decoding="async"
+                             alt="Ejecutando opencode, un agente de IA, dentro de la terminal de Terminal">
+                        <figcaption>TUI, CLIs y Nerd Fonts con scrollback real</figcaption>
+                    </figure>
+                    <figure class="phone">
+                        <img src="img/captura-archivos.png" width="1080" height="1920" loading="lazy" decoding="async"
+                             alt="Pestaña del gestor de archivos de Terminal mostrando la carpeta Home con sdcard y storage">
+                        <figcaption>Abre una terminal en el directorio actual con un toque</figcaption>
+                    </figure>
+                </div>
+            </div>
+        </section>
+
+        <section class="section" id="descargas">
+            <div class="wrap">
+                <header class="section-head">
+                    <h2>Descargas</h2>
+                    <p>Tres pasos y tienes Debian en el teléfono.</p>
+                </header>
+
+                <div class="split">
+                    <ol class="steps">
+                        <li>
+                            <h3>Descarga el APK</h3>
+                            <p>
+                                Instala <code>terminal_2.0.0_universal.apk</code> (~<span data-site="apk-size">14 MB</span>) desde la
+                                <a href="https://github.com/ESTRIN217/Terminal/releases/tag/v2.0.0">sección Assets de la v2.0.0</a>.
+                            </p>
+                        </li>
+                        <li>
+                            <h3>Ábrelo e instálalo</h3>
+                            <p>
+                                Al tocar el archivo, Android pedirá permitir «fuentes desconocidas»
+                                a la app desde la que lo abras: el navegador o el explorador de
+                                archivos. La APK no viene de una tienda oficial, así que instálala
+                                solo desde la release de este repositorio.
+                            </p>
+                        </li>
+                        <li>
+                            <h3>Primer arranque</h3>
+                            <p>Se descarga y configura el rootfs de Debian (~50 MB comprimidos) y se instala el binario de <code>proot</code>. A partir de ahí, el entorno es local.</p>
+                        </li>
+                    </ol>
+
+                    <aside class="panel" aria-labelledby="requisitos-titulo">
+                        <h3 id="requisitos-titulo">Requisitos</h3>
+                        <p class="panel-lead">Lo mínimo para que funcione.</p>
+
+                        <dl class="specs">
+                            <div>
+                                <dt>Paquete</dt>
+                                <dd><code>com.estrin217.terminal</code></dd>
+                            </div>
+                            <div>
+                                <dt>Arquitectura</dt>
+                                <dd><code>arm64-v8a</code> (el binario de proot es solo AArch64)</dd>
+                            </div>
+                            <div>
+                                <dt>Android</dt>
+                                <dd>7.0 o superior (API 24)</dd>
+                            </div>
+                            <div>
+                                <dt>Licencia</dt>
+                                <dd>GPLv3</dd>
+                            </div>
+                            <div>
+                                <dt>Root</dt>
+                                <dd>No hace falta</dd>
+                            </div>
+                        </dl>
+                    </aside>
+                </div>
+
+                <details class="verify">
+                    <summary>Verificar la descarga (opcional)</summary>
+                    <div class="verify-body">
+                        <p>
+                            Para instalar no hace falta: Android ya comprueba la firma del APK al
+                            instalarlo y rechaza el archivo si alguien lo ha modificado. La suma
+                            SHA-256 sirve para otra cosa más concreta — confirmar que el fichero que
+                            tienes es exactamente el que publicó el proyecto. Interesa sobre todo
+                            si lo has descargado de un espejo, de un foro o de Telegram.
+                        </p>
+                        <p class="panel-lead">Suma SHA-256 de <code>terminal_2.0.0_universal.apk</code>:</p>
+                        <pre class="hash"><code id="sha-apk" data-site="sha256">ddb104dd0baecca40e50cf6d0e58574c8e31f1355fc981a7742ab2e44c73971b</code></pre>
+                        <button class="btn btn-ghost btn-sm" type="button" data-copy-target="sha-apk">
+                            Copiar hash
+                        </button>
+                        <p class="hint" role="status" aria-live="polite" data-copy-status></p>
+                        <p class="verify-note">
+                            La lista completa está en
+                            <a href="https://github.com/ESTRIN217/Terminal/releases/download/v2.0.0/terminal_2.0.0_sha256sums">terminal_2.0.0_sha256sums</a>,
+                            junto a la APK en la
+                            <a href="https://github.com/ESTRIN217/Terminal/releases/tag/v2.0.0">release v2.0.0</a>.
+                        </p>
+                    </div>
+                </details>
+
+                <aside class="warning" aria-labelledby="firma-titulo">
+                    <h3 id="firma-titulo">Qué APK instalar</h3>
+                    <p>
+                        Cada release de GitHub adjunta también los APK de <strong>debug</strong> que
+                        compila la CI, firmados con una clave de prueba <strong>no oficial</strong>:
+                        son para pruebas, no son distribuibles. Instala solo
+                        <code>terminal_2.0.0_universal.apk</code>, firmado con la clave de release
+                        del proyecto.
+                    </p>
+                    <p>
+                        Si cambias de origen de instalación, desinstala antes todas las APK del fork.
+                        No mezcles firmas distintas.
+                    </p>
+                </aside>
+            </div>
+        </section>
+
+        <section class="section section-alt" id="limitaciones">
+            <div class="wrap">
+                <header class="section-head">
+                    <h2>Limitaciones conocidas</h2>
+                    <p>No son bugs de la app, son Android.</p>
+                </header>
+
+                <div class="grid grid-2">
+                    <article class="card">
+                        <h3>SELinux y el fabricante</h3>
+                        <p>
+                            En algunos dispositivos la política SELinux del fabricante impide a la app
+                            enumerar <code>/dev</code>, <code>/dev/pts</code> y <code>/sys</code>, así que
+                            <code>ls /dev</code> puede fallar con <code>Permission denied</code> dentro de la sesión.
+                            El acceso a dispositivos concretos (<code>/dev/null</code>, <code>/dev/tty</code>…)
+                            sigue funcionando.
+                        </p>
+                    </article>
+                    <article class="card">
+                        <h3>Estadísticas de CPU</h3>
+                        <p>
+                            Desde Android 8, SELinux deniega a las apps <code>untrusted_app</code> leer
+                            <code>/proc/stat</code>, así que <code>btop</code> y <code>htop</code> no muestran
+                            estadísticas de CPU en dispositivos stock con SELinux enforcing. Sin root o
+                            SELinux permissive no hay workaround.
+                        </p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="section" id="faq">
+            <div class="wrap wrap-narrow">
+                <header class="section-head">
+                    <h2>Preguntas frecuentes</h2>
+                </header>
+
+                <div class="faq">
+                    <details>
+                        <summary>¿Necesita root?</summary>
+                        <p>No. Todo el entorno corre con <code>proot</code>, que emula las llamadas al kernel sin privilégios. Instalas una APK normal, como cualquier otra app.</p>
+                    </details>
+                    <details>
+                        <summary>¿Cuánto ocupa?</summary>
+                        <p>El APK ronda los <span data-site="apk-size">14 MB</span>. El rootfs de Debian son unos ~50 MB comprimidos y se descarga la primera vez que abres la app.</p>
+                    </details>
+                    <details>
+                        <summary>¿Cómo sé que el APK no está manipulado?</summary>
+                        <p>Android comprueba la firma del APK al instalarlo y rechaza el archivo si alguien lo ha modificado, así que no tienes que hacer nada. Si aun así quieres confirmar que el fichero que descargaste es byte a byte el que publicó el proyecto, hay una comprobación opcional con SHA-256 en <a href="#descargas">Descargas</a>.</p>
+                    </details>
+                    <details>
+                        <summary>¿Funciona sin internet?</summary>
+                        <p>Sí, después del primer arranque: el entorno es local. Lo que sí necesita conexión es <code>apt</code> para instalar o actualizar paquetes.</p>
+                    </details>
+                    <details>
+                        <summary>¿Es un fork de Termux?</summary>
+                        <p>Sí, de <a href="https://github.com/termux/termux-app">termux/termux-app</a>, bajo GPLv3, pero es un proyecto independiente: este fork no está afiliado al equipo de Termux. Las librerías del emulador provienen de <a href="https://github.com/jackpal/Android-Terminal-Emulator">jackpal/Android-Terminal-Emulator</a> (Apache 2.0).</p>
+                    </details>
+                    <details>
+                        <summary>¿Cómo reporto un problema?</summary>
+                        <p>Abre un <a href="https://github.com/ESTRIN217/Terminal/issues">issue</a> en este repositorio. Desde la app puedes generar un informe automático en <strong>More → Report Issue</strong>. Publica el texto completo: los issues con capturas parciales en lugar de texto se cierran.</p>
+                    </details>
+                    <details>
+                        <summary>¿Cómo veo los logs?</summary>
+                        <p>En <strong>Ajustes → Terminal → Debugging → Log Level</strong> puedes pasar de <code>Normal</code> a <code>Debug</code> o <code>Verbose</code>. Vuelve a <code>Normal</code> cuando termines. También sirve <code>logcat -d</code> desde la propia terminal.</p>
+                    </details>
+                </div>
+            </div>
+        </section>
+
+        <section class="section section-alt" id="enlaces">
+            <div class="wrap">
+                <header class="section-head">
+                    <h2>Enlaces</h2>
+                    <p>Todo el proyecto vive en GitHub.</p>
+                </header>
+
+                <ul class="links">
+                    <li>
+                        <a href="https://github.com/ESTRIN217/Terminal">
+                            <span class="links-title">Repositorio</span>
+                            <span class="links-desc">Código, issues y ramas</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/ESTRIN217/Terminal/releases">
+                            <span class="links-title">Releases</span>
+                            <span class="links-desc">APK firmados y <code>sha256sums</code></span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/ESTRIN217/Terminal/issues">
+                            <span class="links-title">Issues</span>
+                            <span class="links-desc">Aquí van los errores, no a Termux</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/ESTRIN217/Terminal/discussions">
+                            <span class="links-title">Discussions</span>
+                            <span class="links-desc">Preguntas y configuraciones</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/ESTRIN217/Terminal/wiki">
+                            <span class="links-title">Wiki</span>
+                            <span class="links-desc">Guías y ajustes</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/ESTRIN217/Terminal/blob/master/CHANGELOG.md">
+                            <span class="links-title">CHANGELOG</span>
+                            <span class="links-desc">Qué cambió en cada versión</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="wrap footer-inner">
+            <p>
+                <strong>Terminal 2.0.0</strong> · publicado el <span data-site="published">3 de octubre de 2026</span> ·
+                <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPLv3</a>
+            </p>
+            <p class="muted">
+                Fork independiente de
+                <a href="https://github.com/termux/termux-app">termux/termux-app</a>.
+                Sin afiliación con el equipo de Termux.
+            </p>
+        </div>
+    </footer>
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Terminal",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Android 7.0 o superior (arm64-v8a)",
+        "applicationSubCategory": "Terminal",
+        "description": "Emulador de terminal para Android con un entorno Debian completo vía proot, sin root.",
+        "softwareVersion": "2.0.0",
+        "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+        "downloadUrl": "https://github.com/ESTRIN217/Terminal/releases/download/v2.0.0/terminal_2.0.0_universal.apk",
+        "codeRepository": "https://github.com/ESTRIN217/Terminal"
+    }
+    </script>
+    <script src="main.js" defer></script>
+</body>
+</html>

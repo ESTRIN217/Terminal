@@ -6,19 +6,39 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   los APK debug de la CI + `terminal_2.0.0_universal.apk` firmado (subido a mano, opción C).
   `master` = `release/2.0` + merge; se trabaja sobre `release/2.0`. Firma release local con
   `key.properties` (gitignored) + `key.properties.example`. `enableOnBackInvokedCallback` activo.
+- **Página web estática en `public/`** (sin build, sin dependencias): `index.html` + `styles.css`
+  + `main.js` + `img/`, **publicada en <https://terminal-gnulinux.web.app>** con
+  `firebase deploy --only hosting --project terminal-gnulinux`. Firebase Hosting sirve
+  `public/` con rewrite `**` → `/index.html`.
+  Contenido en español, copiado de README/CHANGELOG: hero, aviso de fork, características,
+  capturas, descargas (hash en un `<details>` opcional), limitaciones (SELinux), FAQ y enlaces.
+  `public/img/` es el **único sitio** de las capturas y del banner: el README los apunta ahí
+  con `git mv`, así que no hay copias (la carpeta `assets/` ya no existe). Única excepción: el
+  icono `public/img/icon-192.png`, copia de `app/src/main/res/mipmap-xxxhdpi/ic_launcher.png`
+  (6 KB), porque el mipmap es código fuente de la app y el sitio necesita un fichero servido.
 - `docs/constitution.md` escrito (6 principios: stack mínimo, spec manda, lógica fuera de la UI,
   tests primero, datos del usuario, idioma por capa). **`specs/` sigue sin existir**: hasta ahora
   el proceso real ha sido `docs/roadmap-2.0.md` + `docs/archive/119|120-*.md`.
-- **El flujo SDD ya está en el repo** (commit `d628080a`): `.opencode/agents` (coordinator, planner,
-  implementer, reviewer), `.opencode/commands/sdd-*.md`, `.agents/skills/sdd/SKILL.md` y
-  `opencode.json` (LSP de Kotlin + MCP de Context7 con la key todavía como placeholder). Para
-  trabajar con spec: `/sdd-spec NNN-nombre` → `/sdd-plan` → `/sdd-tasks` → `/sdd-implement` →
-  `/sdd-validate`. Solo la constitution se escribe sin pasar por el ciclo.
-- Extra keys con paridad de Termux: macros, popup swipe-up, `extra-keys-style`,
-  `extra-keys-text-all-caps`, claves especiales y DECCKM.
+- **El flujo SDD ya está en el repo** (commit `d628080a`): `.opencode/agents`, `.opencode/commands/sdd-*.md`,
+  `.agents/skills/sdd/SKILL.md` y `opencode.json` (la key de Context7 sigue siendo placeholder).
+  Orden: `/sdd-spec` → `/sdd-plan` → `/sdd-tasks` → `/sdd-implement` → `/sdd-validate`.
 - `./gradlew test`, `:app:assembleDebug` y `:app:assembleRelease` en verde.
 
 ## Decisiones (y por qué)
+- **La web de `public/` es HTML/CSS/JS puro**: Firebase Hosting sirve estáticos sin build y así no
+  entra un `node_modules` ni un paso de build en el repo. El JS solo mejora (menú móvil, sombra de
+  la cabecera, copiar hash); con JS apagado la página se usa igual.
+- **Lo que caduca en la web lo pone `scripts/update-site.py`**, no a mano: versión, enlaces, nombre
+  del APK, tamaño, fecha y SHA-256 (que se lee del asset `<versión>_sha256sums` de la release). Es
+  idempotente y puro (stdlib). Regla ya subida a `AGENTS.md`, sección "Sitio web (`public/`)".
+- La versión se propaga por **reemplazo global** del texto de `data-site="version"`; el resto son
+  marcadores `data-site="<clave>"`. Motivo: la página era una segunda copia de la release y se
+  quedaba vieja sola. `render()` valida los datos antes de escribir (semver, 64 hex, `N MB`, fecha
+  en español) y aborta si no cuadran.
+- `og:image` y `og:url` son absolutas contra el dominio real
+  `https://terminal-gnulinux.web.app` (proyecto Firebase `terminal-gnulinux`, display name
+  "Terminal-GNUlinux", cuenta `gamerestrin217@gmail.com`). Si cambia el dominio, hay que
+  cambiar a la vez `og:url`, `og:image` y el `<link rel="canonical">`.
 - El parser Kotlin de extra keys **reutiliza** `ExtraKeysConstants.CONTROL_CHARS_ALIASES` y
   `ExtraKeysInfo.getCharDisplayMapForStyle()` de `termux-shared` en vez de duplicar los mapas. Si se
   borra el paquete Java `extrakeys/`, trasplantarlos a Kotlin antes.
@@ -48,6 +68,11 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   conserva toda la UI nueva en el caso de un solo pane. La **causa raíz sigue sin resolver**.
 
 ## Aprendizajes y errores a evitar
+- **`art/ic_launcher2.png` es el icono de Termux heredado, no el de la app**: el icono real es el
+  adaptativo `app/src/main/res/mipmap-*/ic_launcher.png` (blanco + glifo negro; `background` y
+  `foreground` por separado). No usarlo para marca propia sin decirlo.
+- El SHA-256 no lo comprueba casi nadie: la página lo esconde tras "Verificar la descarga
+  (opcional)" porque **Android ya valida la firma del APK** al instalarlo.
 - **Una fila de tap o long-press sale de píxeles y llega obsoleta**: `GestureDetector` confirma el
   single tap ~300 ms después del `ACTION_UP` con las mismas coordenadas, así que si el panel se
   encogió entre medias (animación del IME, split, rotación) la fila cae fuera de la rejilla. Antes
@@ -63,17 +88,9 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   measure starts`. Para "mi tamaño": layout de la vista Android u `onGloballyPositioned`.
 - **Renderer único de un pane = pintar su fondo en cada frame, siempre**: gatear el paint por un
   tamaño aún no recibido deja el panel en blanco.
-- El split se implementó solo para `TerminalViewHost`: un renderer nuevo hay que revisarlo contra
-  panes múltiples (foco, IME, flags, geometría, blink). Con el canvas el `Row` del split ni siquiera
-  llegaba a componerse, y el fondo del canvas es el mismo `surface` del Scaffold, así que un pane
-  sin pintar **no se distingue a ojo**: se deduce por la ausencia del `VerticalDivider`. Trazas por
-  pane (`Pane laid out`, `Pane draw`, `Pane grid`) en `logDebug` → hay que subir Ajustes → nivel
-  de log.
-- Compose 1.13: `ViewConfiguration.current` → `LocalViewConfiguration.current`; y
-  `PointerInputChange.positionChange()` hay que importarla (si no, Kotlin resuelve un campo interno).
-- `optString("macro", "")` nunca devuelve `null`: no usarlo como bandera de presencia.
-- El Java `termux-shared/.../extrakeys/` sigue sin vistas que lo inflen: solo se usan sus
-  constantes desde Kotlin.
+- **Un pane sin pintar no se distingue a ojo**: el fondo del canvas es el `surface` del Scaffold,
+  así que se deduce por la ausencia del `VerticalDivider`. Trazas por pane (`Pane laid out`,
+  `Pane draw`, `Pane grid`) en `logDebug` → hay que subir Ajustes → nivel de log.
 - Los modificadores sticky nunca se desactivan solos (hay que pulsarlos otra vez).
 
 ## Próximos pasos
@@ -85,8 +102,8 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - **Causa raíz del split con canvas nativo** (opcional, sin prisa): reproducir en landscape con el
   log en nivel Debug y las tres trazas por pane. Ojo: la rotación no se puede forzar por adb en
   este XOS (`wm user-rotation lock` no la aplica), hay que rotar el móvil a mano.
-- **`docs/` y `AGENTS.md` se corrigen contra la fuente, no de memoria** (regla permanente, candidata
-  a subir a `AGENTS.md`): un número de `AGENTS.md` puede venir obsoleto o de una dependencia que ya no
-  existe; comprobar en `gradle/wrapper/`, `libs.versions.toml` o `gradle.properties`.
+- **`docs/` y `AGENTS.md` se corrigen contra la fuente, no de memoria** (candidato a `AGENTS.md`):
+  un número puede venir obsoleto; comprobar en `gradle/wrapper/`, `libs.versions.toml`,
+  `gradle.properties`.
 - Opcionales: crear `specs/` y migrar el roadmap; auto-desactivar sticky modifiers, lock por
   long-press, altura de barra configurable, y borrar el Java muerto de `extrakeys/`.

@@ -51,6 +51,24 @@ app  →  termux-shared  →  terminal-view  →  terminal-emulator
 - The `filemanager` module also uses Compose (Material3) for its `FileManagerScreen`; it does not host activities — the app wires the theme, permissions, and `FileProvider`.
 - **Session tabs are polymorphic:** `TermuxSessionUiModel` is a sealed type (`Terminal` = pty session, `FileManager` = UI-only session). The `FileManagerSessionHost` composable hosts `FileManagerScreen` as a tab with a per-session `FileManagerViewModel` keyed by session id. Closing a file-manager tab never touches `TermuxService`. The file manager can open a terminal in the current directory via `onOpenInTerminal` (nav-row icon + More-menu item), wired in the app to `TermuxComposeActivity.openTerminalIn()`.
 
+## Sitio web (`public/`)
+
+- Página estática de una sola página: `index.html` + `styles.css` + `main.js` + `img/`, servida por
+  `firebase.json` (rewrite `**` → `/index.html`). **Sin build, sin `node_modules` ni framework.**
+  El JS solo mejora (menú móvil, cabecera sticky, copiar hash): con JS apagado la página funciona.
+- **Lo que caduca (versión, enlaces de descarga, nombre del APK, tamaño, fecha y SHA-256) no se
+  escribe a mano: lo pone `scripts/update-site.py`.** Tras publicar una release:
+  ```sh
+  python3 scripts/update-site.py            # escribe
+  python3 scripts/update-site.py --dry-run  # solo diff
+  ```
+  Lee la última release de la API de GitHub y es idempotente. El hash sale del asset
+  `<versión>_sha256sums` de esa misma release, no de una copia.
+- **Si añades un dato que caduca, márcalo con `data-site="<clave>"` y añádelo a `update-site.py`.**
+  Sin marcador se queda viejo en silencio. La versión es el caso especial: se propaga sola con
+  reemplazo global del texto de `data-site="version"`.
+- Texto visible en español (el idioma del repo); identificadores y comentarios técnicos en inglés.
+
 ## Error Handling
 
 - **Return `Error` objects, don't throw.** `null` means success:
