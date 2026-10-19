@@ -313,15 +313,15 @@ public final class TerminalRenderer {
 
                 // Break the run when style, cursor, selection or OSC 8 hyperlink changes, when this code point
                 // (or the one that started the run) has a width that does not match wcwidth(), when the cell
-                // background must be left to the image underneath, or
+                // background must be left to the image underneath, when a new run must start because the
+                // previous cells were skipped (no live run open), or
                 // when ligatures are disabled, in which case every code point must be shaped alone
                 // so that the font's ligature tables (GSUB liga/clig) can never combine characters.
-                if (style != lastRunStyle || insideCursor != lastRunInsideCursor || insideSelection != lastRunInsideSelection
+                if (lastRunStartColumn < 0 || style != lastRunStyle || insideCursor != lastRunInsideCursor
+                    || insideSelection != lastRunInsideSelection
                     || hyperlink != lastRunHyperlink || fontWidthMismatch || lastRunFontWidthMismatch || !mEnableLigatures
                     || skipBackground != lastRunSkipBackground) {
-                    if (column == 0) {
-                        // Skip first column as there is nothing to draw, just record the current style.
-                    } else {
+                    if (lastRunStartColumn >= 0) {
                         final int columnWidthSinceLastRun = column - lastRunStartColumn;
                         final int charsSinceLastRun = currentCharIndex - lastRunStartIndex;
                         int cursorColor = lastRunInsideCursor ? mEmulator.mColors.mCurrentColors[TextStyle.COLOR_INDEX_CURSOR] : 0;
@@ -354,16 +354,18 @@ public final class TerminalRenderer {
                 }
             }
 
-            final int columnWidthSinceLastRun = columns - lastRunStartColumn;
-            final int charsSinceLastRun = currentCharIndex - lastRunStartIndex;
-            int cursorColor = lastRunInsideCursor ? mEmulator.mColors.mCurrentColors[TextStyle.COLOR_INDEX_CURSOR] : 0;
-            boolean invertCursorTextColor = false;
-            if (lastRunInsideCursor && cursorShape == TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK) {
-                invertCursorTextColor = true;
+            if (lastRunStartColumn >= 0) {
+                final int columnWidthSinceLastRun = columns - lastRunStartColumn;
+                final int charsSinceLastRun = currentCharIndex - lastRunStartIndex;
+                int cursorColor = lastRunInsideCursor ? mEmulator.mColors.mCurrentColors[TextStyle.COLOR_INDEX_CURSOR] : 0;
+                boolean invertCursorTextColor = false;
+                if (lastRunInsideCursor && cursorShape == TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK) {
+                    invertCursorTextColor = true;
+                }
+                drawTextRun(canvas, line, palette, heightOffset, lastRunStartColumn, columnWidthSinceLastRun, lastRunStartIndex, charsSinceLastRun,
+                    measuredWidthForRun, cursorColor, cursorShape, lastRunStyle, reverseVideo || invertCursorTextColor || lastRunInsideSelection,
+                    lastRunHyperlink != 0 && mHyperlinksEnabled, !lastRunSkipBackground);
             }
-            drawTextRun(canvas, line, palette, heightOffset, lastRunStartColumn, columnWidthSinceLastRun, lastRunStartIndex, charsSinceLastRun,
-                measuredWidthForRun, cursorColor, cursorShape, lastRunStyle, reverseVideo || invertCursorTextColor || lastRunInsideSelection,
-                lastRunHyperlink != 0 && mHyperlinksEnabled, !lastRunSkipBackground);
             if (mImagesEnabled) {
                 // Second image pass: placements with z>=0 paint after the glyphs, so previews
                 // sit above leftover cell glyphs (RF-19). The cursor was already painted inside

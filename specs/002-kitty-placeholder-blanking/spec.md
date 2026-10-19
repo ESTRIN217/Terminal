@@ -3,7 +3,9 @@
 Estado: aprobada
 
 > Implementada el 2026-10-19 (spec 002). Pendiente la validación en dispositivo con
-> copilot, opencode y yazi.
+> copilot, opencode y yazi. Corrección del 2026-10-19 (T5): el renderer legado seguía
+> mostrando glifos por un bug propio de agrupado de runs (`drawTextRun` con
+> `lastRunStartColumn = -1` tras celdas saltadas); ver `tasks.md` T5.
 
 ## Contexto y objetivo
 
