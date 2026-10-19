@@ -19,6 +19,9 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - `docs/constitution.md` (6 principios) y flujo SDD en el repo (`.opencode/agents`, `.agents/skills/sdd`):
   `/sdd-spec` → `/sdd-plan` → `/sdd-tasks` → `/sdd-implement` → `/sdd-validate`. Key de Context7 placeholder.
 - `./gradlew test` (523 tests) y `:app:assembleDebug` en verde tras cerrar las specs 001 y 002.
+- AboutScreen con botón de sitio web (`https://terminal-gnulinux.web.app`): `onWebsiteClick` en `DeveloperCard`,
+  dos `SocialButton` lado a lado (`weight(1f)`), icono `Web` (via material-icons-extended) y string
+  `about_view_website` en `values/` y `values-es-rVE/` (pt-rBR no trae la sección about, cae al inglés).
 
 ## Spec 001 — kitty placement runs (implementada y validada en dispositivo el 2026-10-19)
 - Motivo: las previews de imagen de la TUI de **opencode/OpenTUI** salían descolocadas porque usa `a=p` con

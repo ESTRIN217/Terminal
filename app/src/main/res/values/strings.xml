@@ -369,6 +369,8 @@
     <string name="about_third_party_library">Third-party library</string>
     <string name="about_view_repository">View repository</string>
     <string name="about_repository_name">ESTRIN217/Terminal</string>
+    <string name="about_view_wiki">Documentation wiki</string>
+    <string name="about_wiki_url">terminal-gnulinux-docs.web.app</string>
     <string name="about_report_issue">Report a problem</string>
     <string name="about_issues_path">ESTRIN217/Terminal/issues</string>
     <string name="about_license_gplv3">GPLv3 license</string>
@@ -378,6 +380,7 @@
     <string name="about_developer_name">ESTRIN217</string>
     <string name="about_main_developer">Lead developer</string>
     <string name="about_view_on_github">View on GitHub</string>
+    <string name="about_view_website">Website</string>
 
     <!-- Licenses Screen -->
     <string name="licenses_title">Licenses</string>
