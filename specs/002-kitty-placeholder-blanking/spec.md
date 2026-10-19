@@ -1,11 +1,10 @@
 # Spec 002 — Celdas placeholder nunca se pintan como glifo
 
-Estado: aprobada
+Estado: implementada (validada en dispositivo el 2026-10-19: legado y Compose,
+copilot sin símbolos)
 
-> Implementada el 2026-10-19 (spec 002). Pendiente la validación en dispositivo con
-> copilot, opencode y yazi. Corrección del 2026-10-19 (T5): el renderer legado seguía
-> mostrando glifos por un bug propio de agrupado de runs (`drawTextRun` con
-> `lastRunStartColumn = -1` tras celdas saltadas); ver `tasks.md` T5.
+> Implementada y corregida el 2026-10-19 (T2 + T5). El usuario confirmó en el móvil
+> que la corrección se ve en ambos renderers con copilot.
 
 ## Contexto y objetivo
 

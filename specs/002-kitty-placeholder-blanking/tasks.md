@@ -70,3 +70,4 @@ Plan: `specs/002-kitty-placeholder-blanking/plan.md`. Una tarea cada vez: **test
     `lastRunStartColumn >= 0`), paridad con `ComposeTerminalFrame.forEachRun`;
     `./gradlew test` verde; el usuario confirma en dispositivo que copilot se ve limpio
     en el render legado y Compose nativo, y opencode/yazi sin cambios.
+  - **Validado por el usuario el 2026-10-19**: "Perfecto ahora sí quedó". Cierra la spec 002.
