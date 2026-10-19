@@ -508,15 +508,10 @@ public final class TermuxConstants {
     public static final String TERMUX_WIKI = TERMUX_APP_NAME + " Wiki"; // Default: "Terminal Wiki"
 
     /** Termux Wiki url (fork) */
-    public static final String TERMUX_WIKI_URL = "https://github.com/ESTRIN217/Terminal/wiki"; // Default: "https://github.com/ESTRIN217/Terminal/wiki"
-
-    /** Termux GitHub wiki repo url (fork) */
-    public static final String TERMUX_GITHUB_WIKI_REPO_URL = TERMUX_GITHUB_REPO_URL + "/wiki"; // Default: "https://github.com/ESTRIN217/Terminal/wiki"
-
+    public static final String TERMUX_WIKI_URL = "https://terminal-gnulinux-docs.web.app"; // Default: "https://terminal-gnulinux-docs.web.app"
 
     /** Termux support url (fork issues, no upstream support) */
     public static final String TERMUX_SUPPORT_EMAIL_URL = "https://github.com/ESTRIN217/Terminal/issues"; // Default: "https://github.com/ESTRIN217/Terminal/issues"
-
     /** Termux support mailto url (fork issues, no upstream support) */
     public static final String TERMUX_SUPPORT_EMAIL_MAILTO_URL = "https://github.com/ESTRIN217/Terminal/issues"; // Default: "https://github.com/ESTRIN217/Terminal/issues"
 
@@ -1164,9 +1159,8 @@ public final class TermuxConstants {
          */
         public static final class RUN_COMMAND_SERVICE {
 
-            /** Termux RUN_COMMAND Intent help url */
-            public static final String RUN_COMMAND_API_HELP_URL = TERMUX_GITHUB_WIKI_REPO_URL + "/RUN_COMMAND-Intent"; // Default: "https://github.com/ESTRIN217/Terminal/wiki/RUN_COMMAND-Intent"
-
+            /** Termux RUN_COMMAND Intent help url (published wiki) */
+            public static final String RUN_COMMAND_API_HELP_URL = TERMUX_WIKI_URL; // Default: "https://terminal-gnulinux-docs.web.app"
 
             /** Intent action to execute command with RUN_COMMAND_SERVICE */
             public static final String ACTION_RUN_COMMAND = TERMUX_PACKAGE_NAME + ".RUN_COMMAND"; // Default: "com.estrin217.terminal.RUN_COMMAND"
