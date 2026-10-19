@@ -909,6 +909,10 @@ private fun renderComposeFrame(
     // immediately, so no value outlives the call that set it.
     val colorsBuffer = ComposeTerminalFrame.ResolvedRunColorsBuffer()
     val codePointChars = CharArray(2)
+    // Placeholder columns without a target on the row being painted (spec 002, RF-1/RF-4):
+    // one int per column, reused across rows (RNF-2).
+    val unresolvedColumns = IntArray(columns)
+    var unresolvedCount = 0
     // Hoisted per-frame cell sets: cleared and refilled for every row so painting a frame
     // allocates no set per row (RNF-3). skipCells hides both the glyph and the background of
     // cells covered by a placement with z>=0; skipBackgroundCells hides only the background of
@@ -969,11 +973,20 @@ private fun renderComposeFrame(
                 else skipCells.add(col)
             }
             if (!(externalRow > topRow && screen.getLineWrap(externalRow - 1))) placeholderState.reset()
-            pendingPlaceholders = ArrayList()
-            com.termux.terminal.KittyPlaceholderDecoder.collectRow(line, columns, placeholderState) { col, target ->
-                skipCells.add(col)
-                pendingPlaceholders.add(col to target)
-            }
+            val pending = ArrayList<Pair<Int, com.termux.terminal.KittyPlaceholderDecoder.Target>>()
+            pendingPlaceholders = pending
+            unresolvedCount = 0
+            com.termux.terminal.KittyPlaceholderDecoder.collectRow(
+                line, columns, placeholderState,
+                { col, target ->
+                    skipCells.add(col)
+                    pending.add(col to target)
+                },
+                { col ->
+                    skipCells.add(col)
+                    unresolvedColumns[unresolvedCount++] = col
+                }
+            )
             // First image pass: placements below the glyphs paint before the text runs, so the
             // glyph sits on top of the image and the image shows through transparent pixels only
             // where the cell background did not hide it (RF-19).
@@ -1003,6 +1016,13 @@ private fun renderComposeFrame(
                 drawComposePlaceholderCell(
                     canvas, emulator, column, target, heightOffset, metrics, paint,
                     line, colors, defaultBackground, reverseVideo, selX1, selX2, colorsBuffer
+                )
+            }
+            // Cells that are placeholders but have no target: blank them too (RF-1/RF-4).
+            for (i in 0 until unresolvedCount) {
+                blankComposePlaceholderCell(
+                    canvas, line, unresolvedColumns[i], heightOffset, metrics, paint,
+                    colors, defaultBackground, reverseVideo, selX1, selX2, colorsBuffer
                 )
             }
         }
@@ -1119,11 +1139,10 @@ private class ComposeRowRunPainter(
 }
 
 /**
-  * Paint one unicode-placeholder cell as its grid slice of the virtual placement.
-  * Silently skips cells whose id or grid position does not resolve — the plain
-  * placeholder glyph drawn by the text run stays visible as fallback. Resolved
-  * cells blank the cell with its effective background first (kitty spec:
-  * transparent image regions show the cell background, never the glyph).
+  * Paint one unicode-placeholder cell as its grid slice of the virtual placement, or as its
+  * effective cell background when the target cannot be painted. Kitty never draws the
+  * placeholder glyph, so the cell is always blanked first (spec 002, RF-1/RF-3/RF-4) and the
+  * image slice is painted on top of that background.
   *
   * @param canvas target canvas
   * @param emulator the emulator (virtual placements + image registry)
@@ -1156,6 +1175,12 @@ private fun drawComposePlaceholderCell(
     selX2: Int,
     colorsBuffer: ComposeTerminalFrame.ResolvedRunColorsBuffer
 ) {
+    // Blank first: the placeholder glyph drawn by the text run must never show, even when the
+    // target cannot be painted (RF-3/RF-4). The image slice is painted on top of this background.
+    blankComposePlaceholderCell(
+        canvas, line, column, yBottom, metrics, paint,
+        paletteColors, defaultBackground, reverseVideo, selX1, selX2, colorsBuffer
+    )
     val vp = emulator.resolveVirtualPlacement(target.imageId) ?: return
     if (target.gridRow < 0 || target.gridRow >= vp.rows ||
         target.gridCol < 0 || target.gridCol >= vp.cols
@@ -1172,13 +1197,9 @@ private fun drawComposePlaceholderCell(
     val srcRight = (target.gridCol + 1).toLong() * bmpW / vp.cols
     val left = column * metrics.fontWidth
     val right = left + metrics.fontWidth
-    // Blank the cell with its effective background before painting the slice: the
-    // placeholder glyph is drawn by the text run underneath and transparent image
-    // pixels must show the cell background, never the glyph.
-    paint.color = cellBlankColor(
-        colorsBuffer, line, column, paletteColors, defaultBackground, reverseVideo, selX1, selX2
-    )
-    canvas.drawRect(left, top, right, bottom, paint)
+    // The cell was already blanked with its effective background before resolving: the
+    // placeholder glyph is drawn by the text run underneath and transparent image pixels
+    // must show the cell background, never the glyph.
     val src = android.graphics.Rect(
         minOf(srcLeft.toInt(), bmpW - 1), minOf(srcTop.toInt(), bmpH - 1),
         maxOf(srcLeft.toInt() + 1, minOf(srcRight.toInt(), bmpW)),
@@ -1186,6 +1207,46 @@ private fun drawComposePlaceholderCell(
     )
     val dst = android.graphics.RectF(left, top, right, bottom)
     canvas.drawBitmap(bitmap, src, dst, null)
+}
+
+/**
+ * Blank one placeholder cell with its effective background (palette, reverse video, selection
+ * and client SGR): Kitty never draws the placeholder glyph, so the cell shows either the image
+ * slice painted on top of this background or just the background (spec 002, RF-1/RF-3/RF-4).
+ *
+ * @param canvas target
+ * @param line the row being painted (cell style for blanking)
+ * @param column screen column of the cell
+ * @param yBottom bottom of the row (baseline convention shared with text runs)
+ * @param metrics font metrics for cell geometry
+ * @param paint paint used to blank the cell background
+ * @param paletteColors the emulator indexed colors
+ * @param defaultBackground the default background color (ARGB)
+ * @param reverseVideo whether the emulator is in reverse-video mode
+ * @param selX1 selection left bound for the row (or -1)
+ * @param selX2 selection right bound for the row (or -1)
+ * @param colorsBuffer per-frame holder for the resolved colors (reused, read immediately)
+ */
+private fun blankComposePlaceholderCell(
+    canvas: android.graphics.Canvas,
+    line: com.termux.terminal.TerminalRow,
+    column: Int,
+    yBottom: Float,
+    metrics: CanvasFontMetrics,
+    paint: Paint,
+    paletteColors: IntArray,
+    defaultBackground: Int,
+    reverseVideo: Boolean,
+    selX1: Int,
+    selX2: Int,
+    colorsBuffer: ComposeTerminalFrame.ResolvedRunColorsBuffer
+) {
+    val top = yBottom - metrics.lineSpacing
+    val left = column * metrics.fontWidth
+    paint.color = cellBlankColor(
+        colorsBuffer, line, column, paletteColors, defaultBackground, reverseVideo, selX1, selX2
+    )
+    canvas.drawRect(left, top, left + metrics.fontWidth, yBottom, paint)
 }
 
 /**

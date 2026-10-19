@@ -10,7 +10,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   `scripts/update-site.py`; regla en `AGENTS.md`. `public/img/` es el único sitio de capturas y banner.
 - `docs/constitution.md` (6 principios) y flujo SDD en el repo (`.opencode/agents`, `.agents/skills/sdd`):
   `/sdd-spec` → `/sdd-plan` → `/sdd-tasks` → `/sdd-implement` → `/sdd-validate`. Key de Context7 placeholder.
-- `./gradlew test` (519 tests) y `:app:assembleDebug` en verde tras cerrar la spec 001 (T1–T9).
+- `./gradlew test` (523 tests) y `:app:assembleDebug` en verde tras cerrar las specs 001 y 002.
 
 ## Spec 001 — kitty placement runs (implementada y validada en dispositivo el 2026-10-19)
 - Motivo: las previews de imagen de la TUI de **opencode/OpenTUI** salían descolocadas porque usa `a=p` con
@@ -41,6 +41,19 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   `parseKittyId` (`Integer.parseUnsignedInt`) para `i=`/`I=`/`p=` y `Integer.toUnsignedString` en las
   respuestas; `z=` sigue con signo. Regresión en `KittyOpenTuiPreviewTest` (4 casos con la secuencia
   capturada: `a=t,f=100,m=1` troceado → `a=p,…,C=1,z=-1073741823,q=2` → `a=d,d=I`).
+
+## Spec 002 — placeholders de copilot (implementada, pendiente de validar en el móvil)
+- **Causa de los "símbolos" de copilot**: usa `a=T,U=1,c=48,r=14` + rejilla de `U+10EEEE` con diacríticos e id
+  en el color de primer plano. Las celdas placeholder que **no decodifican** (fg por defecto) o caen fuera de
+  `c×r` se pintaban como texto (`.notdef` + diacríticos). Kitty **nunca** dibuja ese carácter.
+- **Arreglo**: `KittyPlaceholderDecoder.UnresolvedCellVisitor` + sobrecarga de `collectRow`; los dos renderers
+  meten esas celdas en `skipCells` y las blanquean con el fondo efectivo tras el texto;
+  `drawPlaceholderCell`/`drawComposePlaceholderCell` blanquean **antes** de resolver (también limpia una celda
+  fuera de rejilla o con la imagen desalojada). Con imágenes desactivadas no cambia nada. Sin dependencias.
+- **Regla que no hay que romper**: una celda `U+10EEEE` nunca se pinta como glifo; fuera de `c×r` solo fondo
+  (kitty: "solo parte de la imagen"). Tests nuevos: `KittyPlaceholderBlankTest` (4). Total 523.
+- **Pendiente**: validar en dispositivo (copilot sin símbolos; opencode/yazi igual). La spec sigue `aprobada`
+  hasta esa confirmación.
 
 ## Decisiones y aprendizajes (y por qué)
 - **Las lecturas por fila externa de `TerminalBuffer` no lanzan** (`getHyperlinkAt`/`getImageAt`/`getStyleAt`

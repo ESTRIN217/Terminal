@@ -63,6 +63,10 @@ public final class TerminalRenderer {
     private boolean mPlaceholderReverseVideo;
     private int mPlaceholderSelX1;
     private int mPlaceholderSelX2;
+    /** Placeholder columns without a target on the row being painted (spec 002, RF-1/RF-4). */
+    private int[] mUnresolvedColumns = new int[0];
+    /** Number of used entries in {@link #mUnresolvedColumns} (holder for the row lambda). */
+    private final int[] mUnresolvedCount = new int[1];
     /** Paints decoded placeholder cells; runs after text so opaque images cover the glyph. */
     private final KittyPlaceholderDecoder.CellVisitor mPlaceholderVisitor =
         new KittyPlaceholderDecoder.CellVisitor() {
@@ -198,6 +202,8 @@ public final class TerminalRenderer {
         if (reverseVideo)
             canvas.drawColor(palette[TextStyle.COLOR_INDEX_FOREGROUND], PorterDuff.Mode.SRC);
 
+        if (mImagesEnabled && mUnresolvedColumns.length < columns) mUnresolvedColumns = new int[columns];
+
         float heightOffset = mFontLineSpacingAndAscent;
         for (int row = topRow; row < endRow; row++) {
             heightOffset += mFontLineSpacing;
@@ -233,9 +239,13 @@ public final class TerminalRenderer {
                 if (!(row > topRow && screen.getLineWrap(row - 1))) mPlaceholderState.reset();
                 final java.util.HashSet<Integer> finalSkipCells = skipCells;
                 final java.util.ArrayList<int[]> finalPending = pendingPlaceholders;
+                mUnresolvedCount[0] = 0;
                 KittyPlaceholderDecoder.collectRow(lineObject, columns, mPlaceholderState, (col, target) -> {
                     finalSkipCells.add(col);
                     finalPending.add(new int[]{col, target.imageId, target.gridRow, target.gridCol});
+                }, col -> {
+                    finalSkipCells.add(col);
+                    mUnresolvedColumns[mUnresolvedCount[0]++] = col;
                 });
                 mRowBackgrounds.setRow(lineObject, palette, reverseVideo, selx1, selx2);
                 // First image pass: placements below the glyphs (RF-19).
@@ -379,14 +389,20 @@ public final class TerminalRenderer {
                     mPlaceholderVisitor.visit(ph[0],
                         new KittyPlaceholderDecoder.Target(ph[1], ph[2], ph[3]));
                 }
+                // Cells that are placeholders but have no target: blank them too (RF-1/RF-4).
+                // The scratch context above is already pointing at this row's line/palette.
+                for (int i = 0; i < mUnresolvedCount[0]; i++) {
+                    blankPlaceholderCell(canvas, mUnresolvedColumns[i],
+                        heightOffset - mFontLineSpacing, heightOffset);
+                }
             }
         }
     }
 
     /**
-     * Paint one unicode-placeholder cell as its grid slice of the virtual placement.
-     * Silently skips cells whose id or grid position does not resolve — the plain
-     * placeholder glyph drawn by the text run stays visible as fallback.
+     * Paint one unicode-placeholder cell as its grid slice of the virtual placement, or as
+     * its effective cell background when the target cannot be painted. Kitty never draws the
+     * placeholder glyph, so the cell is always blanked first (spec 002, RF-1/RF-3/RF-4).
      *
      * @param canvas   target
      * @param emulator the emulator (virtual placements + image registry)
@@ -397,6 +413,7 @@ public final class TerminalRenderer {
      */
     private void drawPlaceholderCell(Canvas canvas, TerminalEmulator emulator, int column,
                                      KittyPlaceholderDecoder.Target target, float top, float bottom) {
+        blankPlaceholderCell(canvas, column, top, bottom);
         final KittyVirtualPlacement vp = emulator.resolveVirtualPlacement(target.imageId);
         if (vp == null) return;
         if (target.gridRow < 0 || target.gridRow >= vp.rows
@@ -412,20 +429,31 @@ public final class TerminalRenderer {
         final int srcRight = (int) ((long) (target.gridCol + 1) * bmpW / vp.cols);
         final float left = column * mFontWidth;
         final float right = left + mFontWidth;
-        // Blank the cell with its effective background before painting the slice: the
-        // placeholder glyph is drawn by the text run underneath and transparent image
-        // pixels must show the cell background (kitty spec), never the glyph.
-        final boolean reverseHere = mPlaceholderReverseVideo
-            || (column >= mPlaceholderSelX1 && column <= mPlaceholderSelX2);
-        mTextPaint.setColor(TextStyle.effectiveBackgroundColor(
-            mPlaceholderLine.getStyle(column), mPlaceholderPalette, reverseHere));
-        canvas.drawRect(left, top, right, bottom, mTextPaint);
         final android.graphics.Rect src = new android.graphics.Rect(
             Math.min(srcLeft, bmpW - 1), Math.min(srcTop, bmpH - 1),
             Math.max(srcLeft + 1, Math.min(srcRight, bmpW)),
             Math.max(srcTop + 1, Math.min(srcBottom, bmpH)));
         final android.graphics.RectF dst = new android.graphics.RectF(left, top, right, bottom);
         canvas.drawBitmap(bitmap, src, dst, null);
+    }
+
+    /**
+     * Blank one placeholder cell with its effective background (palette, reverse video,
+     * selection and client SGR), so neither the placeholder glyph nor stale pixels from a
+     * previous frame can show. Uses the scratch row context set before the placeholder pass.
+     *
+     * @param canvas target
+     * @param column screen column of the cell
+     * @param top    cell top in canvas Y
+     * @param bottom cell bottom (baseline convention shared with text runs)
+     */
+    private void blankPlaceholderCell(Canvas canvas, int column, float top, float bottom) {
+        final boolean reverseHere = mPlaceholderReverseVideo
+            || (column >= mPlaceholderSelX1 && column <= mPlaceholderSelX2);
+        mTextPaint.setColor(TextStyle.effectiveBackgroundColor(
+            mPlaceholderLine.getStyle(column), mPlaceholderPalette, reverseHere));
+        final float left = column * mFontWidth;
+        canvas.drawRect(left, top, left + mFontWidth, bottom, mTextPaint);
     }
 
     /**
