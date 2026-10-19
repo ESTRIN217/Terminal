@@ -8,6 +8,14 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - **Web estática publicada en <https://terminal-gnulinux.web.app>**: `public/` (sin build ni `node_modules`)
   servida por Firebase Hosting con rewrite `**` → `/index.html`. Lo que caduca (versión, APK, hash) lo pone
   `scripts/update-site.py`; regla en `AGENTS.md`. `public/img/` es el único sitio de capturas y banner.
+- **Wiki de docs en <https://terminal-gnulinux-docs.web.app>** (2026-10-19): `wiki/` estático (sin build, sin
+  JS imprescindible); 7 páginas + `404.html` + `robots.txt`, convertidas de README y `docs/`. Hosting
+  multitarget: `firebase.json` → array con targets `main` (public/) y `terminal-gnulinux-docs` (wiki/);
+  `.firebaserc` los mapea a sus sitios. Desplegar solo la wiki:
+  `firebase deploy --only hosting:terminal-gnulinux-docs`; ambos sitios con `--only hosting`.
+- **Ojo con el CLI Firebase**: `firebase use` sin `-P` puede resolver otro proyecto (`secure-notes-502213`):
+  pasar SIEMPRE `-P terminal-gnulinux` en scripts/CI de este repo. La wiki no lleva imágenes propias
+  (regla: solo `public/img/`): favicon e imágenes apuntan a la URL del sitio principal.
 - `docs/constitution.md` (6 principios) y flujo SDD en el repo (`.opencode/agents`, `.agents/skills/sdd`):
   `/sdd-spec` → `/sdd-plan` → `/sdd-tasks` → `/sdd-implement` → `/sdd-validate`. Key de Context7 placeholder.
 - `./gradlew test` (523 tests) y `:app:assembleDebug` en verde tras cerrar las specs 001 y 002.
@@ -42,7 +50,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   respuestas; `z=` sigue con signo. Regresión en `KittyOpenTuiPreviewTest` (4 casos con la secuencia
   capturada: `a=t,f=100,m=1` troceado → `a=p,…,C=1,z=-1073741823,q=2` → `a=d,d=I`).
 
-## Spec 002 — placeholders de copilot (implementada, pendiente de validar en el móvil)
+## Spec 002 — placeholders de copilot (implementada y validada en dispositivo el 2026-10-19)
 - **Causa de los "símbolos" de copilot**: usa `a=T,U=1,c=48,r=14` + rejilla de `U+10EEEE` con diacríticos e id
   en el color de primer plano. Las celdas placeholder que **no decodifican** (fg por defecto) o caen fuera de
   `c×r` se pintaban como texto (`.notdef` + diacríticos). Kitty **nunca** dibuja ese carácter.
@@ -52,8 +60,17 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   fuera de rejilla o con la imagen desalojada). Con imágenes desactivadas no cambia nada. Sin dependencias.
 - **Regla que no hay que romper**: una celda `U+10EEEE` nunca se pinta como glifo; fuera de `c×r` solo fondo
   (kitty: "solo parte de la imagen"). Tests nuevos: `KittyPlaceholderBlankTest` (4). Total 523.
-- **Pendiente**: validar en dispositivo (copilot sin símbolos; opencode/yazi igual). La spec sigue `aprobada`
-  hasta esa confirmación.
+- **T5 (corrección, primero mal diagnosticado: el decodificador estaba bien en ambos)**: el usuario confirmó
+  que el arreglo solo se veía en Compose nativo. Bug legado real en `TerminalRenderer.render()`: tras celdas
+  saltadas, `lastRunStartColumn` quedaba en `-1` y el bucle usaba `column == 0` como centinela → flush
+  fantasma con `startColumn = -1`, índice de texto obsoleto y `mes = 0` (división/escala ∞) que estiraba los
+  glifos placeholder por la fila. Compose lo hace bien (`hasRun` en `forEachRun`); Fix: `lastRunStartColumn
+  < 0` al frente de la condición de corte y guardas `lastRunStartColumn >= 0` en los dos flushes. **Lección:
+  cuando dos renderers repiten un algoritmo, comparar también los centinelas de estado, no solo las ramas
+  nuevas; y no dar "código correcto en ambos" por buena con la sola lectura.** Sin test JUnit posible
+  (Canvas), validación en dispositivo. Commit `40c58d09` tras validar el usuario
+  ("Perfecto ahora sí quedó", 2026-10-19): copilot limpio en legado y Compose.
+  Spec 002 cerrada.
 
 ## Decisiones y aprendizajes (y por qué)
 - **Las lecturas por fila externa de `TerminalBuffer` no lanzan** (`getHyperlinkAt`/`getImageAt`/`getStyleAt`

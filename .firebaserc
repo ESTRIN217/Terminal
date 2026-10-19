@@ -1,5 +1,13 @@
 {
   "projects": {
     "default": "terminal-gnulinux"
+  },
+  "targets": {
+    "terminal-gnulinux": {
+      "hosting": {
+        "main": ["terminal-gnulinux"],
+        "terminal-gnulinux-docs": ["terminal-gnulinux-docs"]
+      }
+    }
   }
 }

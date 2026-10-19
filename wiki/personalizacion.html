@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Apariencia y fuentes — Wiki de Terminal</title>
+    <meta name="description" content="Personaliza la terminal de Terminal: elegir fuente Nerd Font y ligaduras, importar tu propia fuente, esquema de color de 24 bits y teclado extra.">
+    <meta name="color-scheme" content="dark">
+    <link rel="canonical" href="https://terminal-gnulinux-docs.web.app/personalizacion.html">
+    <link rel="icon" href="https://terminal-gnulinux.web.app/img/icon-192.png" type="image/png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+    <header class="site-header">
+        <div class="wrap header-inner">
+            <a class="brand" href="index.html">
+                <span class="brand-name">Terminal</span>
+                <span class="brand-sub">· wiki</span>
+            </a>
+            <nav class="site-nav" aria-label="Enlaces del sitio">
+                <ul>
+                    <li><a href="https://terminal-gnulinux.web.app">Sitio</a></li>
+                    <li><a href="https://github.com/ESTRIN217/Terminal">GitHub</a></li>
+                    <li><a href="https://github.com/ESTRIN217/Terminal/releases">Descargar</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main id="contenido">
+        <div class="wrap docs">
+            <nav class="docs-nav" aria-label="Páginas de la wiki">
+                <h2>Documentación</h2>
+                <ul>
+                    <li><a href="index.html">Portada</a></li>
+                    <li><a href="instalacion.html">Instalación</a></li>
+                    <li><a href="uso-terminal.html">Uso de la terminal</a></li>
+                    <li><a href="personalizacion.html" aria-current="page">Apariencia y fuentes</a></li>
+                    <li><a href="hipervinculos.html">Hipervínculos</a></li>
+                    <li><a href="imagenes.html">Imágenes en la terminal</a></li>
+                    <li><a href="limitaciones.html">Limitaciones conocidas</a></li>
+                </ul>
+            </nav>
+
+            <article class="docs-main">
+                <header class="doc-head">
+                    <h1>Apariencia y fuentes</h1>
+                    <p class="doc-meta">Tipografía, ligaduras, colores de 24 bits y detalles de estilo.</p>
+                </header>
+
+                <div class="doc-body">
+                    <h2>Fuentes del terminal</h2>
+                    <p>
+                        El selector de fuente vive en <strong>Ajustes</strong> (y también en el menú
+                        «Más» de la terminal, ítem <em>Estilo</em>, que abre el mismo diálogo). Las
+                        fuentes incluidas llegan con iconografía <strong>Nerd Fonts v3.5.1</strong>:
+                    </p>
+                    <ul>
+                        <li>Predeterminada (monospace de la plataforma)</li>
+                        <li>Fira Code</li>
+                        <li>Cascadia Code</li>
+                        <li>JetBrains Mono</li>
+                        <li>D2 Coding</li>
+                        <li>Hack</li>
+                    </ul>
+
+                    <h3>Tu propia fuente</h3>
+                    <p>
+                        Copia un archivo <kbd>.ttf</kbd> o <kbd>.otf</kbd> como
+                        <code>~/.termux/font.ttf</code>; la entrada <strong>Importar…</strong> de
+                        Ajustes lo hace por ti con el selector de archivos del sistema (SAF, sin
+                        permisos de almacenamiento) y valida el encabezado del fichero antes de
+                        escribir. Límite de tamaño: 50 MB.
+                    </p>
+                    <p>
+                        Al aceptar la elección, el terminal aplica la fuente al instante; la
+                        recarga de estilo ocurre también al volver de Ajustes.
+                    </p>
+
+                    <h3>Ligaduras tipográficas</h3>
+                    <p>
+                        Cada fuente con ligaduras programadas (<code>liga</code>) las aplica igual que
+                        la haría un terminal de escritorio. Hay un <strong>toggle de ligaduras</strong>
+                        en Ajustes: al apagarlo, cada code point se dibuja por separado para inhibir
+                        esas ligaduras — así se desactivan símbolos compuestos como
+                        <code>=&gt;</code>, <code>-&gt;</code> o <code>!=</code> si no te gustan.
+                    </p>
+
+                    <h2>Color de 24 bits</h2>
+                    <p>
+                        El emulador soporta colores directos de 24 bits (secuencias SGR
+                        <code>38;2;r;g;b</code> y <code>48;2;r;g;b</code>). Para el resto del terminal
+                        (texto de fondo, cursor, 16 colores base), puedes definir un
+                        <strong>esquema personalizado</strong> que se activa con el toggle
+                        <em>«Esquema de colores personalizado»</em> de Ajustes.
+                    </p>
+                    <p>
+                        El esquema se define en <code>~/.termux/colors.properties</code>:
+                    </p>
+                    <pre><code>foreground=#eceaf6
+background=#0d0b16
+cursor=#e46aa8
+color0=#1b1a2c
+color7=#d5d3e8
+color15=#ffffff
+</code></pre>
+                    <p>
+                        Las claves admitidas son <code>color0</code>–<code>color15</code> más
+                        <code>foreground</code>, <code>background</code> y <code>cursor</code>, en
+                        formato <code>#RRGGBB</code>. La recarga es automática al volver de Ajustes.
+                    </p>
+
+                    <h2>Multipantalla y Ajustes rápidos</h2>
+                    <h3>Refresco de pantalla</h3>
+                    <p>
+                        La app aplica el <strong>modo de refresco</strong> más alto disponible (90/120
+                        Hz o lo que soporte el teléfono) sin cambiar la resolución, para que el texto
+                        siga nítido. Si priorizas batería, el tile <strong>«Forzar 60 Hz»</strong>
+                        de Ajustes elige el modo más cercano a 60 Hz.
+                    </p>
+
+                    <h3>Atribución por hardware</h3>
+                    <p>
+                        Según la memoria RAM, el número de núcleos y el tipo de dispositivo, la app
+                        fija defaults razonables para:
+                    </p>
+                    <ul>
+                        <li><strong>Scrollback</strong>: 1000 líneas en equipos modestos, 5000 en equipos potentes.</li>
+                        <li><strong>Parpadeo del cursor</strong>: desactivado por defecto en gama baja.</li>
+                        <li><strong>Renderer nativo de Compose</strong>: activado solo en gama alta (detrás del flag <code>native_compose_renderer</code>, con la vista legada de respaldo).</li>
+                    </ul>
+                    <p>
+                        Solo se aplican la primera vez, en una instalación recién estrenada: si ya
+                        personalizaste algo (o el fichero <code>termux.properties</code> existe), tus
+                        preferencias ganan siempre.
+                    </p>
+                </div>
+
+                <nav class="page-nav" aria-label="Navegación entre páginas">
+                    <a href="uso-terminal.html" rel="prev">← Uso de la terminal</a>
+                    <a href="hipervinculos.html" rel="next">Siguiente: Hipervínculos →</a>
+                </nav>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="wrap footer__inner">
+            <p>
+                <strong>Wiki de Terminal</strong> · parte del proyecto
+                <a href="https://github.com/ESTRIN217/Terminal">ESTRIN217/Terminal</a> (GPLv3).
+            </p>
+            <p class="muted">
+                Fork independiente de <a href="https://github.com/termux/termux-app">termux/termux-app</a>.
+                Sin afiliación con el equipo de Termux. Página estática: no usa cookies ni analítica.
+            </p>
+        </div>
+    </footer>
+</body>
+</html>

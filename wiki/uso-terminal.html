@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Uso de la terminal — Wiki de Terminal</title>
+    <meta name="description" content="Uso diario de la app Terminal: teclado y teclas extra, multipantalla, menú «Más», selección de URL, gestor de archivos y depuración con logcat.">
+    <meta name="color-scheme" content="dark">
+    <link rel="canonical" href="https://terminal-gnulinux-docs.web.app/uso-terminal.html">
+    <link rel="icon" href="https://terminal-gnulinux.web.app/img/icon-192.png" type="image/png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+    <header class="site-header">
+        <div class="wrap header-inner">
+            <a class="brand" href="index.html">
+                <span class="brand-name">Terminal</span>
+                <span class="brand-sub">· wiki</span>
+            </a>
+            <nav class="site-nav" aria-label="Enlaces del sitio">
+                <ul>
+                    <li><a href="https://terminal-gnulinux.web.app">Sitio</a></li>
+                    <li><a href="https://github.com/ESTRIN217/Terminal">GitHub</a></li>
+                    <li><a href="https://github.com/ESTRIN217/Terminal/releases">Descargar</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main id="contenido">
+        <div class="wrap docs">
+            <nav class="docs-nav" aria-label="Páginas de la wiki">
+                <h2>Documentación</h2>
+                <ul>
+                    <li><a href="index.html">Portada</a></li>
+                    <li><a href="instalacion.html">Instalación</a></li>
+                    <li><a href="uso-terminal.html" aria-current="page">Uso de la terminal</a></li>
+                    <li><a href="personalizacion.html">Apariencia y fuentes</a></li>
+                    <li><a href="hipervinculos.html">Hipervínculos</a></li>
+                    <li><a href="imagenes.html">Imágenes en la terminal</a></li>
+                    <li><a href="limitaciones.html">Limitaciones conocidas</a></li>
+                </ul>
+            </nav>
+
+            <article class="docs-main">
+                <header class="doc-head">
+                    <h1>Uso de la terminal</h1>
+                    <p class="doc-meta">Gestos, teclado, multipantalla, menú «Más» y depuración.</p>
+                </header>
+
+                <div class="doc-body">
+                    <h2>El entorno Debian</h2>
+                    <p>
+                        Cada pestaña de terminal es una sesión dentro de un entorno Debian completo vía
+                        <code>proot</code>. Puedes usar <code>apt</code> para instalar paquetes con
+                        <code>apt install &lt;paquete&gt;</code>, y herramientas normales de una
+                        distribución Linux dentro del almacenamiento de la app. La conexión a internet
+                        solo hace falta para <code>apt</code>: el resto funciona sin red.
+                    </p>
+
+                    <h2>Sesiones y multipantalla</h2>
+                    <ul>
+                        <li>
+                            <strong>Pestañas</strong>: cada sesión de terminal (o pestaña del gestor de
+                            archivos) es una pestaña; puedes tener varias a la vez.
+                        </li>
+                        <li>
+                            <strong>Split</strong>: en pantallas de <strong>600 dp o más</strong> puedes
+                            repartir dos paneles simultáneos (terminal o gestor de archivos). Tocar un
+                            panel lo enfoca sin moverlo; cerrarlo o rotar el dispositivo lo deshace.
+                        </li>
+                        <li>
+                            <strong>Gestor de archivos</strong>: pestaña dedicada, con symlinks,
+                            papelera, marcadores y acciones sobre los archivos (copiar ruta, edición
+                            con <code>nano</code>/<code>vim</code>, abrir terminal en el directorio
+                            actual…).
+                        </li>
+                    </ul>
+
+                    <h2>Teclado</h2>
+                    <ul>
+                        <li>IME de Android + barra de <strong>teclas extra</strong> (macros, popup de teclas especiales, estilos <code>extra-keys-style</code> de Termux).</li>
+                        <li><strong>Selección</strong>: long-press para marcar, handles arrastrables y toolbar Copiar/Pegar/Más (en el renderer nativo de Compose; detrás del flag <code>native_compose_renderer</code>).</li>
+                        <li><strong>Scroll</strong>: pinch-zoom e inercia de scroll en el renderer nativo, scrollwheel del ratón físico también funciona.</li>
+                        <li><strong><code>BACK</code></strong>: con selección activa la limpia; sin selección se comporta como tecla <kbd>Esc</kbd> del terminal si así lo tienes configurado.</li>
+                    </ul>
+
+                    <h3>Teclas extra</h3>
+                    <p>
+                        La barra de teclas extra sale bajo el teclado cuando la sesión está activa.
+                        Sirve para escribir caracteres que el teclado virtual no verá bien (por
+                        ejemplo <kbd>Esc</kbd>, <kbd>Tab</kbd>, <kbd>Ctrl</kbd> combinados). Se
+                        configura por sesión, no por pantalla.
+                    </p>
+
+                    <h2>Menú «Más» (More)</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>¿Dónde sale?</th>
+                                <th>Acciones destacadas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Overflow (<code>MoreVert</code>) en la pestaña de terminal activa, botón «Más…» de la toolbar de selección y right-click del ratón.</td>
+                                <td>
+                                    Compartir texto seleccionado · <a href="hipervinculos.html#seleccionar-url">Seleccionar URL</a> ·
+                                    Autofill · Matar proceso · Mantener pantalla encendida.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p>
+                        El menú es un <strong>ModalBottomSheet</strong> de [Material 3 Expressive];
+                        la hoja de selección de URL (ver <a href="hipervinculos.html">Hipervínculos</a>)
+                        es un diálogo cuyo título explica las dos acciones posibles: <em>«Click URL to
+                        copy or long press to open»</em>.
+                    </p>
+
+                    <h2>Depuración</h2>
+                    <p>
+                        Puedes ajustar el nivel de <code>logcat</code> desde
+                        <strong>Ajustes → Terminal → Debugging → Log Level</strong> (por defecto
+                        <code>Normal</code>).
+                    </p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Nivel</th>
+                                <th>Qué registra</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>Off</code></td><td>No registra nada.</td></tr>
+                            <tr><td><code>Normal</code></td><td>Errores, avisos, info y stacktraces.</td></tr>
+                            <tr><td><code>Debug</code></td><td>Mensajes de depuración.</td></tr>
+                            <tr><td><code>Verbose</code></td><td>Mensajes detallados.</td></tr>
+                        </tbody>
+                    </table>
+                    <p>
+                        Consúltalo con <code>logcat -d</code> desde la propia terminal o con
+                        <code>adb logcat</code> desde un PC. Vuelve a <code>Normal</code> cuando
+                        acabes de depurar.
+                    </p>
+
+                    <h3>Reporte de incidencias</h3>
+                    <ol>
+                        <li>Menú largo del terminal → <strong>More → Report Issue</strong>: genera un reporte automático.</li>
+                        <li>Pública el <strong>texto completo</strong> en un <a href="https://github.com/ESTRIN217/Terminal/issues">issue de este fork</a>.</li>
+                        <li>Los issues con solo capturas de pantalla parciales probablemente se cierren.</li>
+                    </ol>
+                </div>
+
+                <nav class="page-nav" aria-label="Navegación entre páginas">
+                    <a href="instalacion.html" rel="prev">← Instalación</a>
+                    <a href="personalizacion.html" rel="next">Siguiente: Apariencia y fuentes →</a>
+                </nav>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="wrap footer__inner">
+            <p>
+                <strong>Wiki de Terminal</strong> · parte del proyecto
+                <a href="https://github.com/ESTRIN217/Terminal">ESTRIN217/Terminal</a> (GPLv3).
+            </p>
+            <p class="muted">
+                Fork independiente de <a href="https://github.com/termux/termux-app">termux/termux-app</a>.
+                Sin afiliación con el equipo de Termux. Página estática: no usa cookies ni analítica.
+            </p>
+        </div>
+    </footer>
+</body>
+</html>
