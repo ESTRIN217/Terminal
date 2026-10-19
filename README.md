@@ -20,7 +20,7 @@
 **Terminal** es una aplicación Android de terminal + entorno Linux (Debian vía proot),
 con UI moderna en Jetpack Compose y emulación de terminal nativa.
 
-Versión actual: **2.0.0** (`versionCode` 120). Ver el [CHANGELOG](CHANGELOG.md).
+Versión actual: Ver el [CHANGELOG](CHANGELOG.md) o las release.
 ## 📸 Capturas de Pantalla
 
 <table align="center">
@@ -39,7 +39,7 @@ Versión actual: **2.0.0** (`versionCode` 120). Ver el [CHANGELOG](CHANGELOG.md)
 
 ---
 
-## Características
+## Características clave
 
 - **Entorno Debian completo** vía proot, sin root. El rootfs se descarga y verifica en el
   primer arranque.
@@ -96,9 +96,10 @@ si los necesitas.
 ## Enlaces
 
 - Repo: <https://github.com/ESTRIN217/Terminal>
+- Website: <https://terminal-gnulinux.web.app>
 - Issues: <https://github.com/ESTRIN217/Terminal/issues>
 - Discussions: <https://github.com/ESTRIN217/Terminal/discussions>
-- Wiki: <https://github.com/ESTRIN217/Terminal/wiki>
+- Wiki: <https://terminal-gnulinux-docs.web.app>
 
 ## Depuración
 
@@ -181,3 +182,11 @@ Excepciones heredadas del upstream:
   (Apache 2.0) en las librerías [`terminal-view`](terminal-view) y
   [`terminal-emulator`](terminal-emulator).
 - Ver [`termux-shared/LICENSE.md`](termux-shared/LICENSE.md) para excepciones de `termux-shared`.
+
+<p align="center">
+  Desarrollado con pasión por <b>ESTRIN217</b>.
+</p>
+
+<p align="center">
+  Hecho con ❤️ en Venezuela.
+</p>
