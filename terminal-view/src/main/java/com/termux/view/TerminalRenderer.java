@@ -9,10 +9,12 @@ import android.graphics.Typeface;
 import android.util.LruCache;
 
 import com.termux.terminal.KittyPlaceholderDecoder;
+import com.termux.terminal.KittyPlacementGeometry;
 import com.termux.terminal.KittyVirtualPlacement;
 import com.termux.terminal.TerminalBuffer;
 import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalImageData;
+import com.termux.terminal.TerminalImagePlacement;
 import com.termux.terminal.TerminalRow;
 import com.termux.terminal.TextStyle;
 import com.termux.terminal.WcWidth;
@@ -34,6 +36,18 @@ public final class TerminalRenderer {
     private boolean mImagesEnabled = true;
     /** Decoded bitmap cache keyed by registry id; entries dropped when the registry evicts. */
     private final LruCache<Integer, CachedImageBitmap> mImageBitmaps = new LruCache<>(16);
+    /** Shared painter of placement strips; the Compose canvas paints with the same class (RNF-4). */
+    private final TerminalImagePainter mImagePainter = new TerminalImagePainter();
+    /** Bitmap provider handed to {@link #mImagePainter} (the cache above, identity checked). */
+    private final TerminalImagePainter.ImageBitmapProvider mImageBitmapsProvider =
+        new TerminalImagePainter.ImageBitmapProvider() {
+            @Override
+            public Bitmap bitmapFor(TerminalImageData data) {
+                return TerminalRenderer.this.bitmapFor(data);
+            }
+        };
+    /** Per-row cell background resolver handed to {@link #mImagePainter} (see {@link RowCellBackgrounds}). */
+    private final RowCellBackgrounds mRowBackgrounds = new RowCellBackgrounds();
     private final Paint mTextPaint = new Paint();
 
     /** Per-row inheritance state for unicode-placeholder cells (reset per logical line). */
@@ -72,6 +86,46 @@ public final class TerminalRenderer {
         CachedImageBitmap(TerminalImageData source, Bitmap bitmap) {
             this.source = source;
             this.bitmap = bitmap;
+        }
+    }
+
+    /**
+     * Effective background of one cell of the row being painted, with the same colour logic
+     * {@link #drawTextRun} uses for a text run (palette lookup and selection/reverse swap), so
+     * the painter blanks each covered cell exactly like the glyph pass would (RF-23).
+     * <p>
+     * One instance per renderer, repointed at every row before the image passes run, so painting
+     * allocates no resolver per row.
+     */
+    private final class RowCellBackgrounds implements TerminalImagePainter.CellBackgroundResolver {
+        private TerminalRow mLine;
+        private int[] mPalette;
+        private boolean mReverseVideo;
+        private int mSelX1 = -1;
+        private int mSelX2 = -1;
+
+        /**
+         * Point the resolver at the row about to be painted.
+         *
+         * @param line         row being painted (per-cell styles)
+         * @param palette      the emulator indexed colours
+         * @param reverseVideo whether the emulator is in reverse-video mode
+         * @param selX1        selection left bound for the row, or -1
+         * @param selX2        selection right bound for the row, or -1
+         */
+        void setRow(TerminalRow line, int[] palette, boolean reverseVideo, int selX1, int selX2) {
+            mLine = line;
+            mPalette = palette;
+            mReverseVideo = reverseVideo;
+            mSelX1 = selX1;
+            mSelX2 = selX2;
+        }
+
+        @Override
+        public int colorAt(int column) {
+            if (mLine == null) return 0;
+            final boolean reverseHere = mReverseVideo || (column >= mSelX1 && column <= mSelX2);
+            return TextStyle.effectiveBackgroundColor(mLine.getStyle(column), mPalette, reverseHere);
         }
     }
 
@@ -160,12 +214,21 @@ public final class TerminalRenderer {
             final int charsUsedInLine = lineObject.getSpaceUsed();
 
             java.util.HashSet<Integer> skipCells = null;
+            java.util.HashSet<Integer> skipBackgroundCells = null;
             java.util.ArrayList<int[]> pendingPlaceholders = null;
             if (mImagesEnabled) {
                 skipCells = new java.util.HashSet<>();
+                skipBackgroundCells = new java.util.HashSet<>();
                 pendingPlaceholders = new java.util.ArrayList<>();
+                // The placement holding the cell decides what the glyph pass does with it
+                // (RF-21): z>=0 covers the cell, so neither glyph nor background may be painted
+                // (the image pass paints both); z<0 stays under the glyph, so only the cell
+                // background must be left alone for the image to show through (RF-18/RF-23).
                 for (int col = 0; col < columns; col++) {
-                    if (screen.getImageAt(row, col) != 0) skipCells.add(col);
+                    final TerminalImagePlacement placement = mEmulator.getPlacementAt(row, col);
+                    if (placement == null) continue;
+                    if (KittyPlacementGeometry.isBelowText(placement.z)) skipBackgroundCells.add(col);
+                    else skipCells.add(col);
                 }
                 if (!(row > topRow && screen.getLineWrap(row - 1))) mPlaceholderState.reset();
                 final java.util.HashSet<Integer> finalSkipCells = skipCells;
@@ -174,6 +237,10 @@ public final class TerminalRenderer {
                     finalSkipCells.add(col);
                     finalPending.add(new int[]{col, target.imageId, target.gridRow, target.gridCol});
                 });
+                mRowBackgrounds.setRow(lineObject, palette, reverseVideo, selx1, selx2);
+                // First image pass: placements below the glyphs (RF-19).
+                mImagePainter.drawRowPass(canvas, mEmulator, row, heightOffset - mFontLineSpacing,
+                    heightOffset, mFontWidth, true, mRowBackgrounds, mImageBitmapsProvider, mTextPaint);
             }
 
             long lastRunStyle = 0;
@@ -183,6 +250,7 @@ public final class TerminalRenderer {
             int lastRunStartColumn = -1;
             int lastRunStartIndex = 0;
             boolean lastRunFontWidthMismatch = false;
+            boolean lastRunSkipBackground = false;
             int currentCharIndex = 0;
             float measuredWidthForRun = 0.f;
 
@@ -196,6 +264,10 @@ public final class TerminalRenderer {
                 final boolean insideSelection = column >= selx1 && column <= selx2;
                 final long style = lineObject.getStyle(column);
                 final int hyperlink = lineObject.getHyperlink(column);
+                // A cell under a z<0 placement keeps its glyph but not its background: the image
+                // pass already painted cell background + image, and repainting the background
+                // here would hide the image (RF-18/RF-23).
+                final boolean skipBackground = skipBackgroundCells != null && skipBackgroundCells.contains(column);
 
                 // Check if the measured text width for this code point is not the same as that expected by wcwidth().
                 // This could happen for some fonts which are not truly monospace, or for more exotic characters such as
@@ -217,7 +289,7 @@ public final class TerminalRenderer {
                         drawTextRun(canvas, line, palette, heightOffset, lastRunStartColumn, columnWidthSinceLastRun,
                             lastRunStartIndex, charsSinceLastRun, measuredWidthForRun,
                             cursorColor, cursorShape, lastRunStyle, reverseVideo || invertCursorTextColor || lastRunInsideSelection,
-                            lastRunHyperlink != 0 && mHyperlinksEnabled);
+                            lastRunHyperlink != 0 && mHyperlinksEnabled, !lastRunSkipBackground);
                     }
                     lastRunStartColumn = -1;
                     measuredWidthForRun = 0.f;
@@ -230,11 +302,13 @@ public final class TerminalRenderer {
                 }
 
                 // Break the run when style, cursor, selection or OSC 8 hyperlink changes, when this code point
-                // (or the one that started the run) has a width that does not match wcwidth(), or
+                // (or the one that started the run) has a width that does not match wcwidth(), when the cell
+                // background must be left to the image underneath, or
                 // when ligatures are disabled, in which case every code point must be shaped alone
                 // so that the font's ligature tables (GSUB liga/clig) can never combine characters.
                 if (style != lastRunStyle || insideCursor != lastRunInsideCursor || insideSelection != lastRunInsideSelection
-                    || hyperlink != lastRunHyperlink || fontWidthMismatch || lastRunFontWidthMismatch || !mEnableLigatures) {
+                    || hyperlink != lastRunHyperlink || fontWidthMismatch || lastRunFontWidthMismatch || !mEnableLigatures
+                    || skipBackground != lastRunSkipBackground) {
                     if (column == 0) {
                         // Skip first column as there is nothing to draw, just record the current style.
                     } else {
@@ -248,7 +322,7 @@ public final class TerminalRenderer {
                         drawTextRun(canvas, line, palette, heightOffset, lastRunStartColumn, columnWidthSinceLastRun,
                             lastRunStartIndex, charsSinceLastRun, measuredWidthForRun,
                             cursorColor, cursorShape, lastRunStyle, reverseVideo || invertCursorTextColor || lastRunInsideSelection,
-                            lastRunHyperlink != 0 && mHyperlinksEnabled);
+                            lastRunHyperlink != 0 && mHyperlinksEnabled, !lastRunSkipBackground);
                     }
                     measuredWidthForRun = 0.f;
                     lastRunStyle = style;
@@ -258,6 +332,7 @@ public final class TerminalRenderer {
                     lastRunStartColumn = column;
                     lastRunStartIndex = currentCharIndex;
                     lastRunFontWidthMismatch = fontWidthMismatch;
+                    lastRunSkipBackground = skipBackground;
                 }
                 measuredWidthForRun += measuredCodePointWidth;
                 column += codePointWcWidth;
@@ -278,12 +353,15 @@ public final class TerminalRenderer {
             }
             drawTextRun(canvas, line, palette, heightOffset, lastRunStartColumn, columnWidthSinceLastRun, lastRunStartIndex, charsSinceLastRun,
                 measuredWidthForRun, cursorColor, cursorShape, lastRunStyle, reverseVideo || invertCursorTextColor || lastRunInsideSelection,
-                lastRunHyperlink != 0 && mHyperlinksEnabled);
-            // Inline images paint after text so previews sit above leftover cell glyphs;
-            // the cursor was already painted inside the run above and stays on top of
-            // the image only when it falls outside the image rect (acceptable v1).
-            drawImagesForRow(mEmulator, screen, canvas, row, heightOffset,
-                lineObject, palette, reverseVideo, selx1, selx2);
+                lastRunHyperlink != 0 && mHyperlinksEnabled, !lastRunSkipBackground);
+            if (mImagesEnabled) {
+                // Second image pass: placements with z>=0 paint after the glyphs, so previews
+                // sit above leftover cell glyphs (RF-19). The cursor was already painted inside
+                // the runs above and stays on top of the image only when it falls outside the
+                // image rect (acceptable v1).
+                mImagePainter.drawRowPass(canvas, mEmulator, row, heightOffset - mFontLineSpacing,
+                    heightOffset, mFontWidth, false, mRowBackgrounds, mImageBitmapsProvider, mTextPaint);
+            }
             // Unicode placeholders (kitty U+10EEEE): paint after text so the image
             // covers the placeholder glyph; cells were collected before text to skip
             // the glyph in the text run.
@@ -351,101 +429,6 @@ public final class TerminalRenderer {
     }
 
     /**
-     * Paint every inline image whose placement intersects {@code externalRow}.
-     * Each contiguous run of the same image id on the row draws once, with the
-     * source band taken from the matching columns of the bitmap. Cells under the
-     * strip are blanked with their effective background first (kitty spec:
-     * transparent image regions show the cell background, never the glyph).
-     *
-     * @param emulator     the emulator (image registry)
-     * @param screen       the buffer being drawn
-     * @param canvas       target canvas
-     * @param externalRow  external (transcript-aware) row
-     * @param yBottom      bottom of the row (same baseline convention as text runs)
-     * @param lineObject   the row being painted (per-cell styles for blanking)
-     * @param palette      the emulator indexed colors
-     * @param reverseVideo whether the emulator is in reverse-video mode
-     * @param selx1        selection left bound for the row (or -1)
-     * @param selx2        selection right bound for the row (or -1)
-     */
-    private void drawImagesForRow(TerminalEmulator emulator, TerminalBuffer screen, Canvas canvas,
-                                  int externalRow, float yBottom, TerminalRow lineObject,
-                                  int[] palette, boolean reverseVideo, int selx1, int selx2) {
-        if (!mImagesEnabled) return;
-        final int columns = emulator.mColumns;
-        final float top = yBottom - mFontLineSpacing;
-        final float bottom = yBottom;
-        int col = 0;
-        while (col < columns) {
-            final int imageId = screen.getImageAt(externalRow, col);
-            if (imageId == 0) {
-                col++;
-                continue;
-            }
-            int spanEnd = col + 1;
-            while (spanEnd < columns && screen.getImageAt(externalRow, spanEnd) == imageId) spanEnd++;
-            final TerminalImageData data = emulator.getImageData(imageId);
-            if (data != null && data.intersectsRow(externalRow)) {
-                drawImageStrip(canvas, data, externalRow, col, spanEnd - col, top, bottom,
-                    lineObject, palette, reverseVideo, selx1, selx2);
-            }
-            col = spanEnd;
-        }
-    }
-
-    /**
-     * Draw one horizontal strip of an image placement.
-     *
-     * @param canvas      target
-     * @param data        registry entry
-     * @param externalRow the row being painted
-     * @param startColumn first screen column of the strip
-     * @param widthCells  strip width in cells
-     * @param top         strip top in canvas Y
-     * @param bottom      strip bottom in canvas Y
-     * @param lineObject  the row being painted (per-cell styles for blanking)
-     * @param palette     the emulator indexed colors
-     * @param reverseVideo whether the emulator is in reverse-video mode
-     * @param selx1       selection left bound for the row (or -1)
-     * @param selx2       selection right bound for the row (or -1)
-     */
-    private void drawImageStrip(Canvas canvas, TerminalImageData data, int externalRow,
-                                int startColumn, int widthCells, float top, float bottom,
-                                TerminalRow lineObject, int[] palette, boolean reverseVideo,
-                                int selx1, int selx2) {
-        final Bitmap bitmap = bitmapFor(data);
-        if (bitmap == null || bitmap.isRecycled()) return;
-        final int bmpW = bitmap.getWidth();
-        final int bmpH = bitmap.getHeight();
-        final int localRow = externalRow - data.startRow;
-        if (localRow < 0 || localRow >= data.cellsH) return;
-        final int srcTop = (int) ((long) localRow * bmpH / data.cellsH);
-        final int srcBottom = (int) ((long) (localRow + 1) * bmpH / data.cellsH);
-        final int srcH = Math.max(1, srcBottom - srcTop);
-        // Horizontal source slice matches which columns of the placement remain.
-        final int localCol = Math.max(0, startColumn - data.startCol);
-        final int srcLeft = (int) ((long) localCol * bmpW / data.cellsW);
-        final int srcRight = (int) ((long) (localCol + widthCells) * bmpW / data.cellsW);
-        final float left = startColumn * mFontWidth;
-        final float right = left + widthCells * mFontWidth;
-        // Blank every covered cell with its own effective background before painting:
-        // text runs (filename text etc.) are drawn underneath and transparent image
-        // pixels must show the cell background, never the leftover glyph.
-        for (int c = startColumn; c < startColumn + widthCells; c++) {
-            final boolean reverseHere = reverseVideo || (c >= selx1 && c <= selx2);
-            mTextPaint.setColor(TextStyle.effectiveBackgroundColor(
-                lineObject.getStyle(c), palette, reverseHere));
-            final float cellLeft = c * mFontWidth;
-            canvas.drawRect(cellLeft, top, cellLeft + mFontWidth, bottom, mTextPaint);
-        }
-        final android.graphics.Rect src = new android.graphics.Rect(
-            Math.min(srcLeft, bmpW - 1), srcTop,
-            Math.max(srcLeft + 1, Math.min(srcRight, bmpW)), Math.min(bmpH, srcTop + srcH));
-        final android.graphics.RectF dst = new android.graphics.RectF(left, top, right, bottom);
-        canvas.drawBitmap(bitmap, src, dst, null);
-    }
-
-    /**
      * Decode (once) and cache the bitmap for a registry entry.
      *
      * @param data the image entry
@@ -472,9 +455,30 @@ public final class TerminalRenderer {
         return decoded;
     }
 
+    /**
+     * Paint one text run.
+     *
+     * @param canvas        target canvas
+     * @param text          the row text buffer
+     * @param palette       the emulator indexed colors
+     * @param y             baseline of the row
+     * @param startColumn   first grid column of the run
+     * @param runWidthColumns run width in grid columns
+     * @param startCharIndex first char index of the run
+     * @param runWidthChars number of Java chars of the run
+     * @param mes           measured width of the run in pixels
+     * @param cursor        cursor color, or 0 when the run does not hold the cursor
+     * @param cursorStyle   cursor shape
+     * @param textStyle     the {@link TextStyle}-encoded style of the run
+     * @param reverseVideo  whether the run paints with swapped colors
+     * @param isHyperlink   whether the run is an OSC 8 hyperlink (forced underline)
+     * @param drawBackground whether the cell background must be painted; false for a run over a
+     *                       {@code z<0} image, whose background the image pass already painted
+     *                       (RF-19/RF-23)
+     */
     private void drawTextRun(Canvas canvas, char[] text, int[] palette, float y, int startColumn, int runWidthColumns,
                              int startCharIndex, int runWidthChars, float mes, int cursor, int cursorStyle,
-                             long textStyle, boolean reverseVideo, boolean isHyperlink) {
+                             long textStyle, boolean reverseVideo, boolean isHyperlink, boolean drawBackground) {
         int foreColor = TextStyle.decodeForeColor(textStyle);
         final int effect = TextStyle.decodeEffect(textStyle);
         int backColor = TextStyle.decodeBackColor(textStyle);
@@ -515,8 +519,9 @@ public final class TerminalRenderer {
             savedMatrix = true;
         }
 
-        if (backColor != palette[TextStyle.COLOR_INDEX_BACKGROUND]) {
-            // Only draw non-default background.
+        if (drawBackground && backColor != palette[TextStyle.COLOR_INDEX_BACKGROUND]) {
+            // Only draw non-default background. A cell covered by a below-text placement (RF-23)
+            // keeps its glyph but not its background, which the image pass already painted.
             mTextPaint.setColor(backColor);
             canvas.drawRect(left, y - mFontLineSpacingAndAscent + mFontAscent, right, y, mTextPaint);
         }

@@ -396,6 +396,9 @@ object ComposeTerminalFrame {
      * forces a run break, mirroring the legacy font-metrics check
      * @param skipCells Column indices to exclude from runs (e.g. cells with an active
      * inline image or resolved unicode placeholder whose glyph must not be painted)
+     * @param skipBackgroundCells Column indices whose background must not be painted even
+     * though their glyph is (cells covered by a below-text placement, RF-18/RF-23); the run
+     * is broken on every transition so the caller can tell the two kinds of cells apart
      * @param consumer Invoked once per run, in order, with the [TextRun] constructor fields
      */
     @JvmStatic
@@ -408,6 +411,7 @@ object ComposeTerminalFrame {
         enableLigatures: Boolean,
         hasWidthMismatch: (codePoint: Int) -> Boolean,
         skipCells: Set<Int>,
+        skipBackgroundCells: Set<Int>,
         consumer: LineRunConsumer
     ) {
         val text = line.mText
@@ -418,6 +422,7 @@ object ComposeTerminalFrame {
         var lastInSelection = false
         var lastHyperlink = 0
         var lastMismatch = false
+        var lastSkipBackground = false
         var runStartColumn = 0
         var runStartCharIndex = 0
         var hasRun = false
@@ -439,6 +444,7 @@ object ComposeTerminalFrame {
             val style = line.getStyle(column)
             val hyperlink = line.getHyperlink(column)
             val mismatch = hasWidthMismatch(codePoint)
+            val skipBackground = skipBackgroundCells.contains(column)
 
             if (skipCells.contains(column)) {
                 if (hasRun) {
@@ -465,12 +471,14 @@ object ComposeTerminalFrame {
                 lastInSelection = inSelection
                 lastHyperlink = hyperlink
                 lastMismatch = mismatch
+                lastSkipBackground = skipBackground
                 runStartColumn = column
                 runStartCharIndex = charIndex
                 hasRun = true
             } else if (style != lastStyle || inCursor != lastInCursor ||
                 inSelection != lastInSelection || hyperlink != lastHyperlink ||
-                mismatch || lastMismatch || !enableLigatures
+                mismatch || lastMismatch || !enableLigatures ||
+                skipBackground != lastSkipBackground
             ) {
                 consumer.onRun(
                     runStartColumn, column - runStartColumn,
@@ -482,6 +490,7 @@ object ComposeTerminalFrame {
                 lastInSelection = inSelection
                 lastHyperlink = hyperlink
                 lastMismatch = mismatch
+                lastSkipBackground = skipBackground
                 runStartColumn = column
                 runStartCharIndex = charIndex
             }
@@ -523,6 +532,8 @@ object ComposeTerminalFrame {
      * forces a run break, mirroring the legacy font-metrics check
      * @param skipCells Column indices to exclude from runs (e.g. cells with an active
      * inline image or resolved unicode placeholder whose glyph must not be painted)
+     * @param skipBackgroundCells Column indices whose background must not be painted even
+     * though their glyph is (cells covered by a below-text placement, RF-18/RF-23)
      * @return The runs covering all [columns] columns, in order
      */
     @JvmStatic
@@ -535,12 +546,13 @@ object ComposeTerminalFrame {
         selectionX2: Int,
         enableLigatures: Boolean,
         hasWidthMismatch: (codePoint: Int) -> Boolean = { false },
-        skipCells: Set<Int> = emptySet()
+        skipCells: Set<Int> = emptySet(),
+        skipBackgroundCells: Set<Int> = emptySet()
     ): List<TextRun> {
         val runs = ArrayList<TextRun>()
         forEachRun(
             line, columns, cursorX, selectionX1, selectionX2, enableLigatures,
-            hasWidthMismatch, skipCells
+            hasWidthMismatch, skipCells, skipBackgroundCells
         ) { startColumn, columnWidth, startCharIndex, charCount, style, inCursor, inSelection, hyperlinkIndex ->
             runs.add(
                 TextRun(

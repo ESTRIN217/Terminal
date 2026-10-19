@@ -44,11 +44,13 @@ import com.termux.shared.interact.ShareUtils
 import com.termux.shared.logger.Logger
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties
 import com.termux.shared.view.KeyboardUtils
+import com.termux.terminal.KittyPlacementGeometry
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TextStyle
 import com.termux.terminal.WcWidth
 import com.termux.terminal.bridge.TerminalKeyHandler
+import com.termux.view.TerminalImagePainter
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -288,6 +290,11 @@ internal fun ComposeTerminalCanvas(
             textSize = paintFontSize
         }
     }
+
+    // Shared inline-image painter: the same instance the legacy TerminalRenderer uses, so both
+    // renderers clip and scale image strips identically (RNF-4). It keeps no state per frame
+    // beyond reusable scratch rectangles, so one per session is enough.
+    val imagePainter = remember(session) { TerminalImagePainter() }
 
     // Scrollbar thumb paint, created once instead of on every frame (the thumb is the only
     // thing the draw scope paints besides the terminal itself).
@@ -752,7 +759,7 @@ internal fun ComposeTerminalCanvas(
         drawIntoCanvas { drawCanvas ->
             renderComposeFrame(
                 drawCanvas.nativeCanvas, emulator, topRow, paint, metrics, palette, enableLigatures,
-                cursorVisibleOverride, state.selection, hyperlinksEnabled, imagesEnabled
+                cursorVisibleOverride, state.selection, hyperlinksEnabled, imagesEnabled, imagePainter
             )
         }
         // Vertical scrollbar (legacy setVerticalScrollBarEnabled + computeVerticalScroll*):
@@ -867,6 +874,7 @@ internal fun measureCanvasMetrics(paint: Paint, typeface: Typeface, fontSize: Fl
  * cells paint with swapped colors exactly like the legacy renderer.
  * @param hyperlinksEnabled When false, OSC 8 hyperlink runs do not force an underline
  * @param imagesEnabled When false, inline image placements are not painted
+ * @param imagePainter Shared painter of the inline image placements (two passes per row)
  */
 private fun renderComposeFrame(
     canvas: android.graphics.Canvas,
@@ -879,7 +887,8 @@ private fun renderComposeFrame(
     cursorVisibleOverride: Boolean? = null,
     selection: ComposeTerminalFrame.TextSelection? = null,
     hyperlinksEnabled: Boolean = true,
-    imagesEnabled: Boolean = true
+    imagesEnabled: Boolean = true,
+    imagePainter: TerminalImagePainter = TerminalImagePainter()
 ) {
     val colors = emulator.mColors.mCurrentColors
     val reverseVideo = emulator.isReverseVideo
@@ -900,6 +909,12 @@ private fun renderComposeFrame(
     // immediately, so no value outlives the call that set it.
     val colorsBuffer = ComposeTerminalFrame.ResolvedRunColorsBuffer()
     val codePointChars = CharArray(2)
+    // Hoisted per-frame cell sets: cleared and refilled for every row so painting a frame
+    // allocates no set per row (RNF-3). skipCells hides both the glyph and the background of
+    // cells covered by a placement with z>=0; skipBackgroundCells hides only the background of
+    // cells under a z<0 placement, whose glyph must stay visible (RF-18/RF-21/RF-23).
+    val skipCells = HashSet<Int>()
+    val skipBackgroundCells = HashSet<Int>()
     val hasWidthMismatch: (Int) -> Boolean = { codePoint ->
         val measured = if (codePoint < metrics.asciiMeasures.size) {
             metrics.asciiMeasures[codePoint]
@@ -919,7 +934,14 @@ private fun renderComposeFrame(
         metrics = metrics,
         paint = paint,
         hyperlinksEnabled = hyperlinksEnabled,
-        colorsBuffer = colorsBuffer
+        colorsBuffer = colorsBuffer,
+        skipBackgroundCells = skipBackgroundCells
+    )
+
+    // Resolver of the effective cell background the image painter blanks each covered cell
+    // with (RF-23): the row being painted is repointed per row, the rest is per-frame constant.
+    val cellBackgrounds = ComposeCellBackgrounds(
+        colorsBuffer, colors, defaultBackground, reverseVideo
     )
 
     var heightOffset = metrics.lineSpacingAndAscent.toFloat()
@@ -933,11 +955,18 @@ private fun renderComposeFrame(
         val selBounds = ComposeTerminalFrame.selectionBoundsForRowPacked(selection, externalRow, columns)
         val selX1 = ComposeTerminalFrame.PackedSelectionBounds.first(selBounds)
         val selX2 = ComposeTerminalFrame.PackedSelectionBounds.second(selBounds)
-        val skipCells = HashSet<Int>()
+        skipCells.clear()
+        skipBackgroundCells.clear()
         var pendingPlaceholders: List<Pair<Int, com.termux.terminal.KittyPlaceholderDecoder.Target>>? = null
         if (imagesEnabled) {
+            // The placement holding the cell decides what the glyph pass does with it (RF-21):
+            // z>=0 covers the cell, so neither glyph nor background may be painted (the image
+            // pass paints both); z<0 stays under the glyph, so only the cell background must be
+            // left alone for the image to show through (RF-18/RF-23).
             for (col in 0 until columns) {
-                if (screen.getImageAt(externalRow, col) != 0) skipCells.add(col)
+                val placement = emulator.getPlacementAt(externalRow, col) ?: continue
+                if (KittyPlacementGeometry.isBelowText(placement.z)) skipBackgroundCells.add(col)
+                else skipCells.add(col)
             }
             if (!(externalRow > topRow && screen.getLineWrap(externalRow - 1))) placeholderState.reset()
             pendingPlaceholders = ArrayList()
@@ -945,18 +974,27 @@ private fun renderComposeFrame(
                 skipCells.add(col)
                 pendingPlaceholders.add(col to target)
             }
+            // First image pass: placements below the glyphs paint before the text runs, so the
+            // glyph sits on top of the image and the image shows through transparent pixels only
+            // where the cell background did not hide it (RF-19).
+            cellBackgrounds.setRow(line, selX1, selX2)
+            imagePainter.drawRowPass(
+                canvas, emulator, externalRow, heightOffset - metrics.lineSpacing, heightOffset,
+                metrics.fontWidth, true, cellBackgrounds, ComposeImageBitmaps, paint
+            )
         }
         runPainter.text = line.mText
         runPainter.y = heightOffset
         ComposeTerminalFrame.forEachRun(
             line, columns, cursorX, selX1, selX2, enableLigatures,
-            hasWidthMismatch, skipCells, runPainter
+            hasWidthMismatch, skipCells, skipBackgroundCells, runPainter
         )
-        // Images paint after text so previews sit above leftover cell glyphs.
         if (imagesEnabled) {
-            drawComposeImages(
-                canvas, emulator, screen, externalRow, heightOffset, metrics, paint,
-                line, colors, defaultBackground, reverseVideo, selX1, selX2, colorsBuffer
+            // Second image pass: placements with z>=0 paint after the glyphs, so previews sit
+            // above leftover cell glyphs (RF-19).
+            imagePainter.drawRowPass(
+                canvas, emulator, externalRow, heightOffset - metrics.lineSpacing, heightOffset,
+                metrics.fontWidth, false, cellBackgrounds, ComposeImageBitmaps, paint
             )
             // Unicode placeholders (kitty U+10EEEE): paint after text so the image
             // covers the placeholder glyph; cells were collected before text to skip
@@ -982,6 +1020,10 @@ private fun renderComposeFrame(
  *
  * @param hyperlinksEnabled When the run carries an OSC 8 hyperlink and this is true, force
  * an underline (legacy [com.termux.view.TerminalRenderer.drawTextRun] parity)
+ * @param skipBackgroundCells Column indices whose background must not be painted even though
+ * their glyph is (cells under a below-text placement, RF-18/RF-23); the set is owned by the
+ * frame and repointed per row, and [ComposeTerminalFrame.forEachRun] never lets a run mix
+ * cells from inside and outside it, so checking the run start is enough
  */
 private class ComposeRowRunPainter(
     private val canvas: android.graphics.Canvas,
@@ -992,7 +1034,8 @@ private class ComposeRowRunPainter(
     private val metrics: CanvasFontMetrics,
     private val paint: Paint,
     private val hyperlinksEnabled: Boolean,
-    private val colorsBuffer: ComposeTerminalFrame.ResolvedRunColorsBuffer
+    private val colorsBuffer: ComposeTerminalFrame.ResolvedRunColorsBuffer,
+    private val skipBackgroundCells: Set<Int>
 ) : ComposeTerminalFrame.LineRunConsumer {
 
     /** The row being painted ([com.termux.terminal.TerminalRow.mText]). */
@@ -1035,7 +1078,7 @@ private class ComposeRowRunPainter(
             }
         }
 
-        if (colorsBuffer.drawBackground) {
+        if (colorsBuffer.drawBackground && !skipBackgroundCells.contains(startColumn)) {
             paint.color = colorsBuffer.backColor
             canvas.drawRect(left, y - metrics.lineSpacingAndAscent + metrics.ascent, right, y, paint)
         }
@@ -1177,64 +1220,56 @@ private fun cellBlankColor(
 }
 
 /**
- * Paint every inline image placement intersecting [externalRow], mirroring the legacy
- * [com.termux.view.TerminalRenderer] image strip logic. Covered cells are blanked with
- * their effective background first (kitty spec: transparent image regions show the cell
- * background, never the leftover glyph).
+ * [TerminalImagePainter.CellBackgroundResolver] for the Compose canvas: resolves the effective
+ * background of the cell the image painter blanks, mirroring [cellBlankColor]. The row being
+ * painted and its selection bounds are repointed with [setRow] once per row, so painting a frame
+ * allocates nothing per call (RNF-3).
  *
- * @param canvas target canvas
- * @param emulator the emulator holding the image registry
- * @param screen the buffer being drawn
- * @param externalRow external (transcript-aware) row
- * @param yBottom bottom of the row (same baseline convention as text runs)
- * @param metrics font metrics for cell geometry
- * @param paint paint used to blank the cell backgrounds
- * @param line the row being painted (per-cell styles for blanking)
+ * @param colorsBuffer per-frame holder for the resolved colors (reused, read immediately)
  * @param paletteColors the emulator indexed colors
  * @param defaultBackground the default background color (ARGB)
  * @param reverseVideo whether the emulator is in reverse-video mode
- * @param selX1 selection left bound for the row (or -1)
- * @param selX2 selection right bound for the row (or -1)
- * @param colorsBuffer per-frame holder for the resolved colors (reused, read immediately)
  */
-private fun drawComposeImages(
-    canvas: android.graphics.Canvas,
-    emulator: TerminalEmulator,
-    screen: com.termux.terminal.TerminalBuffer,
-    externalRow: Int,
-    yBottom: Float,
-    metrics: CanvasFontMetrics,
-    paint: Paint,
-    line: com.termux.terminal.TerminalRow,
-    paletteColors: IntArray,
-    defaultBackground: Int,
-    reverseVideo: Boolean,
-    selX1: Int,
-    selX2: Int,
-    colorsBuffer: ComposeTerminalFrame.ResolvedRunColorsBuffer
-) {
-    val top = yBottom - metrics.lineSpacing
-    val bottom = yBottom
-    var col = 0
-    val columns = emulator.mColumns
-    while (col < columns) {
-        val imageId = screen.getImageAt(externalRow, col)
-        if (imageId == 0) {
-            col++
-            continue
-        }
-        var spanEnd = col + 1
-        while (spanEnd < columns && screen.getImageAt(externalRow, spanEnd) == imageId) spanEnd++
-        val data = emulator.getImageData(imageId)
-        if (data != null && data.intersectsRow(externalRow)) {
-            drawComposeImageStrip(
-                canvas, data, externalRow, col, spanEnd - col, top, bottom, metrics,
-                paint, line, paletteColors, defaultBackground, reverseVideo, selX1, selX2,
-                colorsBuffer
-            )
-        }
-        col = spanEnd
+private class ComposeCellBackgrounds(
+    private val colorsBuffer: ComposeTerminalFrame.ResolvedRunColorsBuffer,
+    private val paletteColors: IntArray,
+    private val defaultBackground: Int,
+    private val reverseVideo: Boolean
+) : TerminalImagePainter.CellBackgroundResolver {
+
+    private var line: com.termux.terminal.TerminalRow? = null
+    private var selX1 = -1
+    private var selX2 = -1
+
+    /**
+     * Repoint the resolver at the row being painted.
+     *
+     * @param line the row whose cell styles are resolved
+     * @param selX1 selection left bound for the row (or -1)
+     * @param selX2 selection right bound for the row (or -1)
+     */
+    fun setRow(line: com.termux.terminal.TerminalRow, selX1: Int, selX2: Int) {
+        this.line = line
+        this.selX1 = selX1
+        this.selX2 = selX2
     }
+
+    override fun colorAt(column: Int): Int {
+        val row = line ?: return defaultBackground
+        return cellBlankColor(
+            colorsBuffer, row, column, paletteColors, defaultBackground, reverseVideo, selX1, selX2
+        )
+    }
+}
+
+/**
+ * [TerminalImagePainter.ImageBitmapProvider] for the Compose canvas: hands the shared painter the
+ * same identity-checked cached bitmap the unicode-placeholder painter uses, so an image is
+ * decoded once per payload regardless of how many runners paint it (RNF-3).
+ */
+private object ComposeImageBitmaps : TerminalImagePainter.ImageBitmapProvider {
+    override fun bitmapFor(data: com.termux.terminal.TerminalImageData): android.graphics.Bitmap? =
+        composeBitmapFor(data)
 }
 
 /**
@@ -1250,79 +1285,9 @@ private class ComposeCachedImageBitmap(
 private val composeImageBitmaps = android.util.LruCache<Int, ComposeCachedImageBitmap>(16)
 
 /**
- * Draw one horizontal strip of an image placement. Every covered cell is blanked
- * with its own effective background first (kitty spec: transparent image regions
- * show the cell background, never the leftover glyph underneath).
- *
- * @param canvas target canvas
- * @param data registry entry
- * @param externalRow the row being painted
- * @param startColumn first screen column of the strip
- * @param widthCells strip width in cells
- * @param top strip top in canvas Y
- * @param bottom strip bottom in canvas Y
- * @param metrics font metrics for cell geometry
- * @param paint paint used to blank the cell backgrounds
- * @param line the row being painted (per-cell styles for blanking)
- * @param paletteColors the emulator indexed colors
- * @param defaultBackground the default background color (ARGB)
- * @param reverseVideo whether the emulator is in reverse-video mode
- * @param selX1 selection left bound for the row (or -1)
- * @param selX2 selection right bound for the row (or -1)
- * @param colorsBuffer per-frame holder for the resolved colors (reused, read immediately)
- */
-private fun drawComposeImageStrip(
-    canvas: android.graphics.Canvas,
-    data: com.termux.terminal.TerminalImageData,
-    externalRow: Int,
-    startColumn: Int,
-    widthCells: Int,
-    top: Float,
-    bottom: Float,
-    metrics: CanvasFontMetrics,
-    paint: Paint,
-    line: com.termux.terminal.TerminalRow,
-    paletteColors: IntArray,
-    defaultBackground: Int,
-    reverseVideo: Boolean,
-    selX1: Int,
-    selX2: Int,
-    colorsBuffer: ComposeTerminalFrame.ResolvedRunColorsBuffer
-) {
-    val bitmap = composeBitmapFor(data) ?: return
-    val bmpW = bitmap.width
-    val bmpH = bitmap.height
-    val localRow = externalRow - data.startRow
-    if (localRow < 0 || localRow >= data.cellsH) return
-    val srcTop = (localRow.toLong() * bmpH / data.cellsH).toInt()
-    val srcBottom = ((localRow + 1).toLong() * bmpH / data.cellsH).toInt()
-    val srcH = maxOf(1, srcBottom - srcTop)
-    val localCol = maxOf(0, startColumn - data.startCol)
-    val srcLeft = (localCol.toLong() * bmpW / data.cellsW).toInt()
-    val srcRight = ((localCol + widthCells).toLong() * bmpW / data.cellsW).toInt()
-    val left = startColumn * metrics.fontWidth
-    val right = left + widthCells * metrics.fontWidth
-    // Blank every covered cell with its own effective background before painting:
-    // text runs (filename text etc.) are drawn underneath and transparent image
-    // pixels must show the cell background, never the leftover glyph.
-    for (c in startColumn until startColumn + widthCells) {
-        paint.color = cellBlankColor(
-            colorsBuffer, line, c, paletteColors, defaultBackground, reverseVideo, selX1, selX2
-        )
-        val cellLeft = c * metrics.fontWidth
-        canvas.drawRect(cellLeft, top, cellLeft + metrics.fontWidth, bottom, paint)
-    }
-    val src = android.graphics.Rect(
-        minOf(srcLeft, bmpW - 1), srcTop,
-        maxOf(srcLeft + 1, minOf(srcRight, bmpW)), minOf(bmpH, srcTop + srcH)
-    )
-    val dst = android.graphics.RectF(left, top, right, bottom)
-    canvas.drawBitmap(bitmap, src, dst, null)
-}
-
-/**
  * Decode (or fetch from the identity-checked cache) the bitmap backing [data].
- * Shared by the strip painter and the unicode-placeholder painter.
+ * Shared by the unicode-placeholder painter and the [ComposeImageBitmaps] provider that feeds
+ * the shared [TerminalImagePainter].
  *
  * @param data the registry image entry
  * @return the bitmap, or null when the payload is empty or decoding failed

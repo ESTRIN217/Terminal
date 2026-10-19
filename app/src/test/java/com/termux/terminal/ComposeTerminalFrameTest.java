@@ -503,6 +503,48 @@ public class ComposeTerminalFrameTest {
         Assert.assertEquals(2, runs.get(1).getColumnWidth());
     }
 
+    @Test
+    public void testSkipBackgroundCells_splitsRunsWithoutDroppingGlyphs() {
+        TerminalRow row = asciiRow(6, "abcdef", TextStyle.NORMAL);
+        java.util.Set<Integer> skipBackground = new java.util.HashSet<>();
+        skipBackground.add(0);
+        skipBackground.add(1);
+
+        List<ComposeTerminalFrame.TextRun> runs = ComposeTerminalFrame.buildLineRuns(
+            row, 6, -1, -1, -1, true, codePoint -> false,
+            java.util.Collections.emptySet(), skipBackground);
+
+        // Every glyph is still painted and every column covered: the cells are only split off
+        // so the canvas knows not to paint their background (RF-18/RF-23).
+        Assert.assertEquals(2, runs.size());
+        Assert.assertEquals(0, runs.get(0).getStartColumn());
+        Assert.assertEquals(2, runs.get(0).getColumnWidth());
+        Assert.assertEquals(2, runs.get(1).getStartColumn());
+        Assert.assertEquals(4, runs.get(1).getColumnWidth());
+        int covered = 0;
+        for (ComposeTerminalFrame.TextRun run : runs) covered += run.getColumnWidth();
+        Assert.assertEquals(6, covered);
+    }
+
+    @Test
+    public void testSkipBackgroundCells_isolatedCellSplitsThreeRuns() {
+        TerminalRow row = asciiRow(6, "abcdef", TextStyle.NORMAL);
+        java.util.Set<Integer> skipBackground = new java.util.HashSet<>();
+        skipBackground.add(3);
+
+        List<ComposeTerminalFrame.TextRun> runs = ComposeTerminalFrame.buildLineRuns(
+            row, 6, -1, -1, -1, true, codePoint -> false,
+            java.util.Collections.emptySet(), skipBackground);
+
+        Assert.assertEquals(3, runs.size());
+        Assert.assertEquals(0, runs.get(0).getStartColumn());
+        Assert.assertEquals(3, runs.get(0).getColumnWidth());
+        Assert.assertEquals(3, runs.get(1).getStartColumn());
+        Assert.assertEquals(1, runs.get(1).getColumnWidth());
+        Assert.assertEquals(4, runs.get(2).getStartColumn());
+        Assert.assertEquals(2, runs.get(2).getColumnWidth());
+    }
+
     /**
      * Collect the runs of a line through the streaming {@code forEachRun} the canvas paints
      * with, so it can be compared against the collecting {@code buildLineRuns}.
@@ -511,9 +553,17 @@ public class ComposeTerminalFrameTest {
         TerminalRow row, int columns, int cursorX, int selectionX1, int selectionX2,
         boolean enableLigatures, kotlin.jvm.functions.Function1<Integer, Boolean> hasWidthMismatch,
         java.util.Set<Integer> skipCells) {
+        return collectRuns(row, columns, cursorX, selectionX1, selectionX2, enableLigatures,
+            hasWidthMismatch, skipCells, java.util.Collections.emptySet());
+    }
+
+    private static List<ComposeTerminalFrame.TextRun> collectRuns(
+        TerminalRow row, int columns, int cursorX, int selectionX1, int selectionX2,
+        boolean enableLigatures, kotlin.jvm.functions.Function1<Integer, Boolean> hasWidthMismatch,
+        java.util.Set<Integer> skipCells, java.util.Set<Integer> skipBackgroundCells) {
         final List<ComposeTerminalFrame.TextRun> runs = new java.util.ArrayList<>();
         ComposeTerminalFrame.forEachRun(row, columns, cursorX, selectionX1, selectionX2,
-            enableLigatures, hasWidthMismatch, skipCells,
+            enableLigatures, hasWidthMismatch, skipCells, skipBackgroundCells,
             (startColumn, columnWidth, startCharIndex, charCount, style, inCursor, inSelection,
                 hyperlinkIndex) -> runs.add(new ComposeTerminalFrame.TextRun(startColumn,
                     columnWidth, startCharIndex, charCount, style, inCursor, inSelection,
@@ -545,6 +595,9 @@ public class ComposeTerminalFrameTest {
         java.util.Set<Integer> skip = new java.util.HashSet<>();
         skip.add(1);
         skip.add(4);
+        java.util.Set<Integer> skipBackground = new java.util.HashSet<>();
+        skipBackground.add(2);
+        skipBackground.add(5);
         kotlin.jvm.functions.Function1<Integer, Boolean> never = codePoint -> false;
         kotlin.jvm.functions.Function1<Integer, Boolean> oddOnly =
             codePoint -> codePoint == 'c';
@@ -581,6 +634,16 @@ public class ComposeTerminalFrameTest {
         Assert.assertEquals(
             ComposeTerminalFrame.buildLineRuns(mixed, 6, 2, 1, 5, true, oddOnly, skip),
             collectRuns(mixed, 6, 2, 1, 5, true, oddOnly, skip));
+        // Below-text cells: the run breaks without dropping the cell.
+        Assert.assertEquals(
+            ComposeTerminalFrame.buildLineRuns(
+                mixed, 6, -1, -1, -1, true, never, java.util.Collections.emptySet(), skipBackground),
+            collectRuns(mixed, 6, -1, -1, -1, true, never,
+                java.util.Collections.emptySet(), skipBackground));
+        // Skipped and background-only cells at once.
+        Assert.assertEquals(
+            ComposeTerminalFrame.buildLineRuns(mixed, 6, 2, 1, 5, true, oddOnly, skip, skipBackground),
+            collectRuns(mixed, 6, 2, 1, 5, true, oddOnly, skip, skipBackground));
     }
 
     /**

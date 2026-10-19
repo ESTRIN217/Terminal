@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Stack;
@@ -112,6 +114,12 @@ public final class TerminalEmulator {
     private static final int MAX_IMAGE_REGISTRY_BYTES = 24 * 1024 * 1024;
 
     /**
+     * Max live placements of one image: the next one evicts the oldest placement of that
+     * image first, releasing its cells (RF-37).
+     */
+    private static final int MAX_PLACEMENTS_PER_IMAGE = 256;
+
+    /**
      * Uniform kitty file-media failure reply (spec): every read failure — missing,
      * unreadable, non-regular, sensitive path, truncated vs claimed size — must
      * answer identically so a remote client cannot probe the local filesystem.
@@ -175,6 +183,28 @@ public final class TerminalEmulator {
     private final ArrayList<TerminalImageData> mImageDataList = new ArrayList<>();
     /** Sum of {@link TerminalImageData#encoded} lengths currently retained. */
     private int mImageDataBytesTotal;
+    /**
+     * Session-scoped inline image placements (OSC 1337 / kitty). Index 0 is unused
+     * ("no placement"); {@link TerminalRow} side-band cells store the 1-based
+     * {@link TerminalImagePlacement#key}. Entries are nulled when discarded and are
+     * <b>never</b> reindexed (same rule as {@link #mImageDataList}), so a stale key left on a
+     * recycled transcript row resolves to {@code null} and can never collide with a newer
+     * placement (RF-29). Keys are handed out monotonically and never reused.
+     */
+    private final ArrayList<TerminalImagePlacement> mImagePlacements = new ArrayList<>();
+    /**
+     * Kitty placement identity table: {@code (i= registry id, p= placement id) -> placement key}
+     * (RF-1, RF-4). Anonymous placements ({@code p=} absent or 0) never enter it (RF-3), and an
+     * entry is dropped as soon as its placement is discarded (RF-29). The key is the packed pair
+     * of {@link #kittyPlacementKey(int, int)}.
+     */
+    private final HashMap<Long, Integer> mKittyPlacementKeys = new HashMap<>();
+    /**
+     * Monotonic counter feeding {@link TerminalImagePlacement#creationSeq} (the {@code z}
+     * tiebreak of RF-20 and the age used by RF-37). A counter, never a clock: the paint order
+     * must be deterministic (RNF-5).
+     */
+    private long mImagePlacementSeq;
     /**
      * Kill-switch for inline images ({@code terminal_images} pref). When false,
      * new sequences are ignored (no bytes retained) and renderers skip drawing.
@@ -1254,12 +1284,18 @@ public final class TerminalEmulator {
      */
     private void processKittyCommand(String control, String data) {
         String action = null;
-        int widthCells = -1;
-        int heightCells = -1;
+        int widthCells = -1;   // c=
+        int heightCells = -1;  // r=
+        int sourceX = 0;       // x= : crop origin in image pixels (a=p/a=P)
+        int sourceY = 0;       // y= : crop origin in image pixels (a=p/a=P)
+        int sourceW = -1;      // w= : crop width in image pixels (a=p), cells for a=t/a=T
+        int sourceH = -1;      // h= : crop height in image pixels (a=p), cells for a=t/a=T
+        boolean hasCropRect = false; // true when the client sent any of x=/y=/w=/h= (RF-11)
         int pixelWidth = 0;
         int pixelHeight = 0;
         int imageId = 0;       // protocol i=
-        int placementId = 0;   // protocol p= (accepted, single placement in v1)
+        int placementId = 0;   // protocol p= : placement identity within its image
+        int placementZ = 0;    // z= : stacking order (negative paints below the glyphs)
         int responseMode = 0;  // q= : 0 always, 1 errors only, 2 never
         int virtualPlacement = 0; // U= : 1 = unicode-placeholder virtual placement
         String format = null;
@@ -1277,15 +1313,15 @@ public final class TerminalEmulator {
             switch (key) {
                 case "a":
                 case "A": action = value; break;
-                case "w": widthCells = parseKittyInt(value, -1); break;
-                case "h": heightCells = parseKittyInt(value, -1); break;
-                case "c": if (widthCells < 0) widthCells = parseKittyInt(value, -1); break;
-                case "r": if (heightCells < 0) heightCells = parseKittyInt(value, -1); break;
+                case "w": sourceW = parseKittyInt(value, -1); hasCropRect = true; break;
+                case "h": sourceH = parseKittyInt(value, -1); hasCropRect = true; break;
+                case "c": widthCells = parseKittyInt(value, -1); break;
+                case "r": heightCells = parseKittyInt(value, -1); break;
                 case "s": pixelWidth = parseKittyInt(value, 0); break;
                 case "v": pixelHeight = parseKittyInt(value, 0); break;
                 case "i":
-                case "I": imageId = parseKittyInt(value, 0); break;
-                case "p": placementId = parseKittyInt(value, 0); break;
+                case "I": imageId = parseKittyId(value, 0); break;
+                case "p": placementId = parseKittyId(value, 0); break;
                 case "U": virtualPlacement = parseKittyInt(value, 0); break;
                 case "f": format = value; break;
                 case "q": responseMode = parseKittyInt(value, 0); break;
@@ -1293,8 +1329,14 @@ public final class TerminalEmulator {
                 case "t": mediaType = value; break;
                 case "O": fileOffset = Math.max(0, parseKittyInt(value, 0)); break;
                 case "S": fileSize = Math.max(0, parseKittyInt(value, 0)); break;
-                case "x": deleteX = parseKittyInt(value, -1); break;
-                case "y": deleteY = parseKittyInt(value, -1); break;
+                // x=/y= mean the source-crop origin in a=p/a=P and the cell of a
+                // d=p/d=x/d=y deletion: both are kept and dispatched by action (§4f).
+                case "x": sourceX = parseKittyInt(value, 0); deleteX = parseKittyInt(value, -1); hasCropRect = true; break;
+                case "y": sourceY = parseKittyInt(value, 0); deleteY = parseKittyInt(value, -1); hasCropRect = true; break;
+                case "z": placementZ = parseKittyInt(value, 0); break;
+                // C= would move the cursor after displaying; out of scope, the client
+                // repositions itself with CSI H (RF-6).
+                case "C": break;
                 default: break;
             }
         }
@@ -1343,17 +1385,22 @@ public final class TerminalEmulator {
         }
 
         if ("t".equals(action) || "T".equals(action)) {
+            // a=t/a=T keep reading w=/h= as cells (RF-34): an explicit c=/r= wins.
             handleKittyTransmit(control, data, "T".equals(action), imageId, format,
                 mediaType, fileOffset, fileSize,
-                widthCells, heightCells, pixelWidth, pixelHeight, placementId, responseMode, virtual);
+                widthCells >= 0 ? widthCells : sourceW,
+                heightCells >= 0 ? heightCells : sourceH,
+                pixelWidth, pixelHeight, placementId, responseMode, virtual, placementZ);
             return;
         }
         if ("p".equals(action) || "P".equals(action)) {
-            handleKittyPlace(imageId, widthCells, heightCells, placementId, responseMode, virtual);
+            handleKittyPlace(imageId, widthCells, heightCells,
+                sourceX, sourceY, sourceW, sourceH, hasCropRect,
+                placementId, placementZ, responseMode, virtual);
             return;
         }
         if ("d".equals(action) || "D".equals(action)) {
-            handleKittyDelete(deleteMode, imageId, deleteX, deleteY, responseMode);
+            handleKittyDelete(deleteMode, imageId, placementId, deleteX, deleteY, responseMode);
             return;
         }
     }
@@ -1364,7 +1411,9 @@ public final class TerminalEmulator {
      * <p>Spec semantics: replies are emitted only when the client specified an image
      * id ({@code i=0} stays silent), {@code q=1} suppresses {@code OK} replies and
      * {@code q=2} suppresses failure replies. A client {@code p=} placement id is
-     * echoed in the acknowledgement; no other keys are added.</p>
+     * echoed in the acknowledgement; no other keys are added. Both identifiers are
+     * 32-bit unsigned, so they are echoed with {@link Integer#toUnsignedString(int)}:
+     * a client that sent {@code i=3487878681} must never read back a negative id.</p>
      *
      * @param imageId      client {@code i=} value; {@code 0} sends nothing
      * @param placementId  client {@code p=} value; {@code 0} omits the {@code p=} field
@@ -1375,8 +1424,9 @@ public final class TerminalEmulator {
         if (imageId == 0) return;
         final boolean ok = "OK".equals(message);
         if (ok ? responseMode >= 1 : responseMode >= 2) return;
-        final StringBuilder reply = new StringBuilder("\033_Gi=").append(imageId);
-        if (placementId != 0) reply.append(",p=").append(placementId);
+        final StringBuilder reply = new StringBuilder("\033_Gi=")
+            .append(Integer.toUnsignedString(imageId));
+        if (placementId != 0) reply.append(",p=").append(Integer.toUnsignedString(placementId));
         reply.append(';').append(message).append("\033\\");
         mSession.write(reply.toString());
     }
@@ -1398,13 +1448,15 @@ public final class TerminalEmulator {
      * @param pixelHeight intrinsic px height, or 0
      * @param responseMode {@code q=} suppression
      * @param virtual     {@code U=1}: create a unicode-placeholder virtual placement instead of stamping
+     * @param placementZ  {@code z=} stacking order of the implicit placement
      */
     private void handleKittyTransmit(String control, String data, boolean alsoDisplay,
                                      int protocolId, String format, String mediaType,
                                      int fileOffset, int fileSize,
                                      int widthCells, int heightCells,
                                      int pixelWidth, int pixelHeight,
-                                     int placementId, int responseMode, boolean virtual) {
+                                     int placementId, int responseMode, boolean virtual,
+                                     int placementZ) {
         final int fmt = parseKittyFormatCode(format);
         if (fmt < 0) {
             replyKitty(protocolId, placementId, "INVALID", responseMode);
@@ -1459,10 +1511,9 @@ public final class TerminalEmulator {
             regId = existingReg;
             final TerminalImageData old = getImageData(regId);
             mImageDataBytesTotal -= (old.encoded != null) ? old.encoded.length : 0;
-            clearStampsFor(regId);
+            clearPlacementsOfImage(regId);
             mKittyVirtualPlacements.values().removeIf(vp -> vp.registryId == regId);
-            mImageDataList.set(regId - 1, new TerminalImageData(regId, bytes, -1, -1,
-                0, 0, pW, pH, pixelFormat));
+            mImageDataList.set(regId - 1, new TerminalImageData(regId, bytes, pW, pH, pixelFormat));
             mImageDataBytesTotal += bytes.length;
             evictImagesForBudget(0); // may evict others; keep this entry if possible
         } else {
@@ -1488,7 +1539,7 @@ public final class TerminalEmulator {
             if (virtual) {
                 // U=1: fit-to-grid virtual placement; no cells stamped, cursor untouched.
                 createVirtualPlacement(protocolId, regId, widthCells, heightCells);
-            } else if (!stampImage(regId, mCursorRow, mCursorCol, widthCells, heightCells)) {
+            } else if (!stampImage(regId, mCursorRow, mCursorCol, widthCells, heightCells, placementZ)) {
                 replyKitty(protocolId, placementId, "INVALID", responseMode);
                 return;
             }
@@ -1500,41 +1551,93 @@ public final class TerminalEmulator {
     /**
      * Place a previously transmitted image at the cursor ({@code a=p}).
      *
+     * <p>Geometry follows the kitty spec (RF-6..RF-16, plan §4a/§4f): {@code c=}/{@code r=} are the
+     * destination rectangle in cells, {@code x=}/{@code y=}/{@code w=}/{@code h=} are the source crop
+     * in image pixels, the origin is the cursor cell and the cursor is never moved ({@code C=} is
+     * ignored). The rectangle is stored whole and clipped when painted (RF-8).</p>
+     *
      * @param protocolId   client {@code i=} mapping into {@link #mKittyImageIds}
-     * @param widthCells   override width in cells, or -1
-     * @param heightCells  override height in cells, or -1
-     * @param placementId  client {@code p=} value echoed in the ack
+     * @param widthCells   client {@code c=} in cells, or -1
+     * @param heightCells  client {@code r=} in cells, or -1
+     * @param sourceX      client {@code x=} crop origin in pixels; negative means 0
+     * @param sourceY      client {@code y=} crop origin in pixels; negative means 0
+     * @param sourceW      client {@code w=} crop width in pixels, or -1 when absent
+     * @param sourceH      client {@code h=} crop height in pixels, or -1 when absent
+     * @param hasCropRect  whether the client sent any of {@code x=}/{@code y=}/{@code w=}/{@code h=}
+     * @param placementId  client {@code p=} value: the placement identity within its image
+     *                     ({@code 0} = anonymous, always a new placement; RF-1..RF-4)
+     * @param placementZ   client {@code z=} stacking order (negative paints below the glyphs)
      * @param responseMode {@code q=} suppression
      * @param virtual      {@code U=1}: create a unicode-placeholder virtual placement instead of stamping
      */
     private void handleKittyPlace(int protocolId, int widthCells, int heightCells,
-                                  int placementId, int responseMode, boolean virtual) {
+                                  int sourceX, int sourceY, int sourceW, int sourceH,
+                                  boolean hasCropRect, int placementId, int placementZ,
+                                  int responseMode, boolean virtual) {
         Integer regId = (protocolId != 0) ? mKittyImageIds.get(protocolId) : null;
         final TerminalImageData data = (regId != null) ? getImageData(regId) : null;
         if (data == null) {
             replyKitty(protocolId, placementId, "ENOENT:Image not found", responseMode);
             return;
         }
-        int w = widthCells;
-        int h = heightCells;
-        if (w < 0 && h < 0) {
-            if (data.pixelWidth > 0) w = cellsFromPixels(data.pixelWidth, true);
-            if (data.pixelHeight > 0) h = cellsFromPixels(data.pixelHeight, false);
-        }
-        if (w < 0 && h < 0) {
-            replyKitty(protocolId, placementId, "INVALID", responseMode);
-            return;
-        }
-        if (w < 0) w = deriveMissingCells(h, data.pixelWidth, data.pixelHeight, true);
-        if (h < 0) h = deriveMissingCells(w, data.pixelWidth, data.pixelHeight, false);
         if (virtual) {
             // U=1: virtual placement only — invisible until the client emits
-            // U+10EEEE placeholder text; no cells stamped, cursor untouched.
+            // U+10EEEE placeholder text; no cells stamped, cursor untouched. Its
+            // grid keeps the legacy c=/r= + w=/h= reading (RF-33).
+            int w = widthCells;
+            int h = heightCells;
+            if (w < 0 && h < 0) {
+                if (data.pixelWidth > 0) w = cellsFromPixels(data.pixelWidth, true);
+                if (data.pixelHeight > 0) h = cellsFromPixels(data.pixelHeight, false);
+            }
+            if (w < 0 && h < 0) {
+                replyKitty(protocolId, placementId, "INVALID", responseMode);
+                return;
+            }
+            if (w < 0) w = deriveMissingCells(h, data.pixelWidth, data.pixelHeight, true);
+            if (h < 0) h = deriveMissingCells(w, data.pixelWidth, data.pixelHeight, false);
             createVirtualPlacement(protocolId, regId, w, h);
             replyKitty(protocolId, placementId, "OK", responseMode);
             return;
         }
-        if (!stampImage(regId, mCursorRow, mCursorCol, w, h)) {
+
+        // Source crop (RF-11..RF-15). No crop key at all means the whole image, which the
+        // renderers signal with cropW/cropH = 0 (RF-16/RF-35); x=/y= alone mean "from here
+        // to the far edge" (RF-12).
+        final boolean knownPixels = data.pixelWidth > 0 && data.pixelHeight > 0;
+        int[] crop = new int[]{0, 0, 0, 0};
+        if (hasCropRect) {
+            if (knownPixels) {
+                crop = KittyPlacementGeometry.resolveSourceCrop(data.pixelWidth, data.pixelHeight,
+                    sourceX, sourceY, sourceW, sourceH);
+            } else if (sourceW > 0 || sourceH > 0) {
+                // Unknown intrinsic size (e.g. a non-PNG payload): trust the client's
+                // rectangle, only clamping negative origins.
+                crop = new int[]{Math.max(0, sourceX), Math.max(0, sourceY),
+                    Math.max(0, sourceW), Math.max(0, sourceH)};
+            }
+        }
+        // An explicit crop that intersects nothing registers an invisible placement
+        // (RF-15) instead of failing.
+        if (hasCropRect && knownPixels && (crop[2] <= 0 || crop[3] <= 0)) {
+            if (!upsertPlacement(regId, placementId, mCursorRow, mCursorCol, 0, 0, 0, 0, 0, 0, placementZ)) {
+                replyKitty(protocolId, placementId, "INVALID", responseMode);
+                return;
+            }
+            replyKitty(protocolId, placementId, "OK", responseMode);
+            return;
+        }
+
+        final int srcPxW = (crop[2] > 0) ? crop[2] : data.pixelWidth;
+        final int srcPxH = (crop[3] > 0) ? crop[3] : data.pixelHeight;
+        final int[] cells = KittyPlacementGeometry.resolveCells(widthCells, heightCells,
+            srcPxW, srcPxH, mCellWidthPixels, mCellHeightPixels);
+        if (cells == null) {
+            replyKitty(protocolId, placementId, "INVALID", responseMode);
+            return;
+        }
+        if (!upsertPlacement(regId, placementId, mCursorRow, mCursorCol, cells[0], cells[1],
+                crop[0], crop[1], crop[2], crop[3], placementZ)) {
             replyKitty(protocolId, placementId, "INVALID", responseMode);
             return;
         }
@@ -1542,22 +1645,121 @@ public final class TerminalEmulator {
     }
 
     /**
+     * Identity-table key of a client placement: the pair (image registry id, {@code p=}) packed
+     * into one {@code long}, so two images using the same {@code p=} never collide (RF-4).
+     *
+     * @param registryId  1-based registry index of the image
+     * @param placementId client {@code p=} (never 0: anonymous placements are not registered)
+     * @return the {@link #mKittyPlacementKeys} key
+     */
+    private static long kittyPlacementKey(int registryId, int placementId) {
+        return ((long) registryId << 32) | (placementId & 0xFFFFFFFFL);
+    }
+
+    /**
+     * Create or replace one placement of an image ({@code a=p}, RF-1..RF-4, RF-37).
+     *
+     * <p>A client {@code p=} identifies the placement within its image: an unknown pair gets a
+     * new placement (RF-1), a repeated pair replaces its own placement in place — same
+     * {@link TerminalImagePlacement#key}, fresh {@link TerminalImagePlacement#creationSeq} so it
+     * becomes the most recent for RF-20, old cells released and new ones reserved (RF-2) —
+     * leaving every other placement of the image untouched. A missing or {@code 0} {@code p=} is
+     * anonymous: always a new placement, never registered, so it replaces nothing (RF-3).
+     * The per-image cap is enforced before any cell is reserved (RF-37).</p>
+     *
+     * <p>The origin must be inside the grid and the rectangle is clipped to the right/bottom
+     * border, as in the single-placement path of the previous spec.</p>
+     *
+     * @param registryId  1-based registry index of an already transmitted image
+     * @param placementId client {@code p=} placement id, or 0 for an anonymous placement
+     * @param startRow    external row of the top-left cell
+     * @param startCol    column of the top-left cell
+     * @param cellsW      requested width in cells (&gt;= 1)
+     * @param cellsH      requested height in cells (&gt;= 1)
+     * @return true when the placement was created or replaced
+     */
+    private boolean upsertPlacement(int registryId, int placementId, int startRow, int startCol,
+                                    int cellsW, int cellsH, int cropX, int cropY, int cropW, int cropH,
+                                    int z) {
+        final TerminalImageData data = getImageData(registryId);
+        if (data == null || !mTerminalImagesEnabled) return false;
+        if (cellsW < 0 || cellsH < 0) return false;
+        // The origin cell must be on screen (RF-8 clarification); the rest of the
+        // rectangle may overrun it and is clipped when painting.
+        if (startCol < 0 || startRow < 0 || startCol >= mColumns || startRow >= mRows) return false;
+
+        final long mapKey = (placementId != 0) ? kittyPlacementKey(registryId, placementId) : 0L;
+        final Integer mapped = (placementId != 0) ? mKittyPlacementKeys.get(mapKey) : null;
+        final TerminalImagePlacement existing = (mapped != null) ? getPlacement(mapped) : null;
+
+        final int key;
+        if (existing != null) {
+            key = existing.key;
+            clearCellsOf(key); // the previous rectangle releases its cells before the new one stamps
+        } else {
+            enforcePlacementCap(registryId); // before reserving cells: an evicted old one owns none
+            key = mImagePlacements.size() + 1; // keys are handed out in list order and never reused
+        }
+        final TerminalImagePlacement placement = new TerminalImagePlacement(key, registryId, placementId,
+            startRow, startCol, cellsW, cellsH, cropX, cropY, cropW, cropH, z, ++mImagePlacementSeq,
+            mScreen == mAltBuffer);
+        if (existing != null) {
+            mImagePlacements.set(key - 1, placement);
+        } else {
+            mImagePlacements.add(placement);
+        }
+        if (placementId != 0) mKittyPlacementKeys.put(mapKey, placement.key);
+        stampCells(placement);
+        return true;
+    }
+
+    /**
+     * Enforce the per-image placement cap (RF-37): while the image already holds
+     * {@link #MAX_PLACEMENTS_PER_IMAGE} live placements, the oldest one is discarded — releasing
+     * its cells — before the new placement may reserve any.
+     *
+     * @param registryId 1-based registry index of the image about to be placed
+     */
+    private void enforcePlacementCap(int registryId) {
+        while (countPlacementsOfImage(registryId) >= MAX_PLACEMENTS_PER_IMAGE) {
+            final int index = KittyPlacementGeometry.oldestPlacementIndexForImage(mImagePlacements, registryId);
+            if (index < 0) return;
+            deletePlacement(index + 1); // key == list index + 1: slots are never reindexed
+        }
+    }
+
+    /**
+     * @param registryId 1-based registry index of an image
+     * @return how many live placements that image currently has
+     */
+    private int countPlacementsOfImage(int registryId) {
+        int count = 0;
+        for (int i = 0; i < mImagePlacements.size(); i++) {
+            final TerminalImagePlacement placement = mImagePlacements.get(i);
+            if (placement != null && placement.registryId == registryId) count++;
+        }
+        return count;
+    }
+
+    /**
      * Delete images/placements ({@code a=d}).
      *
      * @param deleteMode  {@code d=} value ({@code a}/{@code i}/{@code c}/{@code p}/…), or null
      * @param protocolId  {@code i=} image id
+     * @param placementId {@code p=} placement id, or 0 when absent (RF-25/RF-26/RF-27)
      * @param x           1-based cell column for {@code d=p}, or -1
      * @param y           1-based cell row for {@code d=p}, or -1
      * @param responseMode {@code q=} suppression
      */
-    private void handleKittyDelete(String deleteMode, int protocolId, int x, int y, int responseMode) {
+    private void handleKittyDelete(String deleteMode, int protocolId, int placementId,
+                                   int x, int y, int responseMode) {
         final String mode = (deleteMode == null || deleteMode.isEmpty()) ? "a" : deleteMode;
         final char m = mode.charAt(0);
         switch (m) {
             case 'a':
             case 'A':
-                clearAllImageStamps();
-                // Keep payloads so a=p can re-display; only wipe side-bands.
+                clearAllPlacements();
+                // Keep payloads so a=p can re-display; only reservations and identity go (RF-28).
                 break;
             case 'i':
             case 'I': {
@@ -1567,11 +1769,22 @@ public final class TerminalEmulator {
             }
             case 'c':
             case 'C':
-                clearImageStampsAt(mCursorRow, mCursorCol);
+                deletePlacementAt(mCursorRow, mCursorCol);
                 break;
             case 'p':
             case 'P':
-                if (x > 0 && y > 0) clearImageStampsAt(y - 1, x - 1);
+                if (placementId != 0) {
+                    final Integer regId = mKittyImageIds.get(protocolId);
+                    final Integer mapped = (regId != null)
+                        ? mKittyPlacementKeys.get(kittyPlacementKey(regId, placementId)) : null;
+                    // Unknown pair: nothing changes and the delete stays idempotent (RF-26).
+                    if (mapped == null || getPlacement(mapped) == null) break;
+                    deletePlacement(mapped); // only this placement; payload and siblings survive (RF-25)
+                } else if (x > 0 && y > 0) {
+                    // RF-27: 1-based cell coordinates, topmost placement of that cell (RF-21).
+                    final int key = KittyPlacementGeometry.topmostKeyAt(mImagePlacements, y - 1, x - 1);
+                    if (key != 0) deletePlacement(key);
+                }
                 break;
             default:
                 // Spec: an unrecognized delete mode has no effect and fails with EINVAL.
@@ -1853,6 +2066,25 @@ public final class TerminalEmulator {
         }
     }
 
+    /**
+     * Parse a kitty identifier ({@code i=}/{@code p=}), which the spec defines as a 32-bit
+     * <em>unsigned</em> integer. {@link #parseKittyInt} would overflow and fall back to 0 on
+     * anything above {@link Integer#MAX_VALUE} (real clients, e.g. opencode/OpenTUI, send ids
+     * like 3487878681), silently detaching the image from its placements.
+     *
+     * @param value    decimal text of the identifier
+     * @param fallback value returned when the text is not a 32-bit unsigned integer
+     * @return the identifier with the same 32-bit pattern ({@code Integer.toUnsignedString}
+     *         recovers the client's text)
+     */
+    private static int parseKittyId(String value, int fallback) {
+        try {
+            return Integer.parseUnsignedInt(value);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
     private int cellsFromPixels(int pixels, boolean isWidth) {
         final int cell = isWidth ? mCellWidthPixels : mCellHeightPixels;
         if (cell <= 0) return 1;
@@ -2069,11 +2301,13 @@ public final class TerminalEmulator {
                     // Clear new screen if alt buffer:
                     if (newScreen == mAltBuffer) {
                         newScreen.blockSet(0, 0, mColumns, mRows, ' ', getStyle());
-                        // The alt buffer content was wiped: drop rects that belonged to it
-                        // (their side-band cells were cleared by blockSet above).
-                        for (int i = 0; i < mImageDataList.size(); i++) {
-                            final TerminalImageData d = mImageDataList.get(i);
-                            if (d != null && d.onAltScreen && d.isPlaced()) d.placeAt(-1, -1, 0, 0);
+                        // The alt buffer content was wiped: drop the placements that belonged to
+                        // it (their side-band cells were cleared by blockSet above).
+                        for (int i = 0; i < mImagePlacements.size(); i++) {
+                            final TerminalImagePlacement placement = mImagePlacements.get(i);
+                            if (placement != null && placement.onAltScreen == (mScreen == mAltBuffer)) {
+                                discardPlacementEntry(placement.key);
+                            }
                         }
                     }
                 }
@@ -2276,7 +2510,7 @@ public final class TerminalEmulator {
                 if (mCursorRow <= mTopMargin) {
                     mScreen.blockCopy(mLeftMargin, mTopMargin, mRightMargin - mLeftMargin, mBottomMargin - (mTopMargin + 1), mLeftMargin, mTopMargin + 1);
                     blockClear(mLeftMargin, mTopMargin, mRightMargin - mLeftMargin);
-                    shiftImagePlacements(mTopMargin, mBottomMargin - 1, +1, false);
+                    shiftPlacements(mTopMargin, mBottomMargin - 1, +1, false);
                 } else {
                     mCursorRow--;
                 }
@@ -2445,7 +2679,7 @@ public final class TerminalEmulator {
                 int linesToMove = linesAfterCursor - linesToInsert;
                 mScreen.blockCopy(0, mCursorRow, mColumns, linesToMove, 0, mCursorRow + linesToInsert);
                 blockClear(0, mCursorRow, mColumns, linesToInsert);
-                shiftImagePlacements(mCursorRow, mBottomMargin - linesToInsert, +linesToInsert, false);
+                shiftPlacements(mCursorRow, mBottomMargin - linesToInsert, +linesToInsert, false);
             }
             break;
             case 'M': // "${CSI}${N}M" - delete N lines (DL).
@@ -2456,7 +2690,7 @@ public final class TerminalEmulator {
                 int linesToMove = linesAfterCursor - linesToDelete;
                 mScreen.blockCopy(0, mCursorRow + linesToDelete, mColumns, linesToMove, 0, mCursorRow);
                 blockClear(0, mCursorRow + linesToMove, mColumns, linesToDelete);
-                shiftImagePlacements(mCursorRow + linesToDelete, mBottomMargin, -linesToDelete, false);
+                shiftPlacements(mCursorRow + linesToDelete, mBottomMargin, -linesToDelete, false);
             }
             break;
             case 'P': // "${CSI}{N}P" - delete ${N} characters (DCH).
@@ -2491,7 +2725,7 @@ public final class TerminalEmulator {
                     final int linesToScroll = Math.min(linesBetweenTopAndBottomMargins, linesToScrollArg);
                     mScreen.blockCopy(mLeftMargin, mTopMargin, mRightMargin - mLeftMargin, linesBetweenTopAndBottomMargins - linesToScroll, mLeftMargin, mTopMargin + linesToScroll);
                     blockClear(mLeftMargin, mTopMargin, mRightMargin - mLeftMargin, linesToScroll);
-                    shiftImagePlacements(mTopMargin, mBottomMargin - linesToScroll, +linesToScroll, false);
+                    shiftPlacements(mTopMargin, mBottomMargin - linesToScroll, +linesToScroll, false);
                 } else {
                     // "${CSI}${func};${startx};${starty};${firstrow};${lastrow}T" - initiate highlight mouse tracking.
                     unimplementedSequence(b);
@@ -3054,39 +3288,43 @@ public final class TerminalEmulator {
             mScreen.blockCopy(mLeftMargin, mTopMargin + 1, mRightMargin - mLeftMargin, mBottomMargin - mTopMargin - 1, mLeftMargin, mTopMargin);
             // .. and blank bottom row between margins:
             mScreen.blockSet(mLeftMargin, mBottomMargin - 1, mRightMargin - mLeftMargin, 1, ' ', currentStyle);
-            shiftImagePlacements(mTopMargin, mBottomMargin, -1, false);
+            shiftPlacements(mTopMargin, mBottomMargin, -1, false);
         } else {
             mScreen.scrollDownOneLine(mTopMargin, mBottomMargin, currentStyle);
-            shiftImagePlacements(mTopMargin, mBottomMargin, -1, true);
+            shiftPlacements(mTopMargin, mBottomMargin, -1, true);
         }
     }
 
     /**
      * Keep image placement rects aligned after row content moved vertically.
      *
-     * <p>Row side-bands travel with the cells (see {@link TerminalRow#copyInterval}),
-     * but {@link TerminalImageData} rects are absolute external coordinates — without
-     * this they go stale on every scroll and the bitmap slice drawn per cell drifts
-     * (the INFORME BUG-3 "ghost row" symptom).</p>
+     * <p>Row side-bands travel with the cells (see {@link TerminalRow#copyInterval}), but
+     * {@link TerminalImagePlacement} rects are absolute external coordinates — without this
+     * they go stale on every scroll and the bitmap slice drawn per cell drifts (the INFORME
+     * BUG-3 "ghost row" symptom).</p>
      *
-     * <p>Only placements that belong to the active screen buffer are touched, so
-     * scrolling the alternate screen (pagers) never moves main-screen rects.</p>
+     * <p>Only placements that belong to the active screen buffer are touched, so scrolling the
+     * alternate screen (pagers) never moves main-screen rects.</p>
+     *
+     * <p>The rect is never anchored nor clipped: a placement that leaves the visible area keeps
+     * its rectangle (and its cells, which travel with their rows), and it is clipped only when
+     * painted (RF-8, RF-30, RF-31).</p>
      *
      * @param regionTop         first external row whose content moved
      * @param regionBottom      one past the last external row whose content moved
      * @param deltaRows         rows shifted ({@code +} down, {@code -} up)
      * @param transcriptShifted whether rows above the screen (external &lt; 0) also shifted
      */
-    private void shiftImagePlacements(int regionTop, int regionBottom, int deltaRows, boolean transcriptShifted) {
+    private void shiftPlacements(int regionTop, int regionBottom, int deltaRows, boolean transcriptShifted) {
         if (deltaRows == 0 || regionTop >= regionBottom) return;
         final boolean onAlt = (mScreen == mAltBuffer);
-        for (int i = 0; i < mImageDataList.size(); i++) {
-            final TerminalImageData data = mImageDataList.get(i);
-            if (data == null || !data.isPlaced() || data.onAltScreen != onAlt) continue;
-            if (data.startRow < 0) {
-                if (transcriptShifted) data.startRow += deltaRows;
-            } else if (data.startRow >= regionTop && data.startRow < regionBottom) {
-                data.startRow += deltaRows;
+        for (int i = 0; i < mImagePlacements.size(); i++) {
+            final TerminalImagePlacement placement = mImagePlacements.get(i);
+            if (placement == null || !placement.isVisible() || placement.onAltScreen != onAlt) continue;
+            if (placement.startRow < 0) {
+                if (transcriptShifted) placement.startRow += deltaRows;
+            } else if (placement.startRow >= regionTop && placement.startRow < regionBottom) {
+                placement.startRow += deltaRows;
             }
         }
     }
@@ -3599,15 +3837,15 @@ public final class TerminalEmulator {
         if (encoded.length > MAX_IMAGE_ENCODED_BYTES) return 0;
         evictImagesForBudget(encoded.length);
         final int id = mImageDataList.size() + 1;
-        mImageDataList.add(new TerminalImageData(id, encoded, -1, -1, 0, 0,
-            pixelWidth, pixelHeight, pixelFormat));
+        mImageDataList.add(new TerminalImageData(id, encoded, pixelWidth, pixelHeight, pixelFormat));
         mImageDataBytesTotal += encoded.length;
         return id;
     }
 
     /**
-     * Place a registry entry at a cell rectangle, clearing any previous stamp
-     * of the same id and stamping the new one.
+     * Place a registry entry at a cell rectangle as this image's single (anonymous) placement:
+     * the previous placement of the same image is discarded first, so a re-place leaves no
+     * ghost cells behind.
      *
      * @param registryId registry index from {@link #registerImage}
      * @param startRow   external row of the top-left cell
@@ -3616,22 +3854,54 @@ public final class TerminalEmulator {
      * @param cellsH     height in cells (&gt;= 1)
      * @return true when the placement was applied
      */
-    private boolean stampImage(int registryId, int startRow, int startCol, int cellsW, int cellsH) {
+    private boolean stampImage(int registryId, int startRow, int startCol, int cellsW, int cellsH, int z) {
         final TerminalImageData data = getImageData(registryId);
         if (data == null || !mTerminalImagesEnabled) return false;
         cellsW = Math.max(1, cellsW);
         cellsH = Math.max(1, cellsH);
+        // The origin cell must be on screen; the rectangle itself may overrun the grid
+        // and is clipped when painting (RF-8/RF-31).
         if (startCol < 0 || startRow < 0 || startCol >= mColumns || startRow >= mRows) return false;
-        cellsW = Math.min(cellsW, mColumns - startCol);
-        cellsH = Math.min(cellsH, mRows - startRow);
 
-        // Drop the previous rectangle of this id so a re-place does not leave ghosts.
-        clearStampsFor(registryId);
-        data.placeAt(startRow, startCol, cellsW, cellsH, mScreen == mAltBuffer);
-        for (int r = 0; r < cellsH; r++)
-            for (int c = 0; c < cellsW; c++)
-                mScreen.setImage(startCol + c, startRow + r, registryId);
+        // Drop the previous placement of this image so a re-place does not leave ghosts.
+        clearPlacementsOfImage(registryId);
+        final TerminalImagePlacement placement = new TerminalImagePlacement(
+            mImagePlacements.size() + 1, registryId, 0, startRow, startCol, cellsW, cellsH,
+            0, 0, 0, 0, z, ++mImagePlacementSeq, mScreen == mAltBuffer);
+        mImagePlacements.add(placement);
+        stampCells(placement);
         return true;
+    }
+
+    /**
+     * Write the placement key of every cell of a placement rectangle that falls inside the
+     * grid. The rest of the rectangle is clipped when painting (RF-8/RF-31).
+     *
+     * <p>A cell keeps the key of the placement that paints on top (RF-21): the key is written
+     * only when the new placement wins the {@link #comparePlacementOrder(TerminalImagePlacement,
+     * TerminalImagePlacement) paint order} against the placement currently holding the cell. A
+     * free cell (key 0) and a stale key whose placement was discarded are always taken. So the
+     * renderers can read the pass (and the background rule) of a cell from its key, while the
+     * painting itself walks the placements of the row.</p>
+     *
+     * @param placement the placement to reserve cells for
+     */
+    private void stampCells(TerminalImagePlacement placement) {
+        final int rows = mScreen.mScreenRows;
+        for (int r = 0; r < placement.cellsH; r++) {
+            final int row = placement.startRow + r;
+            if (row < 0 || row >= rows) continue;
+            for (int c = 0; c < placement.cellsW; c++) {
+                final int col = placement.startCol + c;
+                if (col < 0 || col >= mColumns) continue;
+                final int existingKey = mScreen.getPlacementKeyAt(row, col);
+                if (existingKey != 0) {
+                    final TerminalImagePlacement existing = getPlacement(existingKey);
+                    if (existing != null && comparePlacementOrder(existing, placement) >= 0) continue;
+                }
+                mScreen.setImage(col, row, placement.key);
+            }
+        }
     }
 
     /**
@@ -3650,12 +3920,18 @@ public final class TerminalEmulator {
                                       int cellsW, int cellsH, int pixelWidth, int pixelHeight) {
         final int id = registerImage(encoded, pixelWidth, pixelHeight, TerminalImageData.FORMAT_ENCODED);
         if (id == 0) return 0;
-        if (!stampImage(id, startRow, startCol, cellsW, cellsH)) return 0;
+        if (!stampImage(id, startRow, startCol, cellsW, cellsH, 0)) return 0;
         return id;
     }
 
-    /** Zero every side-band cell still pointing at {@code registryId}. */
-    private void clearStampsFor(int registryId) {
+    /**
+     * Zero every side-band cell carrying a placement key (visible rows plus the reachable
+     * transcript). Only the reservation is touched: text and styles are never modified (RF-22).
+     *
+     * @param key 1-based placement key to clear, or 0 for a no-op
+     */
+    private void clearCellsOf(int key) {
+        if (key == 0) return;
         final TerminalBuffer screen = mScreen;
         final int end = screen.mScreenRows;
         for (int r = -screen.getActiveTranscriptRows(); r < end; r++) {
@@ -3663,7 +3939,7 @@ public final class TerminalEmulator {
                 final TerminalRow line = screen.mLines[screen.externalToInternalRow(r)];
                 if (line == null) continue;
                 for (int c = 0; c < screen.mColumns; c++) {
-                    if (line.getImage(c) == registryId) line.setImage(c, 0);
+                    if (line.getImage(c) == key) line.setImage(c, 0);
                 }
             } catch (RuntimeException ignored) {
                 // Row may have been recycled mid-scan; skip.
@@ -3671,27 +3947,85 @@ public final class TerminalEmulator {
         }
     }
 
-    /** Zero image side-bands covering one cell (kitty {@code d=c}/{@code d=p}). */
-    private void clearImageStampsAt(int externalRow, int column) {
+    /**
+     * Discard every placement of an image, zeroing only the cells that carry its keys and
+     * leaving the payload alone (RF-24, RF-29, RF-38). Nulls the table slots in place; keys are
+     * never reindexed, so stale reservations elsewhere resolve to {@code null}. Used by
+     * {@code d=i}, retransmission (RF-5), budget eviction (RF-38) and the single-placement
+     * {@code a=T}/OSC 1337 paths (RF-34), so it also forgets their {@code (i=, p=)} identities.
+     *
+     * @param registryId 1-based registry index of the image
+     */
+    private void clearPlacementsOfImage(int registryId) {
+        for (int i = 0; i < mImagePlacements.size(); i++) {
+            final TerminalImagePlacement placement = mImagePlacements.get(i);
+            if (placement == null || placement.registryId != registryId) continue;
+            clearCellsOf(placement.key);
+            mImagePlacements.set(i, null);
+        }
+        forgetDiscardedPlacementKeys();
+    }
+
+    /**
+     * Drop every identity-table entry whose placement no longer exists, so a discarded
+     * placement can never be addressed again (RF-26) and the table cannot grow with dead pairs.
+     */
+    private void forgetDiscardedPlacementKeys() {
+        mKittyPlacementKeys.values().removeIf(key -> getPlacement(key) == null);
+    }
+
+    /**
+     * Discard one placement (kitty {@code d=p}/RF-25): release only its cells — never the text
+     * or styles (RF-22) — null its table slot and forget its identity. Keys are never reused, so
+     * a cell still carrying the key resolves to {@code null} and every reader ignores it (RF-29).
+     *
+     * @param key 1-based placement key; an unknown/discarded key is a no-op
+     */
+    private void deletePlacement(int key) {
+        final TerminalImagePlacement placement = getPlacement(key);
+        if (placement == null) return;
+        clearCellsOf(key);
+        discardPlacementEntry(key);
+    }
+
+    /**
+     * Null the table slot of a placement and forget its {@code (i=, p=)} identity; the caller is
+     * responsible for its cells (used when the caller already wiped them).
+     *
+     * @param key 1-based placement key
+     */
+    private void discardPlacementEntry(int key) {
+        if (key <= 0 || key > mImagePlacements.size()) return;
+        mImagePlacements.set(key - 1, null);
+        mKittyPlacementKeys.values().removeIf(mapped -> mapped == key);
+    }
+
+    /**
+     * Discard the placement reserving a cell (kitty {@code d=c}/{@code d=C}, RF-28): the
+     * placement is dropped, not just its cells. A stale key left on the cell (an already
+     * discarded placement, RF-29) is zeroed instead.
+     *
+     * @param externalRow external (transcript-aware) row of the cursor
+     * @param column      screen column of the cursor
+     */
+    private void deletePlacementAt(int externalRow, int column) {
         if (column < 0 || column >= mColumns || externalRow < 0 || externalRow >= mScreen.mScreenRows) return;
-        final int id = mScreen.getImageAt(externalRow, column);
-        if (id == 0) return;
-        final TerminalImageData data = getImageData(id);
-        if (data == null || !data.containsCell(externalRow, column)) {
+        final int key = mScreen.getPlacementKeyAt(externalRow, column);
+        if (key == 0) return;
+        final TerminalImagePlacement placement = getPlacement(key);
+        if (placement == null) {
             mScreen.setImage(column, externalRow, 0);
             return;
         }
-        for (int r = data.startRow; r < data.startRow + data.cellsH; r++) {
-            if (r < 0 || r >= mScreen.mScreenRows) continue;
-            for (int c = data.startCol; c < data.startCol + data.cellsW; c++) {
-                if (c < 0 || c >= mColumns) continue;
-                if (mScreen.getImageAt(r, c) == id) mScreen.setImage(c, r, 0);
-            }
-        }
+        if (!placement.containsCell(externalRow, column)) mScreen.setImage(column, externalRow, 0);
+        deletePlacement(key);
     }
 
-    /** Zero every image stamp on screen (kitty {@code d=a}); payloads stay for re-place. */
-    private void clearAllImageStamps() {
+    /**
+     * Zero every image reservation and drop every placement (kitty {@code d=a}); payloads and
+     * the {@code i=} mapping stay, so the client can place them again (RF-28).
+     */
+    private void clearAllPlacements() {
         final int end = mScreen.mScreenRows;
         for (int r = -mScreen.getActiveTranscriptRows(); r < end; r++) {
             try {
@@ -3704,20 +4038,19 @@ public final class TerminalEmulator {
                 // Skip recycled rows.
             }
         }
-        for (TerminalImageData data : mImageDataList) {
-            if (data != null) data.placeAt(-1, -1, 0, 0);
-        }
+        for (int i = 0; i < mImagePlacements.size(); i++) mImagePlacements.set(i, null);
+        mKittyPlacementKeys.clear();
     }
 
     /**
-     * Remove a registry entry (payload dropped; side-bands cleared first).
+     * Remove a registry entry (payload dropped; its placements and their cells cleared first).
      *
      * @param registryId 1-based registry index
      */
     private void removeImage(int registryId) {
         final TerminalImageData data = getImageData(registryId);
         if (data == null) return;
-        clearStampsFor(registryId);
+        clearPlacementsOfImage(registryId);
         mImageDataBytesTotal -= (data.encoded != null) ? data.encoded.length : 0;
         if (registryId > 0 && registryId <= mImageDataList.size()) {
             mImageDataList.set(registryId - 1, null);
@@ -3728,7 +4061,7 @@ public final class TerminalEmulator {
     }
 
     /**
-     * Resolve the inline image registry entry stamped at a screen cell.
+     * Resolve the payload shown at a screen cell, through the placement reserving it.
      *
      * @param row    external (transcript-aware) row
      * @param column screen column (0-based)
@@ -3736,8 +4069,123 @@ public final class TerminalEmulator {
      */
     public TerminalImageData getImageDataAt(int row, int column) {
         if (!mTerminalImagesEnabled) return null;
-        final int id = mScreen.getImageAt(row, column);
-        return getImageData(id);
+        final TerminalImagePlacement placement = getPlacementAt(row, column);
+        return (placement == null) ? null : getImageData(placement.registryId);
+    }
+
+    /**
+     * Resolve a placement by its 1-based key, as stored in the cells.
+     *
+     * @param key the placement key ({@link TerminalImagePlacement#key})
+     * @return the placement, or {@code null} when the key is unknown/discarded (a stale cell
+     * reservation, which every caller must tolerate)
+     */
+    public TerminalImagePlacement getPlacement(int key) {
+        if (key <= 0 || key > mImagePlacements.size()) return null;
+        return mImagePlacements.get(key - 1); // null when discarded
+    }
+
+    /**
+     * Placement key written in a cell (the emitter side of the reservation side-band).
+     *
+     * @param externalRow external (transcript-aware) row
+     * @param column      screen column (0-based)
+     * @return the 1-based placement key, or {@code 0} when the cell has no image reservation
+     */
+    public int getPlacementKeyAt(int externalRow, int column) {
+        return mScreen.getPlacementKeyAt(externalRow, column);
+    }
+
+    /**
+     * Placement reserving a cell.
+     *
+     * @param externalRow external (transcript-aware) row
+     * @param column      screen column (0-based)
+     * @return the placement, or {@code null} when the cell has no live image reservation
+     */
+    public TerminalImagePlacement getPlacementAt(int externalRow, int column) {
+        return getPlacement(getPlacementKeyAt(externalRow, column));
+    }
+
+    /**
+     * Live placements of an image, in ascending key order.
+     *
+     * @param registryId 1-based registry index of the image
+     * @return a new list with the image's placements, empty when it has none or the id is invalid
+     */
+    public List<TerminalImagePlacement> getPlacementsForImage(int registryId) {
+        final ArrayList<TerminalImagePlacement> placements = new ArrayList<>();
+        if (registryId <= 0) return placements;
+        for (int i = 0; i < mImagePlacements.size(); i++) {
+            final TerminalImagePlacement placement = mImagePlacements.get(i);
+            if (placement != null && placement.registryId == registryId) placements.add(placement);
+        }
+        return placements;
+    }
+
+    /**
+     * Collect the placements one pass of one row must paint (RF-18, RF-19, RF-20).
+     *
+     * <p>{@code out} is cleared and refilled on purpose: the painter reuses the same list for
+     * every row and pass of a frame, so painting allocates no list per row (RNF-3). Only live
+     * visible placements of the active screen buffer whose vertical span covers the row are
+     * returned (RF-32), split by {@link KittyPlacementGeometry#isBelowText(int)} so each pass
+     * gets exactly its side of the glyphs (RF-18). The list is ordered by ascending {@code z}
+     * and, on equal {@code z}, by ascending creation sequence: the last entry is the one that
+     * ends up on top (RF-20).</p>
+     *
+     * @param externalRow external (transcript-aware) row about to be painted
+     * @param belowText   {@code true} for the pass painted below the text glyphs ({@code z<0})
+     * @param out         list to clear and fill; must not be {@code null}
+     */
+    public void collectPlacementsForRow(int externalRow, boolean belowText, List<TerminalImagePlacement> out) {
+        out.clear();
+        final boolean onAltScreen = (mScreen == mAltBuffer);
+        for (int i = 0; i < mImagePlacements.size(); i++) {
+            final TerminalImagePlacement placement = mImagePlacements.get(i);
+            if (placement == null || !placement.isVisible()) continue;
+            if (placement.onAltScreen != onAltScreen) continue;
+            if (KittyPlacementGeometry.isBelowText(placement.z) != belowText) continue;
+            if (!placement.intersectsRow(externalRow)) continue;
+            out.add(placement);
+        }
+        // Paint order (RF-20). Insertion sort: a row holds very few placements of its own and
+        // this keeps the pass allocation-free.
+        for (int i = 1; i < out.size(); i++) {
+            final TerminalImagePlacement placement = out.get(i);
+            int j = i - 1;
+            while (j >= 0 && comparePlacementOrder(out.get(j), placement) > 0) {
+                out.set(j + 1, out.get(j));
+                j--;
+            }
+            out.set(j + 1, placement);
+        }
+    }
+
+    /**
+     * Placements of one row and pass as a new list, in the same order as
+     * {@link #collectPlacementsForRow(int, boolean, List)}.
+     *
+     * @param externalRow external (transcript-aware) row about to be painted
+     * @param belowText   {@code true} for the pass painted below the text glyphs ({@code z<0})
+     * @return a new list ordered by ascending {@code z} and creation age (RF-20)
+     */
+    public List<TerminalImagePlacement> getPlacementsForRow(int externalRow, boolean belowText) {
+        final ArrayList<TerminalImagePlacement> placements = new ArrayList<>();
+        collectPlacementsForRow(externalRow, belowText, placements);
+        return placements;
+    }
+
+    /**
+     * Paint order of two placements (RF-20): ascending {@code z} and, on a tie, the older
+     * creation sequence first.
+     *
+     * @param a first placement
+     * @param b second placement
+     * @return negative when {@code a} paints first, positive when {@code b} paints first
+     */
+    private static int comparePlacementOrder(TerminalImagePlacement a, TerminalImagePlacement b) {
+        return KittyPlacementGeometry.comparePlacementOrder(a.z, a.creationSeq, b.z, b.creationSeq);
     }
 
     /**
@@ -3900,7 +4348,8 @@ public final class TerminalEmulator {
 
     /**
      * Drop oldest registry entries (payload → null) until {@code incoming} bytes fit
-     * the budget. Nulls stay in place so remaining side-band ids never shift.
+     * the budget. Nulls stay in place so remaining side-band ids never shift; a dropped
+     * payload also drops all of its placements, so no cell keeps pointing at it (RF-38/RF-29).
      *
      * @param incoming encoded bytes about to be registered
      */
@@ -3909,6 +4358,7 @@ public final class TerminalEmulator {
             final TerminalImageData old = mImageDataList.get(i);
             if (old != null && old.encoded != null) {
                 mImageDataBytesTotal -= old.encoded.length;
+                clearPlacementsOfImage(i + 1);
                 mImageDataList.set(i, null);
             }
         }

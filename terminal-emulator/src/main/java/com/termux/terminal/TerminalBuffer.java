@@ -528,31 +528,44 @@ public final class TerminalBuffer {
     }
 
     /**
-     * Set (or clear with 0) the inline image index on a cell of the visible screen.
+     * Set (or clear with 0) the placement key reserving a cell of the visible screen.
      *
-     * @param column  screen column (0-based)
-     * @param row     external (transcript-aware) row
-     * @param imageId image registry index, or {@code 0} to clear
+     * @param column       screen column (0-based)
+     * @param row          external (transcript-aware) row
+     * @param placementKey 1-based {@link TerminalImagePlacement#key}, or {@code 0} to clear
      */
-    public void setImage(int column, int row, int imageId) {
+    public void setImage(int column, int row, int placementKey) {
         if (row < 0 || row >= mScreenRows || column < 0 || column >= mColumns)
             throw new IllegalArgumentException("TerminalBuffer.setImage(): row=" + row + ", column=" + column + ", mScreenRows=" + mScreenRows + ", mColumns=" + mColumns);
-        allocateFullLineIfNecessary(externalToInternalRow(row)).setImage(column, imageId);
+        allocateFullLineIfNecessary(externalToInternalRow(row)).setImage(column, placementKey);
     }
 
     /**
-     * Inline image registry index at a cell.
+     * Placement key reserving a cell.
      *
      * @param externalRow external (transcript-aware) row
      * @param column      screen column (0-based)
-     * @return the image index, or {@code 0} when the cell has no image or the row is outside the
-     * grid
+     * @return the 1-based {@link TerminalImagePlacement#key}, or {@code 0} when the cell has no
+     * image reservation or the row is outside the grid
      */
     public int getImageAt(int externalRow, int column) {
         if (!isLiveExternalRow(externalRow)) return 0;
         TerminalRow row = mLines[externalToInternalRow(externalRow)];
         if (row == null || column < 0 || column >= mColumns) return 0;
         return row.getImage(column);
+    }
+
+    /**
+     * Alias of {@link #getImageAt(int, int)} with the meaning of the stored value spelled out:
+     * the cell carries the key of the placement reserving it, not an image id.
+     *
+     * @param externalRow external (transcript-aware) row
+     * @param column      screen column (0-based)
+     * @return the 1-based {@link TerminalImagePlacement#key}, or {@code 0} when the cell has no
+     * image reservation or the row is outside the grid
+     */
+    public int getPlacementKeyAt(int externalRow, int column) {
+        return getImageAt(externalRow, column);
     }
 
     /** Support for http://vt100.net/docs/vt510-rm/DECCARA and http://vt100.net/docs/vt510-rm/DECCARA */
