@@ -1,6 +1,6 @@
 # Spec 003 — Links de texto plano clicables y subrayados
 
-Estado: implementada (pendiente de validar en dispositivo con la checklist)
+Estado: implementada (validada en dispositivo el 2026-10-20)
 
 ## Contexto y objetivo
 Hoy las URLs impresas en la terminal solo se pueden abrir indirectamente: el menú More

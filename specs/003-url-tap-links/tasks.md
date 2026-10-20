@@ -31,11 +31,13 @@
   - Hecho cuando: `terminal_hyperlinks_desc` actualizada en `values/`, `values-es-rVE`,
     `values-pt-rBR` y el grep de literales (constitución #6) sigue vacío; el renderer
     legacy pide spans solo con el toggle activado.
-- [ ] **T9. `./gradlew test` completo en verde + checklist del dispositivo.**
+- [x] **T9. `./gradlew test` completo en verde + checklist del dispositivo.** RF-1..RF-12
   - Hecho cuando: los 5 ítems del criterio de finalización de la spec se cumplen en
     ambos renderers (subrayado, tap abre, link partido completo, ajuste apagado,
     diálogo More intacto), `./gradlew test` en verde y commits Convencionales en
     `release/2.0`.
+  - ✔️ 2026-10-20: `./gradlew test` verde; checklist validada por el usuario en el
+    móvil — "Perfecto verificado en móvil". Spec cerrada.
 
 Máx 30 min por tarea; T1→T8 en orden. T4–T7 dependen de T1–T3; T6/T7 son pares
 (view), T4/T5 son pares (canvas).
