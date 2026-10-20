@@ -141,6 +141,55 @@ public class ComposeTerminalFrameTest {
     }
 
     @Test
+    public void testInsideUrlRange_splitsRuns() {
+        TerminalRow row = asciiRow(4, "abcd", TextStyle.NORMAL);
+        // Plain-URL spans arrive as a per-column boolean array built from a
+        // TerminalUrlScanner entry; the run groups cells that share the flag like the
+        // OSC 8 hyperlink side-band, and the flagged middle run carries it.
+        boolean[] insideUrl = new boolean[] {false, true, true, false};
+
+        List<ComposeTerminalFrame.TextRun> runs = ComposeTerminalFrame.buildLineRuns(
+            row, 4, -1, -1, -1, true, codePoint -> false, null, null, insideUrl);
+
+        Assert.assertEquals(3, runs.size());
+        Assert.assertFalse(runs.get(0).getInsideUrl());
+        Assert.assertTrue(runs.get(1).getInsideUrl());
+        Assert.assertFalse(runs.get(2).getInsideUrl());
+        Assert.assertEquals(1, runs.get(1).getStartColumn());
+        Assert.assertEquals(2, runs.get(1).getColumnWidth());
+    }
+
+    @Test
+    public void testInsideUrlDisabled_singleRunDefaultsFalse() {
+        TerminalRow row = asciiRow(4, "abcd", TextStyle.NORMAL);
+
+        List<ComposeTerminalFrame.TextRun> runs =
+            ComposeTerminalFrame.buildLineRuns(row, 4, -1, -1, -1, true, codePoint -> false);
+
+        Assert.assertEquals(1, runs.size());
+        Assert.assertFalse(runs.get(0).getInsideUrl());
+    }
+
+    @Test
+    public void testInsideUrlCarriesHyperlinkAlongside() {
+        TerminalRow row = asciiRow(4, "abcd", TextStyle.NORMAL);
+        row.setHyperlink(0, 1); // OSC 8 on the first cell, plain-URL span on the last two
+        boolean[] insideUrl = new boolean[] {false, false, true, true};
+
+        List<ComposeTerminalFrame.TextRun> runs = ComposeTerminalFrame.buildLineRuns(
+            row, 4, -1, -1, -1, true, codePoint -> false, null, null, insideUrl);
+
+        Assert.assertEquals(3, runs.size());
+        Assert.assertEquals(1, runs.get(0).getHyperlinkIndex());
+        Assert.assertFalse(runs.get(0).getInsideUrl());
+        Assert.assertEquals(0, runs.get(1).getHyperlinkIndex());
+        Assert.assertFalse(runs.get(1).getInsideUrl());
+        Assert.assertEquals(0, runs.get(2).getHyperlinkIndex());
+        Assert.assertTrue(runs.get(2).getInsideUrl());
+        Assert.assertEquals(2, runs.get(2).getStartColumn());
+    }
+
+    @Test
     public void testWidthMismatch_splitsRuns() {
         TerminalRow row = asciiRow(3, "abc", TextStyle.NORMAL);
 
@@ -563,11 +612,11 @@ public class ComposeTerminalFrameTest {
         java.util.Set<Integer> skipCells, java.util.Set<Integer> skipBackgroundCells) {
         final List<ComposeTerminalFrame.TextRun> runs = new java.util.ArrayList<>();
         ComposeTerminalFrame.forEachRun(row, columns, cursorX, selectionX1, selectionX2,
-            enableLigatures, hasWidthMismatch, skipCells, skipBackgroundCells,
+            enableLigatures, hasWidthMismatch, skipCells, skipBackgroundCells, null,
             (startColumn, columnWidth, startCharIndex, charCount, style, inCursor, inSelection,
-                hyperlinkIndex) -> runs.add(new ComposeTerminalFrame.TextRun(startColumn,
+                hyperlinkIndex, insideUrl) -> runs.add(new ComposeTerminalFrame.TextRun(startColumn,
                     columnWidth, startCharIndex, charCount, style, inCursor, inSelection,
-                    hyperlinkIndex)));
+                    hyperlinkIndex, insideUrl)));
         return runs;
     }
 

@@ -47,6 +47,7 @@ import com.termux.shared.view.KeyboardUtils
 import com.termux.terminal.KittyPlacementGeometry
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
+import com.termux.terminal.TerminalUrlScanner
 import com.termux.terminal.TextStyle
 import com.termux.terminal.WcWidth
 import com.termux.terminal.bridge.TerminalKeyHandler
@@ -215,6 +216,11 @@ internal fun ComposeTerminalCanvas(
     var geometryTick by remember(session) { mutableIntStateOf(0) }
     // Grid the scroll offset was last reconciled against, so a reflow can snap back to live.
     var lastGrid by remember(session) { mutableStateOf(0 to 0) }
+
+    // Plain-text URL spans per painted row (Spec 003, RF-3): the scanner keeps its own
+    // content-fingerprint cache, so per-frame cost without URLs stays a per-row char hash.
+    // UI-thread draws and taps only, matching the scanner's no-locking contract.
+    val urlScanner = remember { TerminalUrlScanner() }
 
     // Legacy updateSize() parity: it snaps mTopRow to 0 whenever the grid changes, so a pane
     // resized into a reflowed transcript never stays scrolled at a stale offset. The hidden
@@ -645,6 +651,18 @@ internal fun ComposeTerminalCanvas(
                                     ShareUtils.openUrl(context, uri)
                                     return@detectTapGestures
                                 }
+                                // Plain-text URL span (Spec 003, RF-1): same stale-row
+                                // defense and allowlist as the OSC 8 lookup; the scanner is
+                                // wrap-aware, so the tap on any row of a soft-wrapped link
+                                // opens its full URL (RF-8).
+                                val plainUri = if (
+                                    linkRow >= -emulator.screen.activeTranscriptRows &&
+                                    linkRow < emulator.mRows
+                                ) urlScanner.getUriAt(emulator.screen, linkRow, linkCol) else null
+                                if (TerminalEmulator.isAllowedHyperlinkUri(plainUri)) {
+                                    ShareUtils.openUrl(context, plainUri)
+                                    return@detectTapGestures
+                                }
                             }
                             activateSession()
                             // Legacy onSingleTapUp contract: notify the client so any tap
@@ -759,7 +777,8 @@ internal fun ComposeTerminalCanvas(
         drawIntoCanvas { drawCanvas ->
             renderComposeFrame(
                 drawCanvas.nativeCanvas, emulator, topRow, paint, metrics, palette, enableLigatures,
-                cursorVisibleOverride, state.selection, hyperlinksEnabled, imagesEnabled, imagePainter
+                cursorVisibleOverride, state.selection, hyperlinksEnabled, imagesEnabled,
+                imagePainter, urlScanner
             )
         }
         // Vertical scrollbar (legacy setVerticalScrollBarEnabled + computeVerticalScroll*):
@@ -875,6 +894,8 @@ internal fun measureCanvasMetrics(paint: Paint, typeface: Typeface, fontSize: Fl
  * @param hyperlinksEnabled When false, OSC 8 hyperlink runs do not force an underline
  * @param imagesEnabled When false, inline image placements are not painted
  * @param imagePainter Shared painter of the inline image placements (two passes per row)
+ * @param urlScanner Scanner of plain-text URL spans over the logical lines (Spec 003, RF-3);
+ * created once per pane by the composable that owns this frame
  */
 private fun renderComposeFrame(
     canvas: android.graphics.Canvas,
@@ -888,7 +909,8 @@ private fun renderComposeFrame(
     selection: ComposeTerminalFrame.TextSelection? = null,
     hyperlinksEnabled: Boolean = true,
     imagesEnabled: Boolean = true,
-    imagePainter: TerminalImagePainter = TerminalImagePainter()
+    imagePainter: TerminalImagePainter = TerminalImagePainter(),
+    urlScanner: TerminalUrlScanner = TerminalUrlScanner()
 ) {
     val colors = emulator.mColors.mCurrentColors
     val reverseVideo = emulator.isReverseVideo
@@ -998,9 +1020,24 @@ private fun renderComposeFrame(
         }
         runPainter.text = line.mText
         runPainter.y = heightOffset
+        // Plain-text URL spans for this row (Spec 003, RF-3): an IntArray of per-row span
+        // column ranges flattened as a boolean[columns], allocated only when the row carries
+        // spans at all (most rows have none).
+        var insideUrlColumns: BooleanArray? = null
+        if (hyperlinksEnabled) {
+            val entry = urlScanner.entryFor(screen, externalRow)
+            if (entry != null && entry.mSpans.isNotEmpty()) {
+                val columnsBuffer = BooleanArray(columns)
+                for (span in entry.mSpans) {
+                    val range = entry.columnRangeForRow(screen, externalRow, span) ?: continue
+                    for (col in range[0] until range[1]) columnsBuffer[col] = true
+                }
+                insideUrlColumns = columnsBuffer
+            }
+        }
         ComposeTerminalFrame.forEachRun(
             line, columns, cursorX, selX1, selX2, enableLigatures,
-            hasWidthMismatch, skipCells, skipBackgroundCells, runPainter
+            hasWidthMismatch, skipCells, skipBackgroundCells, insideUrlColumns, runPainter
         )
         if (imagesEnabled) {
             // Second image pass: placements with z>=0 paint after the glyphs, so previews sit
@@ -1039,7 +1076,9 @@ private fun renderComposeFrame(
  * mismatches wcwidth (non-monospace glyphs).
  *
  * @param hyperlinksEnabled When the run carries an OSC 8 hyperlink and this is true, force
- * an underline (legacy [com.termux.view.TerminalRenderer.drawTextRun] parity)
+ * an underline (legacy [com.termux.view.TerminalRenderer.drawTextRun] parity); plain-text
+ * URL spans (Spec 003) are pre-gated by the caller, which passes no URL columns when links
+ * are off
  * @param skipBackgroundCells Column indices whose background must not be painted even though
  * their glyph is (cells under a below-text placement, RF-18/RF-23); the set is owned by the
  * frame and repointed per row, and [ComposeTerminalFrame.forEachRun] never lets a run mix
@@ -1072,7 +1111,8 @@ private class ComposeRowRunPainter(
         style: Long,
         inCursor: Boolean,
         inSelection: Boolean,
-        hyperlinkIndex: Int
+        hyperlinkIndex: Int,
+        insideUrl: Boolean
     ) {
         ComposeTerminalFrame.resolveRunColorsInto(
             colorsBuffer, style, paletteColors, defaultBackground, reverseVideo,
@@ -1124,7 +1164,8 @@ private class ComposeRowRunPainter(
                 (TextStyle.CHARACTER_ATTRIBUTE_BOLD or TextStyle.CHARACTER_ATTRIBUTE_BLINK) != 0
             val isHyperlink = hyperlinksEnabled && hyperlinkIndex != 0
             paint.isUnderlineText =
-                effect and TextStyle.CHARACTER_ATTRIBUTE_UNDERLINE != 0 || isHyperlink
+                effect and TextStyle.CHARACTER_ATTRIBUTE_UNDERLINE != 0 ||
+                    isHyperlink || insideUrl
             paint.textSkewX = if (effect and TextStyle.CHARACTER_ATTRIBUTE_ITALIC != 0) -0.35f else 0f
             paint.isStrikeThruText = effect and TextStyle.CHARACTER_ATTRIBUTE_STRIKETHROUGH != 0
             paint.color = colorsBuffer.foreColor

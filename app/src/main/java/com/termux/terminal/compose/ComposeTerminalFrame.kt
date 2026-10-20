@@ -40,6 +40,8 @@ object ComposeTerminalFrame {
      * @param inCursor Whether the run holds the visible cursor cell
      * @param inSelection Whether the run is inside the text selection
      * @param hyperlinkIndex OSC 8 URI registry index for the run (0 = not a hyperlink)
+     * @param insideUrl Whether the run is inside a plain-text URL span (Spec 003): the
+     * canvas forces an underline for it, like the OSC 8 hyperlink
      */
     data class TextRun(
         val startColumn: Int,
@@ -49,7 +51,8 @@ object ComposeTerminalFrame {
         val style: Long,
         val inCursor: Boolean,
         val inSelection: Boolean,
-        val hyperlinkIndex: Int = 0
+        val hyperlinkIndex: Int = 0,
+        val insideUrl: Boolean = false
     )
 
     /**
@@ -69,6 +72,7 @@ object ComposeTerminalFrame {
          * @param inCursor Whether the run holds the visible cursor cell
          * @param inSelection Whether the run is inside the text selection
          * @param hyperlinkIndex OSC 8 URI registry index for the run (0 = not a hyperlink)
+         * @param insideUrl Whether the run is inside a plain-text URL span (Spec 003)
          */
         fun onRun(
             startColumn: Int,
@@ -78,7 +82,8 @@ object ComposeTerminalFrame {
             style: Long,
             inCursor: Boolean,
             inSelection: Boolean,
-            hyperlinkIndex: Int
+            hyperlinkIndex: Int,
+            insideUrl: Boolean
         )
     }
 
@@ -412,6 +417,7 @@ object ComposeTerminalFrame {
         hasWidthMismatch: (codePoint: Int) -> Boolean,
         skipCells: Set<Int>,
         skipBackgroundCells: Set<Int>,
+        insideUrlColumns: BooleanArray?,
         consumer: LineRunConsumer
     ) {
         val text = line.mText
@@ -421,6 +427,7 @@ object ComposeTerminalFrame {
         var lastInCursor = false
         var lastInSelection = false
         var lastHyperlink = 0
+        var lastInsideUrl = false
         var lastMismatch = false
         var lastSkipBackground = false
         var runStartColumn = 0
@@ -443,6 +450,7 @@ object ComposeTerminalFrame {
             val inSelection = column >= selectionX1 && column <= selectionX2
             val style = line.getStyle(column)
             val hyperlink = line.getHyperlink(column)
+            val insideUrl = insideUrlColumns?.getOrNull(column) ?: false
             val mismatch = hasWidthMismatch(codePoint)
             val skipBackground = skipBackgroundCells.contains(column)
 
@@ -451,7 +459,7 @@ object ComposeTerminalFrame {
                     consumer.onRun(
                         runStartColumn, column - runStartColumn,
                         runStartCharIndex, charIndex - runStartCharIndex,
-                        lastStyle, lastInCursor, lastInSelection, lastHyperlink
+                        lastStyle, lastInCursor, lastInSelection, lastHyperlink, lastInsideUrl
                     )
                     hasRun = false
                 }
@@ -470,6 +478,7 @@ object ComposeTerminalFrame {
                 lastInCursor = inCursor
                 lastInSelection = inSelection
                 lastHyperlink = hyperlink
+                lastInsideUrl = insideUrl
                 lastMismatch = mismatch
                 lastSkipBackground = skipBackground
                 runStartColumn = column
@@ -477,18 +486,20 @@ object ComposeTerminalFrame {
                 hasRun = true
             } else if (style != lastStyle || inCursor != lastInCursor ||
                 inSelection != lastInSelection || hyperlink != lastHyperlink ||
+                insideUrl != lastInsideUrl ||
                 mismatch || lastMismatch || !enableLigatures ||
                 skipBackground != lastSkipBackground
             ) {
                 consumer.onRun(
                     runStartColumn, column - runStartColumn,
                     runStartCharIndex, charIndex - runStartCharIndex,
-                    lastStyle, lastInCursor, lastInSelection, lastHyperlink
+                    lastStyle, lastInCursor, lastInSelection, lastHyperlink, lastInsideUrl
                 )
                 lastStyle = style
                 lastInCursor = inCursor
                 lastInSelection = inSelection
                 lastHyperlink = hyperlink
+                lastInsideUrl = insideUrl
                 lastMismatch = mismatch
                 lastSkipBackground = skipBackground
                 runStartColumn = column
@@ -509,7 +520,7 @@ object ComposeTerminalFrame {
             consumer.onRun(
                 runStartColumn, columns - runStartColumn,
                 runStartCharIndex, charIndex - runStartCharIndex,
-                lastStyle, lastInCursor, lastInSelection, lastHyperlink
+                lastStyle, lastInCursor, lastInSelection, lastHyperlink, lastInsideUrl
             )
         }
     }
@@ -534,6 +545,9 @@ object ComposeTerminalFrame {
      * inline image or resolved unicode placeholder whose glyph must not be painted)
      * @param skipBackgroundCells Column indices whose background must not be painted even
      * though their glyph is (cells covered by a below-text placement, RF-18/RF-23)
+     * @param insideUrlColumns Per-row columns inside a plain-text URL span (Spec 003), built
+     * by the caller from a [com.termux.terminal.TerminalUrlScanner] entry; {@code null} when
+     * terminal links are disabled or the row has no spans
      * @return The runs covering all [columns] columns, in order
      */
     @JvmStatic
@@ -546,18 +560,20 @@ object ComposeTerminalFrame {
         selectionX2: Int,
         enableLigatures: Boolean,
         hasWidthMismatch: (codePoint: Int) -> Boolean = { false },
-        skipCells: Set<Int> = emptySet(),
-        skipBackgroundCells: Set<Int> = emptySet()
+        skipCells: Set<Int>? = null,
+        skipBackgroundCells: Set<Int>? = null,
+        insideUrlColumns: BooleanArray? = null
     ): List<TextRun> {
         val runs = ArrayList<TextRun>()
         forEachRun(
             line, columns, cursorX, selectionX1, selectionX2, enableLigatures,
-            hasWidthMismatch, skipCells, skipBackgroundCells
-        ) { startColumn, columnWidth, startCharIndex, charCount, style, inCursor, inSelection, hyperlinkIndex ->
+            hasWidthMismatch, skipCells ?: emptySet(), skipBackgroundCells ?: emptySet(),
+            insideUrlColumns
+        ) { startColumn, columnWidth, startCharIndex, charCount, style, inCursor, inSelection, hyperlinkIndex, insideUrl ->
             runs.add(
                 TextRun(
                     startColumn, columnWidth, startCharIndex, charCount,
-                    style, inCursor, inSelection, hyperlinkIndex
+                    style, inCursor, inSelection, hyperlinkIndex, insideUrl
                 )
             )
         }
