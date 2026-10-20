@@ -6,6 +6,8 @@ import com.termux.shared.termux.TermuxConstants;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 
 public class ProotShellEnvironmentTest {
@@ -173,6 +175,65 @@ public class ProotShellEnvironmentTest {
         Assert.assertEquals("--login", command[23]);
         Assert.assertEquals("-c", command[24]);
         Assert.assertEquals("echo hi", command[25]);
+    }
+
+    @Test
+    public void testIsGuestTimeZoneAvailable_presentZone() {
+        // Toy rootfs: the guest tzdata contains the device zone → exportable.
+        File rootfs = new File(System.getProperty("java.io.tmpdir"),
+            "terminal-test-rootfs-" + System.nanoTime());
+        File zoneinfo = new File(rootfs, "usr/share/zoneinfo/America");
+        try {
+            Assert.assertTrue(zoneinfo.mkdirs());
+            Assert.assertTrue(new File(zoneinfo, "Caracas").createNewFile());
+            Assert.assertTrue(ProotShellEnvironment.isGuestTimeZoneAvailable(
+                rootfs.getPath(), "America/Caracas"));
+        } catch (IOException e) {
+            Assert.fail("Failed to build toy rootfs: " + e.getMessage());
+        } finally {
+            ProotShellEnvironmentTest.deleteToolRootfs(rootfs);
+        }
+    }
+
+    @Test
+    public void testIsGuestTimeZoneAvailable_rejections() {
+        // Missing zone, unknown id and traversal attempts must never export TZ.
+        File rootfsWithoutZones = new File(System.getProperty("java.io.tmpdir"),
+            "terminal-test-rootfs-" + System.nanoTime());
+        try {
+            Assert.assertFalse(ProotShellEnvironment.isGuestTimeZoneAvailable(
+                rootfsWithoutZones.getPath(), "America/Caracas"));
+            Assert.assertFalse(ProotShellEnvironment.isGuestTimeZoneAvailable(
+                rootfsWithoutZones.getPath(), "Etc/Unknown"));
+            // Path traversal must never cure a missing zone file.
+            Assert.assertFalse(ProotShellEnvironment.isGuestTimeZoneAvailable(
+                rootfsWithoutZones.getPath(), "America/../../etc"));
+            // POSIX-style offsets invert the sign in glibc: never export them.
+            Assert.assertFalse(ProotShellEnvironment.isGuestTimeZoneAvailable(
+                rootfsWithoutZones.getPath(), "GMT+04:00"));
+            Assert.assertFalse(ProotShellEnvironment.isGuestTimeZoneAvailable(
+                rootfsWithoutZones.getPath(), ""));
+        } finally {
+            ProotShellEnvironmentTest.deleteToolRootfs(rootfsWithoutZones);
+        }
+    }
+
+    /** Delete the toy rootfs tree created by a test (tmpdir cleanup). */
+    private static void deleteToolRootfs(File rootfs) {
+        File[] files = rootfs.listFiles() != null ? rootfs.listFiles() : new File[0];
+        for (File file : files) {
+            ProotShellEnvironmentTest.deleteToolRootfs(file);
+        }
+        // Best effort: ignore failures, tmpdir tracks.
+        rootfs.delete();
+    }
+
+    @Test
+    public void testGetEnvironment_tzNotSetWithoutRootfs() {
+        // The unit-test host has no rootfs: the guest zone cannot be probed, so
+        // TZ must stay unset and the guest keeps its UTC default.
+        HashMap<String, String> env = new ProotShellEnvironment().getEnvironment(null, false);
+        Assert.assertFalse(env.containsKey("TZ"));
     }
 
     @Test
