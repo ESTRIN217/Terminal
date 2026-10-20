@@ -14,8 +14,9 @@ import java.io.File
  * target for every symlink in the current listing; [brokenLinks] holds the
  * absolute paths of dangling links whose target does not exist.
  *
- * [focusedIndex] is the keyboard/extra-keys cursor into [files] (a negative
- * value means the list is empty).
+ * [focusedIndex] is the keyboard/extra-keys cursor into [files]: a negative
+ * value means there is no cursor yet (no highlight shown) — either because
+ * the listing is empty or because the directory just changed (spec 007).
  */
 @Immutable
 data class FileManagerUiState(

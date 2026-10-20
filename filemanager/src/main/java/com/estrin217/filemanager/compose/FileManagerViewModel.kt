@@ -276,10 +276,15 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         withContext(Dispatchers.Main) {
             if (currentDir != dir) return@withContext
             _uiState.update {
-                // Normalize the focused cursor to the new listing: keep the current
-                // position when it still fits, else fall back to the first entry.
-                val normalized = if (sorted.isEmpty()) -1
-                else it.focusedIndex.coerceIn(0, sorted.lastIndex)
+                // The cursor policy unsets it on a directory change (a
+                // phantom carry-over made new folders auto-scroll) and keeps
+                // it only for same-directory re-listings (spec 007).
+                val normalized = FocusCursorPolicy.normalizedIndex(
+                    previous = it.focusedIndex,
+                    previousPath = it.currentPath,
+                    listedPath = dir.absolutePath,
+                    size = sorted.size
+                )
                 it.copy(
                     busy = false,
                     currentPath = dir.absolutePath,
@@ -325,14 +330,18 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
 
     /**
      * Move the focused list entry by [delta] rows (clamped to the visible list).
+     * Delegates the index math to [FocusCursorPolicy.movedIndex]: an unset
+     * cursor counts as one step before the first row (spec 007).
      *
      * @param delta How many rows to move (negative moves up).
      */
     fun moveFocus(delta: Int) {
-        val size = _uiState.value.files.size
-        if (size == 0) return
-        val current = _uiState.value.focusedIndex.coerceAtLeast(0)
-        setFocusedIndex((current + delta).coerceIn(0, size - 1))
+        val next = FocusCursorPolicy.movedIndex(
+            current = _uiState.value.focusedIndex,
+            delta = delta,
+            size = _uiState.value.files.size
+        ) ?: return
+        setFocusedIndex(next)
     }
 
     /**

@@ -3,6 +3,7 @@ package com.estrin217.filemanager.compose
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -139,8 +141,18 @@ fun FileManagerScreen(
     val listState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
-    LaunchedEffect(state.focusedIndex) {
-        if (state.focusedIndex >= 0) listState.animateScrollToItem(state.focusedIndex)
+    // Directory changes reset the scroll to the first row: the lazy list keeps
+    // its previous offset across listings, which made a new folder open
+    // mid-page with the last-position row on top (spec 007). Only a cursor
+    // move inside the same directory scrolls, and then minimally.
+    var listedDir by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.currentPath, state.files.size, state.focusedIndex) {
+        if (state.currentPath != listedDir) {
+            listedDir = state.currentPath
+            if (state.files.isNotEmpty()) listState.scrollToItem(0)
+        } else if (state.focusedIndex >= 0) {
+            listState.ensureItemVisible(state.focusedIndex)
+        }
     }
 
     fun executeKeyAction(action: FileManagerKeyAction): Boolean =
@@ -743,6 +755,38 @@ fun FileManagerScreen(
             )
         }
         DialogKind.NONE -> Unit
+    }
+}
+
+/**
+ * Scrolls [index] into view only when needed and never more than necessary
+ * (spec 007): a fully visible row must not yank the page, a row cut by the
+ * top edge aligns with it, a row cut by the bottom edge gets a minimal nudge
+ * by its overflow, and an out-of-view row is docked against the nearest edge
+ * (top when above; bottom when below, estimating the height from the last
+ * visible row since rows are uniform in this list).
+ *
+ * @param index The row carrying the cursor highlight.
+ */
+private suspend fun LazyListState.ensureItemVisible(index: Int) {
+    val info = layoutInfo
+    if (info.visibleItemsInfo.isEmpty()) return
+    val item = info.visibleItemsInfo.firstOrNull { it.index == index }
+    if (item != null) {
+        when {
+            item.offset < info.viewportStartOffset -> animateScrollToItem(index)
+            item.offset + item.size > info.viewportEndOffset ->
+                animateScrollBy((item.offset + item.size - info.viewportEndOffset).toFloat())
+            else -> Unit // Already fully visible: no movement.
+        }
+        return
+    }
+    if (index < info.visibleItemsInfo.first().index) {
+        animateScrollToItem(index)
+    } else {
+        val last = info.visibleItemsInfo.last()
+        val viewportHeight = info.viewportEndOffset - info.viewportStartOffset
+        scrollToItem(index, last.size - viewportHeight)
     }
 }
 
