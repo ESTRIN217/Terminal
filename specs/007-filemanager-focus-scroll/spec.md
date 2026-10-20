@@ -1,5 +1,7 @@
 # Spec 007 — Cursor de teclado y scroll del gestor de archivos
 
+Estado: **cerrada** (2026-10-20; implementada y validada en dispositivo)
+
 ## Contexto
 
 Bug reportado: al abrir una carpeta con muchas entradas, la lista "cae" con la fila 10
@@ -83,9 +85,11 @@ El resto de acciones (HOME/END/PGUP/PGDN/TAB/ENTER) no cambian de semántica.
 
 ## Checklist de dispositivo
 
-- [ ] Abrir una carpeta grande: abre en la fila 1, sin resaltado, sin scroll.
-- [ ] Abrir carpeta con las teclas (↓×10 + Enter): la nueva carpeta abre arriba, sin resaltado.
-- [ ] ↓ una vez: resaltado en fila 1; otra ↓: fila 2 (no salta de 2 en 2).
-- [ ] ↓ hasta la fila parcialmente visible: empuje mínimo, la fila queda cortada arriba — la lista sube solo lo justo.
-- [ ] Volver (↑ barra) desde una subcarpeta scrolleada: la carpeta padre abre arriba.
-- [ ] Búsqueda/orden/ocultos con cursor puesto: el resaltado persiste en su índice.
+X 2026-10-20 por el usuario (spec cerrada):
+
+- [x] Abrir una carpeta grande: abre en la fila 1, sin resaltado, sin scroll.
+- [x] Abrir carpeta con las teclas (↓×10 + Enter): la nueva carpeta abre arriba, sin resaltado.
+- [x] ↓ una vez: resaltado en fila 1; otra ↓: fila 2 (no salta de 2 en 2).
+- [x] ↓ hasta la fila parcialmente visible: empuje mínimo, la fila queda cortada arriba — la lista sube solo lo justo.
+- [x] Volver (↑ barra) desde una subcarpeta scrolleada: la carpeta padre abre arriba.
+- [x] Búsqueda/orden/ocultos con cursor puesto: el resaltado persiste en su índice.

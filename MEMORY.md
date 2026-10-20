@@ -8,18 +8,17 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   caduca) y **wiki** <https://terminal-gnulinux-docs.web.app> (`wiki/`); `firebase.json` multitarget
   (`main` y `terminal-gnulinux-docs`). Ojo: `firebase use` SIEMPRE con `-P terminal-gnulinux`.
 - `docs/constitution.md` (6 principios) + flujo SDD (`/sdd-spec → plan → tasks → implement → validate`).
-- Specs 001-006: implementadas, validadas en dispositivo y cerradas (kitty placement
+- Specs 001-007: implementadas, validadas en dispositivo y cerradas (kitty placement
   runs, blanking de placeholders, URLs clicables, TZ del guest, identidad de proceso
   `Terminal` en `comm` (fix `fastfetch` "rin217.terminal"), iconos por tipo de archivo
   con 9 familias `FileTypeDetector` + 11 variantes `IconVariant`; 006 cerrada
   2026-10-20). Detalle en `specs/NNN-*/`.
-- **Spec 007 (cursor de teclado y scroll del gestor): implementada, PENDIENTE de
-  validar en dispositivo.** Bug: abrir carpeta scrolleaba y resaltaba la fila 10
-  (cursor heredado entre directorios + `animateScrollToItem` que alinea arriba +
-  `LazyColumn` que retiene offset entre listados). Fix: `FocusCursorPolicy` (puro,
-  11 tests JUnit), cursor a `-1` al cambiar de directorio (lista limpia, decisión del
-  usuario), scroll a fila 1 al cambiar de directorio y scroll mínimo
-  (`ensureItemVisible`).
+- **Spec 007 CERRADA** (2026-10-20, validada en dispositivo): cursor de teclado y scroll
+  del gestor. Bug: abrir carpeta scrolleaba y resaltaba la fila 10 (cursor heredado entre
+  directorios + `animateScrollToItem` que alinea arriba + `LazyColumn` que retiene offset
+  entre listados). Fix: `FocusCursorPolicy` (puro, 11 tests JUnit), cursor a `-1` al
+  cambiar de directorio (lista limpia, decisión del usuario), scroll a fila 1 al cambiar
+  de directorio y scroll mínimo (`ensureItemVisible`).
 - `./gradlew test` en verde (592 tests) tras la spec 007.
 - **Glifos multicolor en Compose (`Icon(imageVector=…)`)**: los rellenos por-path de un
   `ImageVector` solo sobreviven si el `tint` del `Icon` es `Color.Unspecified` (el ColorFilter
