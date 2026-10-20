@@ -11,6 +11,7 @@ import android.util.LruCache;
 import com.termux.terminal.KittyPlaceholderDecoder;
 import com.termux.terminal.KittyPlacementGeometry;
 import com.termux.terminal.KittyVirtualPlacement;
+import com.termux.terminal.TerminalUrlScanner;
 import com.termux.terminal.TerminalBuffer;
 import com.termux.terminal.TerminalEmulator;
 import com.termux.terminal.TerminalImageData;
@@ -144,6 +145,14 @@ public final class TerminalRenderer {
 
     private final float[] asciiMeasures = new float[127];
 
+    /**
+     * Scanner of plain-text URL spans over the logical lines (Spec 003, RF-3), shared with
+     * {@link TerminalView}'s tap path (package-private access). Entries are cached per content
+     * fingerprint (RNF-1) and both consumers run on the UI thread, matching the scanner's
+     * no-locking contract.
+     */
+    final TerminalUrlScanner mUrlScanner = new TerminalUrlScanner();
+
     public TerminalRenderer(int textSize, Typeface typeface, boolean enableLigatures) {
         mTextSize = textSize;
         mTypeface = typeface;
@@ -257,12 +266,29 @@ public final class TerminalRenderer {
             boolean lastRunInsideCursor = false;
             boolean lastRunInsideSelection = false;
             int lastRunHyperlink = 0;
+            boolean lastRunInsideUrl = false;
             int lastRunStartColumn = -1;
             int lastRunStartIndex = 0;
             boolean lastRunFontWidthMismatch = false;
             boolean lastRunSkipBackground = false;
             int currentCharIndex = 0;
             float measuredWidthForRun = 0.f;
+
+            // Plain-text URL spans of this row (Spec 003, RF-3): flattened to a boolean over
+            // the columns from the scanner's cached entry, allocated only when the row
+            // carries spans at all (most rows have none; RNF-1 keeps the cost to a hash).
+            boolean[] insideUrl = null;
+            if (mHyperlinksEnabled) {
+                TerminalUrlScanner.LogicalLineEntry entry = mUrlScanner.entryFor(screen, row);
+                if (entry != null && entry.mSpans.length > 0) {
+                    insideUrl = new boolean[columns];
+                    for (TerminalUrlScanner.LinkSpan span : entry.mSpans) {
+                        int[] range = entry.columnRangeForRow(screen, row, span);
+                        if (range == null) continue;
+                        for (int col = range[0]; col < range[1]; col++) insideUrl[col] = true;
+                    }
+                }
+            }
 
             for (int column = 0; column < columns; ) {
                 final char charAtIndex = line[currentCharIndex];
@@ -274,6 +300,9 @@ public final class TerminalRenderer {
                 final boolean insideSelection = column >= selx1 && column <= selx2;
                 final long style = lineObject.getStyle(column);
                 final int hyperlink = lineObject.getHyperlink(column);
+                // Both halves of a wide glyph carry the same flag, so a span never splits a
+                // wide glyph's run (the scanner's ranges are cell complete).
+                final boolean insideUrlHere = insideUrl != null && insideUrl[column];
                 // A cell under a z<0 placement keeps its glyph but not its background: the image
                 // pass already painted cell background + image, and repainting the background
                 // here would hide the image (RF-18/RF-23).
@@ -299,7 +328,7 @@ public final class TerminalRenderer {
                         drawTextRun(canvas, line, palette, heightOffset, lastRunStartColumn, columnWidthSinceLastRun,
                             lastRunStartIndex, charsSinceLastRun, measuredWidthForRun,
                             cursorColor, cursorShape, lastRunStyle, reverseVideo || invertCursorTextColor || lastRunInsideSelection,
-                            lastRunHyperlink != 0 && mHyperlinksEnabled, !lastRunSkipBackground);
+                            lastRunHyperlink != 0 && mHyperlinksEnabled || lastRunInsideUrl, !lastRunSkipBackground);
                     }
                     lastRunStartColumn = -1;
                     measuredWidthForRun = 0.f;
@@ -319,7 +348,8 @@ public final class TerminalRenderer {
                 // so that the font's ligature tables (GSUB liga/clig) can never combine characters.
                 if (lastRunStartColumn < 0 || style != lastRunStyle || insideCursor != lastRunInsideCursor
                     || insideSelection != lastRunInsideSelection
-                    || hyperlink != lastRunHyperlink || fontWidthMismatch || lastRunFontWidthMismatch || !mEnableLigatures
+                    || hyperlink != lastRunHyperlink || insideUrlHere != lastRunInsideUrl
+                    || fontWidthMismatch || lastRunFontWidthMismatch || !mEnableLigatures
                     || skipBackground != lastRunSkipBackground) {
                     if (lastRunStartColumn >= 0) {
                         final int columnWidthSinceLastRun = column - lastRunStartColumn;
@@ -332,13 +362,14 @@ public final class TerminalRenderer {
                         drawTextRun(canvas, line, palette, heightOffset, lastRunStartColumn, columnWidthSinceLastRun,
                             lastRunStartIndex, charsSinceLastRun, measuredWidthForRun,
                             cursorColor, cursorShape, lastRunStyle, reverseVideo || invertCursorTextColor || lastRunInsideSelection,
-                            lastRunHyperlink != 0 && mHyperlinksEnabled, !lastRunSkipBackground);
+                            lastRunHyperlink != 0 && mHyperlinksEnabled || lastRunInsideUrl, !lastRunSkipBackground);
                     }
                     measuredWidthForRun = 0.f;
                     lastRunStyle = style;
                     lastRunInsideCursor = insideCursor;
                     lastRunInsideSelection = insideSelection;
                     lastRunHyperlink = hyperlink;
+                    lastRunInsideUrl = insideUrlHere;
                     lastRunStartColumn = column;
                     lastRunStartIndex = currentCharIndex;
                     lastRunFontWidthMismatch = fontWidthMismatch;
@@ -364,7 +395,7 @@ public final class TerminalRenderer {
                 }
                 drawTextRun(canvas, line, palette, heightOffset, lastRunStartColumn, columnWidthSinceLastRun, lastRunStartIndex, charsSinceLastRun,
                     measuredWidthForRun, cursorColor, cursorShape, lastRunStyle, reverseVideo || invertCursorTextColor || lastRunInsideSelection,
-                    lastRunHyperlink != 0 && mHyperlinksEnabled, !lastRunSkipBackground);
+                    lastRunHyperlink != 0 && mHyperlinksEnabled || lastRunInsideUrl, !lastRunSkipBackground);
             }
             if (mImagesEnabled) {
                 // Second image pass: placements with z>=0 paint after the glyphs, so previews
@@ -501,19 +532,20 @@ public final class TerminalRenderer {
      * @param cursorStyle   cursor shape
      * @param textStyle     the {@link TextStyle}-encoded style of the run
      * @param reverseVideo  whether the run paints with swapped colors
-     * @param isHyperlink   whether the run is an OSC 8 hyperlink (forced underline)
+     * @param forceUnderline whether the run underlines regardless of its style (an OSC 8
+     *                       hyperlink or a plain-text URL span, Spec 003 RF-3)
      * @param drawBackground whether the cell background must be painted; false for a run over a
      *                       {@code z<0} image, whose background the image pass already painted
      *                       (RF-19/RF-23)
      */
     private void drawTextRun(Canvas canvas, char[] text, int[] palette, float y, int startColumn, int runWidthColumns,
                              int startCharIndex, int runWidthChars, float mes, int cursor, int cursorStyle,
-                             long textStyle, boolean reverseVideo, boolean isHyperlink, boolean drawBackground) {
+                             long textStyle, boolean reverseVideo, boolean forceUnderline, boolean drawBackground) {
         int foreColor = TextStyle.decodeForeColor(textStyle);
         final int effect = TextStyle.decodeEffect(textStyle);
         int backColor = TextStyle.decodeBackColor(textStyle);
         final boolean bold = (effect & (TextStyle.CHARACTER_ATTRIBUTE_BOLD | TextStyle.CHARACTER_ATTRIBUTE_BLINK)) != 0;
-        final boolean underline = (effect & TextStyle.CHARACTER_ATTRIBUTE_UNDERLINE) != 0 || isHyperlink;
+        final boolean underline = (effect & TextStyle.CHARACTER_ATTRIBUTE_UNDERLINE) != 0 || forceUnderline;
         final boolean italic = (effect & TextStyle.CHARACTER_ATTRIBUTE_ITALIC) != 0;
         final boolean strikeThrough = (effect & TextStyle.CHARACTER_ATTRIBUTE_STRIKETHROUGH) != 0;
         final boolean dim = (effect & TextStyle.CHARACTER_ATTRIBUTE_DIM) != 0;

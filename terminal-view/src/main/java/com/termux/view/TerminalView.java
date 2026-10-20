@@ -621,6 +621,13 @@ public final class TerminalView extends View {
             || column < 0 || column >= mEmulator.mColumns)
             return false;
         String uri = mEmulator.getHyperlinkUriAt(row, column);
+        // Plain-text URL spans (Spec 003, RF-1): when the cell carries no OSC 8 link, the
+        // wrap-aware scanner may still match a printed URL — same allowlist (RF-5), and a tap
+        // on any row of a soft-wrapped link opens its full URL (RF-8). The scanner shares the
+        // renderer's cache, so a row painted just before the tap is not rescanned (RNF-1).
+        if (!TerminalEmulator.isAllowedHyperlinkUri(uri)) {
+            uri = mRenderer.mUrlScanner.getUriAt(mEmulator.getScreen(), row, column);
+        }
         if (!TerminalEmulator.isAllowedHyperlinkUri(uri)) return false;
         try {
             getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(uri)));
