@@ -27,6 +27,7 @@
     <!-- Terminal Bootstrap Packages Installation -->
     <string name="bootstrap_installer_body">Instalando paquetes de bootstrap…</string>
     <string name="bootstrap_error_title">No se pudo instalar bootstrap</string>
+    <string name="error_filemanager_shortcut_unsupported">Este launcher no admite atajos fijados</string>
     <string name="bootstrap_error_body">&TERMUX_APP_NAME; no pudo instalar los paquetes de bootstrap.</string>
     <string name="bootstrap_error_abort">Cancelar</string>
     <string name="bootstrap_error_try_again">Intentar de nuevo</string>

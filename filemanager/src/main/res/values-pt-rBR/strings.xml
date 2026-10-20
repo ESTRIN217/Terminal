@@ -49,4 +49,26 @@
     <!-- Selection mode -->
     <string name="selection_mode_title">%1$d selecionados</string>
 
+    <!-- Spec 008: top bar subtitle + bookmark drawer -->
+    <string name="filemanager_counts">%1$d pastas · %2$d arquivos</string>
+    <string name="filemanager_favorites">Favoritos</string>
+    <string name="action_remove_favorite">Remover dos favoritos</string>
+    <string name="action_organize">Organizar</string>
+    <string name="view_list">Lista</string>
+    <string name="view_grid">Grade</string>
+    <string name="sort_ascending">Crescente</string>
+    <string name="folders_first">Pasta primeiro</string>
+    <string name="only_this_folder">Somente para esta pasta</string>
+    <string name="title_section_view">Visualização</string>
+    <string name="title_section_sort">Ordenar</string>
+    <string name="action_new_tab">Nova aba</string>
+    <string name="action_go_to">Ir para…</string>
+    <string name="action_refresh">Atualizar</string>
+    <string name="action_share_folder">Compartilhar pasta</string>
+    <string name="action_add_favorite">Adicionar aos favoritos</string>
+    <string name="action_create_shortcut">Criar atalho</string>
+    <string name="filemanager_go_to_title">Ir para a pasta</string>
+    <string name="filemanager_go_to_hint">Caminho da pasta</string>
+    <string name="msg_share_failed">Falha ao compartilhar</string>
+
 </resources>

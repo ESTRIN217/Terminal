@@ -977,6 +977,12 @@ public final class TermuxConstants {
             /** Intent extra for if termux failsafe session needs to be started and is used by {@link TERMUX_ACTIVITY} and {@link TERMUX_SERVICE#ACTION_STOP_SERVICE} */
             public static final String EXTRA_FAILSAFE_SESSION = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.failsafe_session"; // Default: "com.estrin217.terminal.app.failsafe_session"
 
+            /** Intent action to open a file manager session at the optional folder path of {@link TERMUX_ACTIVITY#EXTRA_OPEN_FILE_MANAGER_PATH} (spec 008). */
+            public static final String ACTION_OPEN_FILE_MANAGER = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.action.open_file_manager"; // Default: "com.estrin217.terminal.app.action.open_file_manager"
+
+            /** Intent {@code String} extra for the open folder path of the {@link TERMUX_ACTIVITY#ACTION_OPEN_FILE_MANAGER} intent. */
+            public static final String EXTRA_OPEN_FILE_MANAGER_PATH = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.open_file_manager_path"; // Default: "com.estrin217.terminal.app.open_file_manager_path"
+
 
             /** Intent action to make termux app notify user that a crash happened. */
             public static final String ACTION_NOTIFY_APP_CRASH = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.notify_app_crash"; // Default: "com.estrin217.terminal.app.notify_app_crash"

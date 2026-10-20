@@ -29,6 +29,29 @@ data class FileManagerUiState(
     val searchQuery: String = "",
     val sortOption: FileSortOption = FileSortOption.NAME,
     val sortAscending: Boolean = true,
+    /**
+     * Whether directories sort first (grouped, historical behaviour) or
+     * merge into the plain criteria order (spec 008, RF-7).
+     */
+    val foldersFirst: Boolean = true,
+    /** Presentation mode of the listing (list rows or tile grid, RF-7). */
+    val viewMode: FileViewMode = FileViewMode.LIST,
+    /**
+     * Whether the open folder has its own listing-preferences override
+     * ("Organize > this folder only", RF-8). When set, organize changes
+     * write to the folder override instead of the global prefs.
+     */
+    val folderScoped: Boolean = false,
+    /** Visible directory tally of the current listing (RF-1/RF-18). */
+    val folderCount: Int = 0,
+    /** Visible non-directory tally of the current listing (RF-1/RF-18). */
+    val fileCount: Int = 0,
+    /** User favorites (label + path) for the bookmarks drawer (RF-5). */
+    val favorites: List<BreadcrumbPolicy.Crumb> = emptyList(),
+    /** Whether the open folder is in [favorites] (RF-6). */
+    val isFavorite: Boolean = false,
+    /** Whether the open folder has a navigable parent (RF-11). */
+    val canGoUp: Boolean = false,
     val showHidden: Boolean = false,
     val canGoBack: Boolean = false,
     val canGoForward: Boolean = false,

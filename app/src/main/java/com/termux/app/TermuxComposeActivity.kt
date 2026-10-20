@@ -78,6 +78,9 @@ import com.termux.terminal.compose.TermuxSessionUiModel
 import com.termux.terminal.compose.TermuxViewModel
 import com.termux.terminal.compose.TerminalViewRegistry
 import androidx.activity.enableEdgeToEdge
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import java.io.File
 import kotlin.math.abs
 
@@ -237,6 +240,10 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         startService(serviceIntent)
         bindService(serviceIntent, this, BIND_AUTO_CREATE)
 
+        // The file manager launcher shortcut also cold-starts the app, where
+        // onNewIntent never runs (spec 008, RF-16).
+        handleIntent(intent)
+
         setContent {
             // Disk-backed font/palette loads are keyed on revision + pref values so unrelated
             // recompositions (menu state, uiState) do not re-read assets or colors.properties;
@@ -285,13 +292,9 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                         onRemoveSession = { session -> removeSession(session) },
                         onToggleKeyboard = { toggleKeyboard() },
                         onPasteFromClipboard = { pasteFromClipboard() },
-                        onOpenFileManager = {
-                            if (mViewModel.uiState.value.sessions.size >= MAX_SESSIONS) {
-                                Toast.makeText(this, R.string.title_max_terminals_reached, Toast.LENGTH_SHORT).show()
-                            } else {
-                                mViewModel.createFileManagerSession(getString(R.string.title_activity_file_manager))
-                            }
-                        },
+                        onOpenFileManager = { addFileManagerSession(null) },
+                        onNewFileManagerTab = { addFileManagerSession(null) },
+                        onCreateFileManagerShortcut = { createFileManagerLauncherShortcut(it) },
                         onOpenInTerminal = { openTerminalIn(it) },
                         onEditFile = { openFileInEditor(it) },
                         onOpenSettings = {
@@ -378,7 +381,54 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                 intent.action = null
                 addNewSession(isFailSafe, null)
             }
+        } else if (TERMUX_ACTIVITY.ACTION_OPEN_FILE_MANAGER == action) {
+            // File manager launcher shortcut (spec 008, RF-16): no terminal
+            // service needed, so it works cold-started too.
+            val path = intent.getStringExtra(TERMUX_ACTIVITY.EXTRA_OPEN_FILE_MANAGER_PATH)
+            intent.action = null
+            addFileManagerSession(path)
         }
+    }
+
+    /**
+     * Opens an additional file manager session, honoring the sessions cap
+     * (spec 008, RF-10); optionally at a given folder (launcher shortcut).
+     *
+     * @param initialPath Optional folder the session opens at.
+     */
+    private fun addFileManagerSession(initialPath: String? = null) {
+        if (mViewModel.uiState.value.sessions.size >= MAX_SESSIONS) {
+            Toast.makeText(this, R.string.title_max_terminals_reached, Toast.LENGTH_SHORT).show()
+        } else {
+            mViewModel.createFileManagerSession(
+                getString(R.string.title_activity_file_manager), initialPath
+            )
+        }
+    }
+
+    /**
+     * Pins a launcher shortcut that opens the app in a file manager session
+     * at [folder] (spec 008, RF-16); announces when the launcher refuses.
+     *
+     * @param folder The folder to pin.
+     */
+    private fun createFileManagerLauncherShortcut(folder: File) {
+        if (!ShortcutManagerCompat.isRequestPinShortcutSupported(this)) {
+            Toast.makeText(this, R.string.error_filemanager_shortcut_unsupported, Toast.LENGTH_LONG).show()
+            return
+        }
+        val label = folder.name.ifBlank { "Root" }
+        val shortcutId = "fm_" + Integer.toHexString(folder.absolutePath.hashCode())
+        val intent = Intent(this, TermuxComposeActivity::class.java)
+            .setAction(TERMUX_ACTIVITY.ACTION_OPEN_FILE_MANAGER)
+            .putExtra(TERMUX_ACTIVITY.EXTRA_OPEN_FILE_MANAGER_PATH, folder.absolutePath)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        val shortcut = ShortcutInfoCompat.Builder(this, shortcutId)
+            .setShortLabel(label)
+            .setIcon(IconCompat.createWithResource(this, R.drawable.ic_folder))
+            .setIntent(intent)
+            .build()
+        ShortcutManagerCompat.requestPinShortcut(this, shortcut, null)
     }
 
     override fun onStop() {

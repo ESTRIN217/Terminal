@@ -88,7 +88,6 @@ class FileManagerComposeActivity : ComponentActivity() {
             TermuxExpressiveTheme(terminalTypeface = terminalTypeface) {
                 FileManagerScreen(
                     viewModel = mViewModel,
-                    onNavigateUp = { finish() },
                     onOpenFile = { openFile(it) },
                     onEnsureStorageAccess = { dir, onGranted -> ensureStorageAccess(dir, onGranted) },
                     onShareFiles = {
