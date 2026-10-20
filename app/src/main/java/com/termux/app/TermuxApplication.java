@@ -14,6 +14,7 @@ import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment
 import com.termux.shared.termux.shell.am.TermuxAmSocketServer;
 import com.termux.shared.termux.shell.TermuxShellManager;
 import com.termux.shared.termux.theme.TermuxThemeUtils;
+import com.termux.terminal.TerminalProcessName;
 
 public class TermuxApplication extends Application {
 
@@ -23,6 +24,15 @@ public class TermuxApplication extends Application {
         super.onCreate();
 
         Context context = getApplicationContext();
+
+        // Expose the app label as the process identity read in /proc/<pid>/comm by CLI tools
+        // (fastfetch, neofetch...): Android truncates the package name to its last 15 chars
+        // and "com.estrin217.terminal" surfaces as the meaningless "rin217.terminal" (spec
+        // 005). Runs on the main thread so sessions created later inherit it; failure is
+        // non-fatal and only downgrades those tools back to the truncated name.
+        if (!TerminalProcessName.applyProcessIdentity())
+            Logger.logWarn(LOG_TAG, "Setting the \"" + TerminalProcessName.PROCESS_IDENTITY
+                + "\" process identity (comm) failed; CLI tools will see the truncated package name");
 
         // Set crash handler for the app
         TermuxCrashUtils.setDefaultCrashHandler(this);

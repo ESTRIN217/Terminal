@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/prctl.h>
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
@@ -215,4 +216,16 @@ JNIEXPORT jint JNICALL Java_com_termux_terminal_JNI_waitFor(JNIEnv* TERMUX_UNUSE
 JNIEXPORT void JNICALL Java_com_termux_terminal_JNI_close(JNIEnv* TERMUX_UNUSED(env), jclass TERMUX_UNUSED(clazz), jint fileDescriptor)
 {
     close(fileDescriptor);
+}
+
+JNIEXPORT jboolean JNICALL Java_com_termux_terminal_JNI_setProcessName(JNIEnv* env, jclass TERMUX_UNUSED(clazz), jstring name)
+{
+    if (name == NULL) return JNI_FALSE;
+    const char* utf = (*env)->GetStringUTFChars(env, name, NULL);
+    if (utf == NULL) return JNI_FALSE;
+    // PR_SET_NAME copies up to TASK_COMM_LEN bytes (truncating the tail), so a longer name is
+    // still safe to pass; callers keep the name short to avoid any truncation.
+    jboolean applied = prctl(PR_SET_NAME, utf, 0, 0, 0) == 0 ? JNI_TRUE : JNI_FALSE;
+    (*env)->ReleaseStringUTFChars(env, name, utf);
+    return applied;
 }
