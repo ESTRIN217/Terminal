@@ -8,16 +8,11 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   caduca) y **wiki** <https://terminal-gnulinux-docs.web.app> (`wiki/`); `firebase.json` multitarget
   (`main` y `terminal-gnulinux-docs`). Ojo: `firebase use` SIEMPRE con `-P terminal-gnulinux`.
 - `docs/constitution.md` (6 principios) + flujo SDD (`/sdd-spec → plan → tasks → implement → validate`).
-- Specs 001 (kitty placement runs), 002 (blanking de placeholders de copilot), 003 (URLs de texto
-  clicables y subrayadas), 004 (TZ del guest Debian) y 005 (identidad de proceso `Terminal` en
-  `comm`, fix `fastfetch` "rin217.terminal"): implementadas y validadas en dispositivo; 005
-  cerrada 2026-10-20. **Spec 006 CERRADA** (2026-10-20, validada en dispositivo; iconos por
-  tipo de archivo en el gestor, rev 7: 9 familias
-  `FileTypeDetector` + 11 variantes `IconVariant` — md→markdown, json→file_json AMARILLO
-  `#F9A825`, readme.md→info, changelog.md→history, .properties/prop→settings, .js→javascript,
-  .git{ignore,attributes,config,modules,keep}→glifo git `#F03C2E`, .kt/.kts→glifo Kotlin
-  `#7F52FF`, .java→taza local_cafe rojo Java `#EA2D2E`, .py→glifo Python BICOLOR
-  `#3776AB`/`#FFD43B`; doc al día, RF-1…RF-17).
+- Specs 001-006: implementadas, validadas en dispositivo y cerradas (kitty placement
+  runs, blanking de placeholders, URLs clicables, TZ del guest, identidad de proceso
+  `Terminal` en `comm` (fix `fastfetch` "rin217.terminal"), iconos por tipo de archivo
+  con 9 familias `FileTypeDetector` + 11 variantes `IconVariant`; 006 cerrada
+  2026-10-20). Detalle en `specs/NNN-*/`.
 - **Spec 007 (cursor de teclado y scroll del gestor): implementada, PENDIENTE de
   validar en dispositivo.** Bug: abrir carpeta scrolleaba y resaltaba la fila 10
   (cursor heredado entre directorios + `animateScrollToItem` que alinea arriba +
@@ -29,9 +24,8 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - **Glifos multicolor en Compose (`Icon(imageVector=…)`)**: los rellenos por-path de un
   `ImageVector` solo sobreviven si el `tint` del `Icon` es `Color.Unspecified` (el ColorFilter
   los aplastaría). La fila propaga `variant?.tint` (`Color?`, `Unspecified` vale) y no lo
-  consume. Vendidos 5 glifos (`markdown`, `file_json`, `git`, `kotlin`, `local_cafe`,
-  `python`; fuente: endpoint gstatic `.kt` = GZ con código Kotlin; drawables adjuntos
-  parseados con `addPathNodes`).
+  consume. Fuente de glifos vendidos: endpoint gstatic `.kt` = GZ con código Kotlin
+  (parseado con `addPathNodes`; detalle en spec 006).
 
 ## Learnings vigentes (por qué; de las specs 001-007)
 - **`animateScrollToItem(i)` alinea la fila i con el borde SUPERIOR del viewport**
