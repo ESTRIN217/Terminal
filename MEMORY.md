@@ -10,7 +10,10 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - `docs/constitution.md` (6 principios) + flujo SDD (`/sdd-spec → plan → tasks → implement → validate`).
 - Specs 001 (kitty placement runs), 002 (blanking de placeholders de copilot) y 003 (URLs de texto
   clicables y subrayadas): implementadas y validadas en dispositivo; cerradas 2026-10-19/20.
-- `./gradlew test` en verde (~534 tests) tras la spec 003.
+- Spec 004 (TZ del guest): implementada 2026-10-20, pendiente de validar en dispositivo. `TZ` se
+  exporta al guest solo si `<rootfs>/usr/share/zoneinfo/<ID>` existe (sonda pura en
+  `ProotShellEnvironment`). En la validación: `date` debe dar la hora local y `echo $TZ` el ID.
+- `./gradlew test` en verde (~540 tests) tras la spec 004.
 
 ## Learnings vigentes (por qué; de las specs 001-003)
 - **Las lecturas por fila externa de `TerminalBuffer` no lanzan** (devuelven "nada" fuera de la rejilla;
@@ -26,6 +29,9 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   termux-shared no es visible desde terminal-view → ciclo). Merece regla en AGENTS.md.
 - **`BUILD SUCCESSFUL` ≠ APK válido** (agp 9.4.1): `android.enableResourceOptimizations=false` + `unzip -l`.
 - **Tests de extra keys = JUnit plano, no Robolectric** (no existe su native runtime en Linux aarch64).
+- **El aviso Bionic `__bionic_open_tzdata` de logcat no sale de este código**: es ruido del
+  ROM/emulador (la libc busca los datos de zona del dispositivo y no los encuentra); no se puede
+  arreglar desde la app, no abrir spec para suprimirlo.
 - **`docs/` y `AGENTS.md` se corrigen contra la fuente** (`gradle/wrapper/`, `libs.versions.toml`...).
 - Los "quirks" del reconocedor de URLs son PARIDAD con el diálogo (sin `mailto:`, "http://a.b" casa solo
   "http://a", glifo ancho dentro rompe el match): no arreglarlos sin abrir spec.
