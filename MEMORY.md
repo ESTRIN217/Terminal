@@ -17,9 +17,15 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   `#F9A825`, readme.md→info, changelog.md→history, .properties/prop→settings, .js→javascript,
   .git{ignore,attributes,config,modules,keep}→glifo git `#F03C2E`, .kt/.kts→glifo Kotlin
   `#7F52FF`, .java→taza local_cafe rojo Java `#EA2D2E`, .py→glifo Python BICOLOR
-  `#3776AB`/`#FFD43B`) cerrada 2026-10-20: implementada, validada en dispositivo y doc al
-  día (RF-1…RF-17).
-- `./gradlew test` en verde (581 tests) tras la spec 006 rev 7.
+  `#3776AB`/`#FFD43B`; doc al día, RF-1…RF-17).
+- **Spec 007 (cursor de teclado y scroll del gestor): implementada, PENDIENTE de
+  validar en dispositivo.** Bug: abrir carpeta scrolleaba y resaltaba la fila 10
+  (cursor heredado entre directorios + `animateScrollToItem` que alinea arriba +
+  `LazyColumn` que retiene offset entre listados). Fix: `FocusCursorPolicy` (puro,
+  11 tests JUnit), cursor a `-1` al cambiar de directorio (lista limpia, decisión del
+  usuario), scroll a fila 1 al cambiar de directorio y scroll mínimo
+  (`ensureItemVisible`).
+- `./gradlew test` en verde (592 tests) tras la spec 007.
 - **Glifos multicolor en Compose (`Icon(imageVector=…)`)**: los rellenos por-path de un
   `ImageVector` solo sobreviven si el `tint` del `Icon` es `Color.Unspecified` (el ColorFilter
   los aplastaría). La fila propaga `variant?.tint` (`Color?`, `Unspecified` vale) y no lo
@@ -27,7 +33,14 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   `python`; fuente: endpoint gstatic `.kt` = GZ con código Kotlin; drawables adjuntos
   parseados con `addPathNodes`).
 
-## Learnings vigentes (por qué; de las specs 001-003)
+## Learnings vigentes (por qué; de las specs 001-007)
+- **`animateScrollToItem(i)` alinea la fila i con el borde SUPERIOR del viewport**
+  (aunque ya sea visible) y `LazyListState` retiene el índice/offset de scroll al
+  cambiar los índices de los ítems: cualquier "entra en otra carpeta y enlista otra
+  vez" con ambos daba auto-scroll fantasma. Regla: cursor de teclado en clase pura
+  con reset por cambio de directorio (`FocusCursorPolicy`) y scroll con
+  `ensureItemVisible` (nudge por `visibleItemsInfo`, `scrollToItem(i, h-V)` para
+  dock-lo por abajo) — spec 007.
 - **Semánticas de extensión que difieren NO se unifican sin spec**: `FileSortOption.getExtension`
   (sort, `idx>=0`, oculto → su grupo `.name`) ≠ `FileTypeDetector` (iconos, oculto → genérico).
   Intento de delegar el sort al detector cambió el orden de ocultos: el test de regresión lo
