@@ -334,7 +334,7 @@
     <string name="native_compose_renderer">Renderizado Compose nativo [Experimental]</string>
     <string name="native_compose_renderer_desc">Pinta la terminal con un prototipo Canvas de Compose. La vista clásica sigue como respaldo</string>
     <string name="terminal_hyperlinks">Hipervínculos de terminal [Experimental]</string>
-    <string name="terminal_hyperlinks_desc">Subraya los enlaces OSC 8 y ábrelos al tocarlos</string>
+    <string name="terminal_hyperlinks_desc">Subraya los enlaces OSC 8 y las URLs impresas, y ábrelos al tocarlos</string>
     <string name="terminal_images">Imágenes de terminal [Experimental]</string>
     <string name="terminal_images_desc">Muestra imágenes en línea (OSC 1337 / kitty graphics)</string>
     <string name="force_60hz">Forzar 60 Hz (batería)</string>

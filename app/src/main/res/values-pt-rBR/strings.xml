@@ -307,4 +307,8 @@
     <!-- File Details -->
     <string name="title_details">Detalhes do arquivo</string>
 
+    <!-- Settings: terminal (Spec 003, RF-11; catches up with the EN/es sections) -->
+    <string name="terminal_hyperlinks">Hiperlinks de terminal [Experimental]</string>
+    <string name="terminal_hyperlinks_desc">Sublinhe os links OSC 8 e as URLs impressas e abra-os ao tocar</string>
+
 </resources>
