@@ -8,11 +8,9 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   caduca) y **wiki** <https://terminal-gnulinux-docs.web.app> (`wiki/`); `firebase.json` multitarget
   (`main` y `terminal-gnulinux-docs`). Ojo: `firebase use` SIEMPRE con `-P terminal-gnulinux`.
 - `docs/constitution.md` (6 principios) + flujo SDD (`/sdd-spec → plan → tasks → implement → validate`).
-- Specs 001 (kitty placement runs), 002 (blanking de placeholders de copilot) y 003 (URLs de texto
-  clicables y subrayadas): implementadas y validadas en dispositivo; cerradas 2026-10-19/20.
-- Spec 004 (TZ del guest): implementada 2026-10-20, pendiente de validar en dispositivo. `TZ` se
-  exporta al guest solo si `<rootfs>/usr/share/zoneinfo/<ID>` existe (sonda pura en
-  `ProotShellEnvironment`). En la validación: `date` debe dar la hora local y `echo $TZ` el ID.
+- Specs 001 (kitty placement runs), 002 (blanking de placeholders de copilot), 003 (URLs de texto
+  clicables y subrayadas) y 004 (TZ del guest Debian): implementadas y validadas en dispositivo;
+  cerradas 2026-10-19/20.
 - `./gradlew test` en verde (~540 tests) tras la spec 004.
 
 ## Learnings vigentes (por qué; de las specs 001-003)

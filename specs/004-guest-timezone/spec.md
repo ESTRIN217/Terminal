@@ -1,5 +1,7 @@
 # Spec 004 — Zona horaria del guest Debian
 
+Estado: implementada (validada en dispositivo el 2026-10-20)
+
 ## Problema
 
 Al abrir una sesión de Debian, `date` muestra la fecha correcta pero la hora en
