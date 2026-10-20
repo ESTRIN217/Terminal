@@ -89,6 +89,7 @@ app  →  termux-shared  →  terminal-view  →  terminal-emulator
 - **Client Interface Pattern:** Interfaces define contracts (`TerminalSessionClient`, `TerminalViewClient`). Base classes provide no-op defaults (`TermuxTerminalSessionClientBase`). Concrete implementations in `app` extend bases. Follow this pattern for new callbacks.
 - **Service lifecycle:** `TermuxService` outlives `TermuxComposeActivity`. Activity re-binds on rotation/restart. Don't store activity references in the service — use the client interface.
 - **Static utility classes** for stateless helpers (`TermuxUtils`, `TermuxThemeUtils`, `DataUtils`).
+- **Shared logic lives at the bottom of the module graph (`terminal-emulator`) and uppers delegate.** When a utility consumed by `termux-shared` is also needed by `terminal-view` or `terminal-emulator`, move the implementation to `terminal-emulator` and delegate from the original class instead of duplicating the logic or injecting it through client plumbing: `termux-shared` cannot be seen from `terminal-view` (and a dependency that way would be a cycle). Example: the URL recognizer moved there as `TerminalUrlScanner` (`TermuxUrlUtils.getUrlMatchRegex()` delegates, spec 003), shared by the More-menu dialog, both renderers and both tap paths. Keep the delegating class's public API so callers don't change.
 
 ## Gotchas
 

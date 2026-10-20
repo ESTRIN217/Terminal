@@ -32,5 +32,4 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 
 ## Próximos pasos
 - Opcionales: auto-desactivar sticky modifiers, lock por long-press, altura de barra configurable.
-- Proponer a AGENTS.md la regla de "mueve utilidades compartidas a terminal-emulator y delega" (usada en 003).
 
