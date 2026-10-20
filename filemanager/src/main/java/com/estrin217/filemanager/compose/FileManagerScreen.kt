@@ -88,6 +88,7 @@ import androidx.compose.ui.unit.dp
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import com.estrin217.filemanager.FileTypeDetector
 import com.estrin217.filemanager.FileOperationsHelper
 import com.estrin217.filemanager.FileSortOption
 import com.estrin217.filemanager.R
@@ -421,6 +422,13 @@ fun FileManagerScreen(
                     val isBroken = state.brokenLinks.contains(file.absolutePath)
                     val isDir = remember(file.absolutePath) { file.isDirectory }
                     val fileSize = remember(file.absolutePath) { file.length() }
+                    val family = remember(file.absolutePath, isLink, isDir) {
+                        if (isLink || isDir) null else FileTypeDetector.familyFor(file.name)
+                    }
+                    val variant = remember(file.absolutePath, isLink, isDir) {
+                        if (isLink || isDir) FileTypeDetector.IconVariant.NONE
+                        else FileTypeDetector.iconVariantFor(file.name)
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -456,12 +464,12 @@ fun FileManagerScreen(
                         Icon(
                             if (isLink) Icons.Default.Link
                             else if (isDir) Icons.Default.Folder
-                            else Icons.Default.Description,
+                            else variant?.icon ?: family?.icon ?: Icons.Default.Description,
                             contentDescription = null,
                             tint = if (isBroken) MaterialTheme.colorScheme.error
                             else if (isLink) MaterialTheme.colorScheme.tertiary
                             else if (isDir) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            else variant?.tint ?: family?.tint ?: MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(28.dp)
                         )
                         Spacer(Modifier.width(12.dp))
