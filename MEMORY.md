@@ -88,7 +88,8 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Selección del gestor = segundo estado de la topbar (2026-10-21): título «n seleccionados»,
   nav-icon «Cerrar»→`clearSelection()` (el cajón no abre durante la selección), acciones
   copiar/cortar/copiar ruta/compartir/editar/borrar en la propia topbar; `BottomAppBar`
-  retirada del Scaffold. Sin strings nuevos.
+  retirada del Scaffold. Sin strings nuevos. **Validada en dispositivo (2026-10-21);
+  commit `e118ca78` en `release/2.0`, sin push. Fuera de spec (tangent de la 008).**
 
 ## Learnings vigentes (por qué)
 - **Glifos multicolor en Compose**: los rellenos por-path de un `ImageVector` solo sobreviven con
