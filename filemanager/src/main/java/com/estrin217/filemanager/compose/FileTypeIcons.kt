@@ -3,7 +3,7 @@ package com.estrin217.filemanager.compose
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Image
@@ -12,7 +12,7 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.TextSnippet
+import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -71,9 +71,9 @@ internal val FileType.icon: ImageVector
         FileType.IMAGE -> Icons.Default.Image
         FileType.AUDIO -> Icons.Default.MusicNote
         FileType.VIDEO -> Icons.Default.Movie
-        FileType.TEXT -> Icons.Default.TextSnippet
+        FileType.TEXT -> Icons.AutoMirrored.Filled.TextSnippet
         FileType.PDF -> Icons.Default.PictureAsPdf
-        FileType.DOCUMENT -> Icons.Default.Article
+        FileType.DOCUMENT -> Icons.AutoMirrored.Filled.Article
     }
 
 /**

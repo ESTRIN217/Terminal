@@ -51,7 +51,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tab
 import androidx.compose.material.icons.filled.Terminal
@@ -88,7 +88,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.material3.TopAppBar
@@ -425,7 +425,7 @@ fun FileManagerScreen(
                         )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.view_list)) },
-                            leadingIcon = { Icon(Icons.Default.List, null) },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, null) },
                             trailingIcon = {
                                 if (state.viewMode == FileViewMode.LIST) Icon(Icons.Default.Check, null)
                             },
@@ -1425,7 +1425,7 @@ private fun PropertiesDialog(
         title = { Text(stringResource(R.string.properties_title, file.name)) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                TabRow(selectedTabIndex = tab) {
+                PrimaryTabRow(selectedTabIndex = tab) {
                     Tab(
                         selected = tab == 0,
                         onClick = { tab = 0 },

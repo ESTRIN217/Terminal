@@ -2,7 +2,12 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-## Estado actual
+- **Cero warnings en `:filemanager:compileDebugKotlin`** (2026-10-21): migrados los 4
+  iconos deprecados a sus versiones AutoMirrored (`List`, `TextSnippet`, `Article`;
+  imports `androidx.compose.material.icons.automirrored.filled.*` y usos
+  `Icons.AutoMirrored.Filled.*`) y `TabRow` → `PrimaryTabRow` (import material3 +
+  diálogo de propiedades de `FileManagerScreen.kt`). BUILD SUCCESSFUL sin líneas
+  `w:`. Verificado con grep que no queda ningún uso de los iconos viejos.
 - **Rama `3.0` creada** (2026-10-21, desde master). **Spec 010 CERRADA**
   (2026-10-21): htop/proc-stat resuelto sin root — overlay en proot (binds
   `-b <snapshot>:<fichero>` tras `-b /proc`; el específico gana, verificado en
