@@ -47,8 +47,8 @@ android {
         applicationId = "com.estrin217.terminal"
         minSdk = providers.gradleProperty("minSdkVersion").orNull?.toInt() ?: 24
         targetSdk = providers.gradleProperty("targetSdkVersion").orNull?.toInt() ?: 28
-        versionCode = 120
-        val verName = appVersionName.ifEmpty { "2.0.0" }
+        versionCode = 121
+        val verName = appVersionName.ifEmpty { "2.1.0" }
         versionName = verName
         validateVersionName(verName)
 

@@ -7,6 +7,53 @@ Todos los cambios relevantes de Terminal. El formato sigue
 Este proyecto es un fork independiente de [termux/termux-app](https://github.com/termux/termux-app)
 y no está afiliado al equipo de Termux.
 
+## [2.1.0] — 2026-10-21
+
+### Añadido
+
+#### Terminal
+- **URLs impresas clicables en ambos renderers**: la detección de renglones con URL se ha extraído
+  a `TerminalUrlScanner` (en `terminal-emulator`, compartida por los dos renderers y el menú
+  «Más»), la vista legada subraya y abre por toque, y el canvas Compose hace lo propio, con
+  paridad de esquemas con los hipervínculos OSC 8.
+- **Identidad de proceso del terminal**: establece `comm` de una TUI propia con `prctl(PR_SET_NAME)`
+  vía JNI (`TerminalProcessName`), de forma que herramientas como `fastfetch`/`neofetch` detectan
+  el terminal.
+- **Kitty Graphics**: colocaciones múltiples y recorte del origen de la imagen, con los
+  placeholders visibles en ambos renderers.
+
+#### Gestor de archivos
+- **Iconos por tipo de fichero**: coincidencia por extensión con variants por tinte para
+  documentos de Groovy DSL (elefante de Gradle en azul), Kotlin, scripts, imágenes, vídeos,
+  texto plano, código fuente, etc.
+- **Topbar con breadcrumb clicable y menú «Organizar»**: título con carpeta y recuento
+  (n ficheros / n carpetas), tren de carpetas navegable, cajón de marcadores (favoritos
+  persistentes), orden y modo de vista con preferencias por carpeta, y atajos del launcher
+  para carpetas y archivos (`ACTION_OPEN_FILE_MANAGER`).
+- **Selección en la topbar**: segundo estado de la barra con «n seleccionados» y acciones
+  copiar / cortar / copiar ruta / compartir / editar / borrar. La `BottomAppBar` se retira.
+- **Menú por ítem con acciones de riqueza**: abrir con el sistema (FileProvider) o con un editor
+  del *guest* Debian si existe (`nano`/`vim` detectados), **Comprimir…** con zip/tar.xz/7z y
+  soporte de contraseña en `.7z`, y **Propiedades** en dos pestañas Básico/Permisos, con el
+  modo POSIX en formato de texto, usuario/grupo y etiqueta SELinux.
+
+### Corregido
+- **Crash al abrir un hipervínculo con la fila fuera de la cuadrícula** del terminal.
+- **Runs fantasma en el renderer legado** tras celdas saltadas; los placeholders kitty ya no
+  se pintan como glifo (clips respetados en la geometría).
+- **La hora del *guest* Debian salía en UTC**: `date` pasa a informar en hora local.
+- **El pegado fallido informaba «0 pegados» como éxito**: si el origen ya no existe aparece
+  «Error al pegar», y un pegado por cortar solo vacía el portapapeles si alguna fila se movió.
+- El gestor de archivos ya no hace *auto-scroll* al abrir una carpeta; el cursor del teclado
+  se limpia y el desplazamiento mínimo usa `ensureItemVisible`.
+- Cazadas claves faltantes en `values-pt-rBR` del gestor de archivos: 28 claves caían al
+  inglés en runtime.
+
+### Documentación
+- Wiki de documentación estática (`wiki/`) servida en el hosting, enlazada desde Acerca de:
+  uso, personalización, y `RUN_COMMAND`/`Termux:API` documentados.
+- Banner, capturas y badges en el README.
+
 ## [2.0.0] — 2026-10-03
 
 ### Añadido

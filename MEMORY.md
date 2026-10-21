@@ -14,47 +14,17 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   - 008 (2026-10-20): topbar del gestor: título = carpeta + recuento (`ListingCounts`), breadcrumb
     clicable (`BreadcrumbPolicy`), cajón de marcadores (favoritos = StringSet en prefs), menú
     «Organizar» (lista/cuadrícula, orden, overrides por carpeta `folder:<path>:*` con
-    snapshot/restore) y More completo (RF-9; «Pegar» se conserva al final — decisión abierta). Atajo
+    snapshot/restore) y More completo (RF-9; «Pegar» al final por diseño, decisión cerrada
+    2026-10-21). Atajo
     del launcher: `ACTION_OPEN_FILE_MANAGER`(+`EXTRA_…_PATH`) en `TermuxConstants.TERMUX_ACTIVITY`,
     `handleIntent` también en `onCreate` (arranque frío, action se consume), `ShortcutManagerCompat`
     id `fm_<hash>` + `ic_folder`; MAX_SESSIONS respetado. `./gradlew test` verde, APK válido.
-- Cambios de la 008 aún sin commit en `master` (sin push).
-- Spec 009 (More por ítem + propiedades en pestañas) **aprobada** con plan y
-  tareas listos en `specs/009-filemanager-item-menu/` (10 tareas, T1-T10);
-  pendiente de implementar. Decisiones: «Rootfs» reutiliza el callback `onEditFile`
-  de la app (ya hace nano→vim con `DEBIAN_EDITOR_CANDIDATES`), compresión con
-  commons-compress en el propio módulo (`ArchiveCreator`), `PastePolicy` corrige el
-  pegado fallido que mostraba «0 pegados». La grid se queda con «Info»→propiedades.
-- Imple 009 en marcha: **T1-T4 cerradas** (políticas, ViewModel con paste/
-  clipboard-fix, `ArchiveCreator` con tests de disco rojo→verde: zip/tar.xz/7z
-  cifrado descifran y rondan contenido; `compressItem` con plan/collision y
-  strings de compresión en 3 locales). Gotcha: commons-compress 7z usa
-  `closeArchiveEntry()` (no `closeEntry()`); `libs.xz` no estaba en cache local
-  (primera ejecución de Gradle con red). Siguiente T5: menú «More» por fila.
-- **T5 cerrada**: `ItemMoreMenu` por fila (Icono «More» sustituye a «Info»),
-  `addFavoriteFor(dir)` en el VM, parámetro opcional `onCreateFileShortcut` en la
-  Screen (cableado en T9), «Propiedades» abre temporalmente DETAILS (T8 lo
-  sustituye), «Abrir con» y «Comprimir» llegan en T6/T7. Cero strings nuevos
-  (reusados action_cut/copy/delete/rename/share/paste/copy_path…). App compila.
-- **T6 cerrada**: «Abrir con…» file-only (symlink → destino): Sistema =
-  `onOpenFile(resolved)`; Rootfs = pre-check `EditorPolicy` sobre
-  `DEBIAN_EDITOR_CANDIDATES`+`canExecute()` → `onEditFile(resolved)` o snack
-  `msg_no_rootfs_editor` (el host decide MAX_SESSIONS/ruta mapeable/chooser).
-  Submenú inline expandible en el DropdownMenu. Sin cableado de `onEditFile` el
-  elemento Rootfs se oculta. Siguiente T7: diálogo «Comprimir…».
-- **T7 cerrada**: `DialogKind.COMPRESS` + `CompressDialog` (nombre por defecto
-  del ítem, radios zip/tar.xz/7z, contraseña solo visible con 7z y enmascarada,
-  aceptar deshabilitado en vacío); `compressItem` del VM da los mensajes de
-  resultado. Glifo `Icons.Default.Archive` verificado en el AAR. Elemento
-  «Comprimir…» con `enabled=!busy` en su slot RF-1. Test=literales OK + app
-  compila. Siguiente T8: propiedades en dos pestañas.
-- **T8 cerrada**: `DialogKind.PROPERTIES` sustituye a DETAILS (también para el
-  «Info» del mosaico); `PropertiesDialog` con TabRow Básico/Permisos +
-  `PropertyRow` (valor con wrap, «—» en huérfano); VM `loadProperties` (lstat +
-  UserUtils + PosixModeText + SELinuxUtils) y `loadFolderCounts` (ocultos
-  vigente, sin filtro de búsqueda; guarda por ruta en state.properties). Se
-  retiró el caché muerto `folderSizes`/`loadFolderSize`. 15 strings ×3 locales.
-  Gotcha: `ListingCounts.counts` devuelve `Counts(folders, files)` (no un Pair).
+- Spec 009 (More por ítem + propiedades en pestañas): implementada completa
+  (T1-T10), decidida: «Rootfs» reutiliza `onEditFile` de la app
+  (nano→vim con `DEBIAN_EDITOR_CANDIDATES`), compresión con commons-compress
+  en el propio módulo (`ArchiveCreator`), `PastePolicy` corrige el pegado
+  fallido que mostraba «0 pegados». La grid se queda con «Info»→propiedades.
+  Gotchas: commons-compress 7z usa `closeArchiveEntry()` (no `closeEntry()`).
 - **T9 cerrada**: `ACTION_OPEN_FILE` + `EXTRA_OPEN_FILE_PATH` en
   `TermuxConstants.TERMUX_ACTIVITY`; rama en `handleIntent` (consume la
   acción; si el archivo ya no existe → `addFileManagerSession(null)` sin
@@ -85,6 +55,23 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   con `group(translationY = 45.855)`) y tinte propio azul `#0288D1` (venía en negro, el
   usuario pidió azul). Sin familia (como `kts`); RF-18. Tests rojo→verde; `./gradlew test`
   global verde. **Validada en dispositivo el 2026-10-21 (rev 8); spec 006 cerrada.**
+- **Candidatura 2.1.0 auditada (2026-10-21)**: 41 commits desde `v2.0.0`
+  (specs 002-009 + tangente selección), todo aditivo, sin rupturas de API →
+  bump minor: 2.0.0→2.1.0. `./gradlew test` verde a fecha de hoy. **Hecho:
+  `versionCode 121` + `versionName 2.1.0` en app/build.gradle.kts y entrada
+  `## [2.1.0] — 2026-10-21` en CHANGELOG.md** (`:app:versionName` imprime
+  2.1.0). Todavía sin commit. Pendiente para el release: commit, push de
+  `release/2.0` (34+ commits sin publicar), release build+tag en master,
+  update-site.py. NOTA: la fecha del changelog es la del bump; si el corte
+  tarda, ajustarla a la fecha real del tag.
+- **Docs actualizados para 2.1.0 (2026-10-21)**: README (características URL
+  impresas + gestor ampliado), `docs/hipervinculos-y-seleccionar-url.md`
+  (sección nueva «URLs impresas tocables (spec 003)» + relación actualizada),
+  wiki `hipervinculos.html` (sección nueva + tabla «¿Cuál usar?»),
+  `wiki/uso-terminal.html` (bullet gestor), `docs/proot-debian-arm64-plan.md`
+  (estado actual 2.1.0), `docs/en/index.md` (wiki apunta al hosting, no al
+  GitHub wiki). Sin tocar `docs/roadmap-2.0.md` (histórico completo) ni
+  `public/` (lo escribe update-site.py).
 - Selección del gestor = segundo estado de la topbar (2026-10-21): título «n seleccionados»,
   nav-icon «Cerrar»→`clearSelection()` (el cajón no abre durante la selección), acciones
   copiar/cortar/copiar ruta/compartir/editar/borrar en la propia topbar; `BottomAppBar`
