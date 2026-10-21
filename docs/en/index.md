@@ -35,10 +35,15 @@ On some devices the OEM SELinux policy blocks the app from enumerating `/dev`, `
 and `/sys`, so listing them inside the Debian session can fail with `Permission denied`.
 Individual device access (`/dev/null`, `/dev/tty`, …) keeps working.
 
-Similarly, since Android 8 (API 26) SELinux denies `untrusted_app` reads of `/proc/stat`, so
-CPU monitors such as `btop` and `htop` show no CPU statistics on stock devices with SELinux in
-enforcing mode. The `-b /proc` bind is present and correct; there is no workaround without
-root or a permissive policy.
+Similarly, since Android 8 (API 26) SELinux denies `untrusted_app` reads of `/proc/stat`,
+which would kill CPU monitors (`htop`: `Cannot open /proc/stat: Permission denied`). Resolved
+without root (spec 010): while Debian sessions run, the app probes which sources
+(`/proc/stat`, `/proc/meminfo`, `/proc/loadavg`) are actually blocked and binds a live
+one-second snapshot over each blocked file. Data model: own-session CPU load from
+`/proc/<pid>/stat` deltas (all session processes share the app uid), `btime` from
+`SystemClock`, RAM from `ActivityManager`, real `loadavg` counters when readable. If the
+device does allow direct reads (root or permissive SELinux), no snapshot is written and
+the native path is used. Sampling stops when no session remains.
 
 ## Building from source
 

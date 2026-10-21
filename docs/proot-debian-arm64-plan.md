@@ -231,8 +231,16 @@ normalidad.
 La misma clase de restricción afecta a `/proc/stat`: desde Android 8 (API 26) el dominio
 `untrusted_app` no tiene permiso `read` sobre los archivos sensibles de `proc`, como
 `/proc/stat`, aunque el bind `-b /proc` en
-`ProotShellEnvironment.buildProotCommand()` esté presente y correcto. Los monitores de
-CPU del invitado (`btop`, `htop`) no mostrarán estadísticas de CPU en un dispositivo
-stock con SELinux enforcing — `btop` falla con `Failed to parse /proc/stat` — y como en
-el resto de esta sección, sin root o SELinux permissive no hay workaround. Ver también
-el README, sección «Limitaciones conocidas (SELinux OEM)».
+`ProotShellEnvironment.buildProotCommand()` esté presente y correcto. Resuelto con el
+**overlay proc-stat** (spec 010, `termux-shared/.../termux/proot/ProcStatOverlaySampler.java`):
+al abrir cada sesión el servicio sondea la legibilidad real de `/proc/stat`,
+`/proc/meminfo` y `/proc/loadavg`, y solo para lo bloqueado escribe en
+`files/proc-stat-overlay/` snapshots vivos (temp + rename, 1 s) que se bindean en proot
+después de `-b /proc` (`-b <snapshot>:/proc/stat`, etc.). El modelo de datos es la carga
+propia de la app medida por deltas de `/proc/<pid>/stat` (los procesos de la sesión
+debian corren todos sobre el UID de la app, y es exactamente lo que htop lista),
+`btime` derivado de `SystemClock`, RAM de `ActivityManager.MemoryInfo` y contadores
+corriendo/bloqueados del `loadavg` real o de los estados R/D de los procesos propios.
+Todo con vía directa intacta cuando el dispositivo permite leer los ficheros originales
+(root/permissive), con la suma de `cpuN` cuadrada con la línea `cpu` (reparto uniforme
+cuando solo hay datos agregados). Ver `specs/010-procstat-htop/`.

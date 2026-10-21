@@ -131,10 +131,18 @@ dentro de la sesión Debian. No es un bug: el acceso a dispositivos concretos
 [`docs/proot-debian-arm64-plan.md`](docs/proot-debian-arm64-plan.md) (sección 7).
 
 Del mismo modo, desde Android 8 (API 26) SELinux deniega a las apps `untrusted_app`
-leer `/proc/stat`, así que los monitores de CPU (`btop`, `htop`) no mostrarán
-estadísticas de CPU en un dispositivo stock con SELinux enforcing (`btop` falla con
-`Failed to parse /proc/stat`). El bind `-b /proc` está presente y correcto; sin root
-o SELinux permissive no hay workaround.
+leer `/proc/stat`, así que los monitores de CPU (`btop`, `htop`) morirían con
+`Cannot open /proc/stat: Permission denied`. Resuelto sin root (spec 010): durante
+las sesiones Debian la app sondea si el dispositivo realmente bloquea cada fuente
+(`/proc/stat`, `/proc/meminfo`, `/proc/loadavg`) y, por cada bloqueada, añade un bind
+de proot `-b <snapshot>:<fichero>` alimentado cada segundo con los datos que Android
+sí permite ver (procesos propios de la sesión → carga de CPU, `SystemClock` →
+`btime`, `ActivityManager.MemoryInfo` → RAM, `loadavg` real cuando es legible —
+lo que no es carga propia se reporta como idle, sin muestras fijas). Si el
+dispositivo sí deja leer los ficheros originales (root, SELinux permissive), no se
+escribe ningún snapshot y se usa la vía nativa. Sin sesiones activas, el muestreo
+se para. Detalles de datos en [`docs/proot-debian-arm64-plan.md`](docs/proot-debian-arm64-plan.md)
+(sección 7) y [`specs/010-procstat-htop/`](specs/010-procstat-htop/).
 
 ## Mantenimiento y contribuciones
 

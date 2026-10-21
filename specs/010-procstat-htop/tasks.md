@@ -23,8 +23,12 @@
 - [ ] **T6. Validación en dispositivo (mantenedor).** RF-5, RF-9, NFR-2.
   - Hecho cuando: htop arranca sin errores; con carga (`while true; do :; done`) la CPU sube, tras Ctrl-C baja; `MemTotal` coherente (±0.5 GB); sin sesiones activas el fichero de snapshot queda congelado (mtime); con `/proc/stat` legible (root/permissive si disponible) usa la vía directa y no escribe snapshot actualizado.
 
-- [ ] **T7. Documentación de la limitación resuelta.** RF-8.
-  - Hecho cuando: `README.md` (§ Limitaciones), `docs/proot-debian-arm64-plan.md` (§ 7) y `wiki/limitaciones.html` describen el nuevo mecanismo (qué es real, qué sintético y cómo); sin tocar `CHANGELOG` (se entra en el release).
+- [x] **T7. Documentación de la limitación resuelta.** RF-8.
+  - Hecho cuando: `README.md` (§ Limitaciones), `docs/proot-debian-arm64-plan.md`
+    (§ 7), `wiki/limitaciones.html` y `docs/en/index.md` describen el mecanismo
+    (qué es real, qué sintético y el modelo de datos); `CHANGELOG` se toca en el
+    release; `public/index.html` sigue describiendo 2.1.0 y se ajusta en el
+    release de 3.0.
 
 ## Notas
 

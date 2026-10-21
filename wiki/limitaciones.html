@@ -74,16 +74,28 @@
                         es plenamente operativa. Sin root o con SELinux permissive no hay workaround.
                     </p>
 
-                    <h2>Estadísticas de CPU: <code>btop</code>/<code>htop</code> sin CPU</h2>
+                    <h2>Estadísticas de CPU (<code>/proc/stat</code>) — resuelto con snapshot vivo</h2>
                     <p>
                         Desde Android 8 (API 26), SELinux deniega a las apps <code>untrusted_app</code>
-                        leer <code>/proc/stat</code>. En un dispositivo stock con SELinux enforcing, los
-                        monitores de CPU (<code>btop</code>, <code>htop</code>…) no muestran estadísticas
-                        de CPU (<code>btop</code> falla con <code>Failed to parse /proc/stat</code>).
+                        leer <code>/proc/stat</code>: sin nada más, <code>htop</code> muere con
+                        <code>Cannot open /proc/stat: Permission denied</code> y <code>btop</code> con
+                        <code>Failed to parse /proc/stat</code>. Este fork lo compensa sin root
+                        (spec&nbsp;010): al abrir sesiones Debian, la app sondea qué fuentes
+                        (<code>/proc/stat</code>, <code>/proc/meminfo</code>, <code>/proc/loadavg</code>)
+                        están realmente bloqueadas y, por cada una, bindea en proot un
+                        <strong>snapshot vivo</strong> reescrito cada segundo.
                     </p>
                     <p>
-                        El bind de proot sobre <code>/proc</code> está presente y correcto; sin root o
-                        con SELinux permissive no hay forma de saltárselo.
+                        El modelo de datos: la carga de CPU es la de los <em>procesos propios de la
+                        sesión</em> (todos corren sobre el UID de la app — Android no expone el resto
+                        del sistema sin root), <code>btime</code> se deriva de <code>SystemClock</code>,
+                        la RAM de <code>ActivityManager</code> y los contadores de
+                        <em>corriendo/bloqueados</em> vienen del <code>loadavg</code> real si el
+                        dispositivo lo permite (si no, de los procesos propios). Si el dispositivo
+                        sí deja leer los ficheros originales (root o SELinux permissive), no se
+                        escribe ningún snapshot y se usa la vía nativa. El muestreo se para cuando
+                        no queda ninguna sesión activa. Los medidores responden al uso real;
+                        <code>htop</code> arranca normal.
                     </p>
 
                     <h2>Solo AArch64</h2>
