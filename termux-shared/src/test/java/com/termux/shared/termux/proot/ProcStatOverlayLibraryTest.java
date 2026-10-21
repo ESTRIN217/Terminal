@@ -163,6 +163,54 @@ public class ProcStatOverlayLibraryTest {
         Assert.assertEquals(30, ProcStatOverlayLibrary.btimeFromBoot(60000, 30000));
     }
 
+    // ---- overlays (RF-3/NFR-5) ----
+
+    private static final String STAT_PATH = "/host/stat";
+    private static final String MEM_PATH = "/host/meminfo";
+    private static final String LOAD_PATH = "/host/loadavg";
+
+    @Test
+    public void testOverlays_allReadable_nativePassthrough() {
+        Assert.assertTrue(ProcStatOverlayLibrary.overlays(true, true, true,
+            STAT_PATH, MEM_PATH, LOAD_PATH).isEmpty());
+    }
+
+    @Test
+    public void testOverlays_allBlocked_bindsInOrder() {
+        List<String[]> binds = ProcStatOverlayLibrary.overlays(false, false, false,
+            STAT_PATH, MEM_PATH, LOAD_PATH);
+
+        Assert.assertEquals(3, binds.size());
+        Assert.assertArrayEquals(new String[]{STAT_PATH, "/proc/stat"}, binds.get(0));
+        Assert.assertArrayEquals(new String[]{MEM_PATH, "/proc/meminfo"}, binds.get(1));
+        Assert.assertArrayEquals(new String[]{LOAD_PATH, "/proc/loadavg"}, binds.get(2));
+    }
+
+    @Test
+    public void testOverlays_partial_onlyBlockedOnes() {
+        // Only stat is blocked
+        List<String[]> statOnly = ProcStatOverlayLibrary.overlays(false, true, true,
+            STAT_PATH, MEM_PATH, LOAD_PATH);
+        Assert.assertEquals(1, statOnly.size());
+        Assert.assertArrayEquals(new String[]{STAT_PATH, "/proc/stat"}, statOnly.get(0));
+
+        // Only loadavg is blocked
+        List<String[]> loadOnly = ProcStatOverlayLibrary.overlays(true, true, false,
+            STAT_PATH, MEM_PATH, LOAD_PATH);
+        Assert.assertEquals(1, loadOnly.size());
+        Assert.assertArrayEquals(new String[]{LOAD_PATH, "/proc/loadavg"}, loadOnly.get(0));
+    }
+
+    @Test
+    public void testOverlays_blockedWithoutSnapshotPath_isSkipped() {
+        // A blocked file with a null snapshot path cannot be served: no bind for it.
+        List<String[]> binds = ProcStatOverlayLibrary.overlays(false, true, false,
+            STAT_PATH, null, LOAD_PATH);
+        Assert.assertEquals(2, binds.size());
+        Assert.assertArrayEquals(new String[]{STAT_PATH, "/proc/stat"}, binds.get(0));
+        Assert.assertArrayEquals(new String[]{LOAD_PATH, "/proc/loadavg"}, binds.get(1));
+    }
+
     // ---- helpers ----
 
     /** Parses the per-core lines and asserts their user/idle sums equal the aggregate `cpu` line. */

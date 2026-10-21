@@ -3,7 +3,7 @@
 - [x] **T1. Librería pura `ProcStatOverlayLibrary` (render + deltas + `btime`).** RF-2, RF-4, RF-11, NFR-2.
   - Hecho cuando: tests en rojo primero (`renderStat` 1/4/8 núcleos con suma `cpuN == cpu`, `renderMeminfo`, `renderLoadavg`, `advanceCpu` con pid nuevo/muerto/clamp, `btimeFromBoot`) y luego verde; `./gradlew :termux-shared:test` verde.
 
-- [ ] **T2. Decisión de vías y lista de overlays.** RF-3, NFR-5.
+- [x] **T2. Decisión de vías y lista de overlays.** RF-3, NFR-5.
   - Hecho cuando: tests `overlays()` en rojo (todo legible → vacía; parcial → solo necesarios) y luego verde.
 
 - [ ] **T3. Overload de `buildProotCommand` con binds + constantes del directorio overlay.** RF-1, NFR-6.
