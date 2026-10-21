@@ -2,8 +2,13 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-- **Terminal 2.0.0 PUBLICADA** (2026-10-03): tag `v2.0.0` en `master` (= `release/2.0` + merge; se trabaja
-  sobre `release/2.0`). Firma local con `key.properties`; APKs debug de la CI + universal a mano.
+- **Terminal 2.1.0 PUBLICADA** (2026-10-21): tag `v2.1.0` en master
+  (`e0eb3c30` merge de release/2.0 + `a1d5b574` sitio). APK universal firmado
+  subido + sha256 (asset `terminal_2.1.0_sha256sums`, hash 1f15a173…); CI
+  adjunta los `+github-debug`. Web y wiki redesplegadas (update-site.py +
+  `firebase deploy --only hosting:main,hosting:terminal-gnulinux-docs`).
+  Ambas ramas sincronizadas al mismo commit; se sigue en `master` por
+  petición del usuario. Firma local con `key.properties`.
 - **Web** <https://terminal-gnulinux.web.app> (`public/`, sin build; `scripts/update-site.py` pone lo que
   caduca) y **wiki** (<https://terminal-gnulinux-docs.web.app>, `wiki/`); `firebase use` SIEMPRE con
   `-P terminal-gnulinux`. `firebase.json` multitarget (`main` y docs).
