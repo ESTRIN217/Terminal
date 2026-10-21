@@ -32,6 +32,7 @@ import com.termux.shared.shell.ShellUtils;
 import com.termux.shared.shell.command.runner.app.AppShell;
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
 import com.termux.shared.termux.shell.command.environment.ProotShellEnvironment;
+import com.termux.shared.termux.proot.ProcStatOverlaySampler;
 import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment;
 import com.termux.shared.termux.shell.TermuxShellUtils;
 import com.termux.shared.termux.TermuxConstants;
@@ -111,7 +112,22 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
     /** If the user has executed the {@link TERMUX_SERVICE#ACTION_STOP_SERVICE} intent. */
     boolean mWantsToStop = false;
 
+    /** Count of active proot (Debian) sessions whose procfs sources were served an overlay (spec 010).
+     *  Mirrors {@code ProcStatOverlaySampler}'s own counter so service teardown can stop the sampler. */
+    private int mProotOverlaySessionCount = 0;
+
     private static final String LOG_TAG = "TermuxService";
+
+    /**
+     * {@code true} when a proot session executable towards the host matches the
+     * bundled proot binary (spec 010 session bookkeeping).
+     */
+    static boolean isProotSession(@Nullable TermuxSession termuxSession) {
+        if (termuxSession == null) return false;
+        ExecutionCommand executionCommand = termuxSession.getExecutionCommand();
+        return executionCommand != null
+            && TermuxConstants.PROOT_BIN_PATH.equals(executionCommand.executable);
+    }
 
     @Override
     public void onCreate() {
@@ -281,8 +297,12 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
             ExecutionCommand executionCommand = termuxSessions.get(i).getExecutionCommand();
             processResult = mWantsToStop || executionCommand.isPluginExecutionCommandWithPendingResult();
             termuxSessions.get(i).killIfExecuting(this, processResult);
-            if (!processResult)
+            if (!processResult) {
                 mShellManager.mTermuxSessions.remove(termuxSessions.get(i));
+                // Spec 010: mass teardown also stops the overlay sampler at zero.
+                if (isProotSession(termuxSessions.get(i)))
+                    onProotOverlaySessionEnded();
+            }
         }
 
 
@@ -598,6 +618,9 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         // Otherwise if command was manually started by the user like by adding a new terminal session,
         // then no need to set stdout
         IShellEnvironment shellEnvironmentClient = new TermuxShellEnvironment();
+        // Spec 010 proc overlay binds for proot guests, null when nothing is blocked (NFR-5).
+        List<String[]> procOverlayBinds = null;
+        boolean procOverlayIssued = false;
         if (!executionCommand.isFailsafe
                 && !executionCommand.isPluginExecutionCommand
                 && executionCommand.executable == null
@@ -619,7 +642,17 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
                 return null;
             }
             String guestCwd = ProotShellEnvironment.hostPathToGuestPath(executionCommand.workingDirectory);
-            String[] prootCommand = ProotShellEnvironment.buildProotCommand(guestCwd, executionCommand.arguments);
+            // Spec 010: serve synthetic procfs snapshots for whatever /proc files
+            // this uid cannot read directly; null = nothing blocked (NFR-5).
+            procOverlayBinds = ProcStatOverlaySampler.prepareSessionOverlayBinds(this);
+            procOverlayIssued = procOverlayBinds != null && !procOverlayBinds.isEmpty();
+            if (procOverlayIssued) {
+                mProotOverlaySessionCount++;
+                Logger.logDebug(LOG_TAG, "Proc stat overlay issued (" + procOverlayBinds.size()
+                    + " bind(s)); active overlay sessions: " + mProotOverlaySessionCount);
+            }
+            String[] prootCommand = ProotShellEnvironment.buildProotCommand(guestCwd, executionCommand.arguments,
+                ProotShellEnvironment.isLinkfixInstalledOnHost(), procOverlayBinds);
             executionCommand.executable = prootCommand[0];
             executionCommand.arguments = Arrays.copyOfRange(prootCommand, 1, prootCommand.length);
             shellEnvironmentClient = new ProotShellEnvironment();
@@ -636,6 +669,8 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         if (newTermuxSession == null) {
             Logger.logError(LOG_TAG, "Failed to execute new TermuxSession command for:\n" + executionCommand.getCommandIdAndLabelLogString());
             // If the execution command was started for a plugin, then process the error
+            if (procOverlayIssued)
+                onProotOverlaySessionEnded();
             if (executionCommand.isPluginExecutionCommand)
                 TermuxPluginUtils.processPluginExecutionCommandError(this, LOG_TAG, executionCommand, false);
             else {
@@ -686,12 +721,24 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
                 TermuxPluginUtils.processPluginExecutionCommandResult(this, LOG_TAG, executionCommand);
 
             mShellManager.mTermuxSessions.remove(termuxSession);
+            // Spec 010: a finished proot session may release the overlay sampler.
+            if (isProotSession(termuxSession))
+                onProotOverlaySessionEnded();
 
             // The Compose UI re-seeds its session list from the service when it binds
             // (onServiceConnected), so no explicit session list notification is needed.
         }
 
         updateNotification();
+    }
+
+    /** Release one proot overlay session and stop the sampler when none remain (spec 010 RF-6). */
+    private synchronized void onProotOverlaySessionEnded() {
+        if (mProotOverlaySessionCount <= 0) return;
+        mProotOverlaySessionCount--;
+        ProcStatOverlaySampler.onProotSessionRemoved();
+        Logger.logDebug(LOG_TAG, "Proc stat overlay released; active overlay sessions: "
+            + mProotOverlaySessionCount);
     }
 
 
