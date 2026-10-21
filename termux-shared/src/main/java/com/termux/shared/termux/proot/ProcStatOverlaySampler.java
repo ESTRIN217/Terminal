@@ -136,6 +136,10 @@ public final class ProcStatOverlaySampler {
     /** Pid keys seen in the previous tick, to count nets of new pids for the fork counter. */
     @NonNull
     private Set<Integer> mPrevSamplePids = new HashSet<>();
+    /** Cumulative busy jiffies across ticks — htop diffs consecutive reads, so the snapshot must be monotonic (like real /proc/stat). */
+    private long mCumulativeBusy;
+    /** Cumulative idle jiffies across ticks (completes the busy budget of each interval). */
+    private long mCumulativeIdle;
     /** 1/5/15 minutes exponentially decayed synthetic load averages. */
     private final double[] mLoads = new double[LOAD_DECAY.length];
     /** Cumulative fork count of the synthetic history. */
@@ -290,6 +294,11 @@ public final class ProcStatOverlaySampler {
         mPrevCpuTimes.clear();
         mPrevCpuTimes.putAll(delta.next);
 
+        // htop diffs consecutive /proc/stat reads: counters must be cumulative
+        // and monotonic across ticks, never reset to the per-tick delta.
+        mCumulativeBusy += delta.busy;
+        mCumulativeIdle += delta.idle;
+
         int running;
         int blocked;
         if (mHostLoadavgReadable) {
@@ -303,7 +312,7 @@ public final class ProcStatOverlaySampler {
 
         if (mStatOverlayNeeded)
             writeSnapshotAtomic(TermuxConstants.DEBIAN_PROC_OVERLAY_STAT_FILE_PATH,
-                ProcStatOverlayLibrary.renderStat(cores, bootSec, delta.busy, delta.idle,
+                ProcStatOverlayLibrary.renderStat(cores, bootSec, mCumulativeBusy, mCumulativeIdle,
                     running, blocked, mProcessesTotal) + "\n");
 
         if (mMemOverlayNeeded) {

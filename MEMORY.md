@@ -12,9 +12,12 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   CPU sube/baja, MemTotal ±0.5 GB, mtime congelado sin sesiones, vía directa).
   Piezas: `ProcStatOverlayLibrary` (pura) + `ProcStatOverlaySampler`
   (glue Android) + overload `buildProotCommand(overlayBinds)` + constantes
-  `DEBIAN_PROC_OVERLAY_*`. Al cerrar: estado del spec.md, memoria, y pendiente
-  de release 3.0: `public/index.html` aún describe 2.1.0 y su párrafo lo
-  corrige junto al release (el doc de límites en web es estático).
+  `DEBIAN_PROC_OVERLAY_*`. Fix en dispositivo: contadores de cpu del snapshot
+  DEBEN ser acumulativos/monótonos (htop difiere lecturas; los deltas
+  por-tick hacían negativos sus %) — corregido y testeado (`/proc/stat` no es
+  status por tick, es acumulado histórico). Al cerrar: estado del spec.md,
+  memoria, y pendiente de release 3.0: `public/index.html` aún describe
+  2.1.0 (ajustar junto al release).
 - **Terminal 2.1.0 PUBLICADA** (2026-10-21): tag `v2.1.0` en master
   (`e0eb3c30` merge de release/2.0 + `a1d5b574` sitio). APK universal firmado
   subido + sha256 (asset `terminal_2.1.0_sha256sums`, hash 1f15a173…); CI
