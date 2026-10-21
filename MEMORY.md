@@ -2,13 +2,19 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-- **Rama `3.0` creada** (2026-10-21, desde master). **Spec 010 aprobada**:
+- **Rama `3.0` creada** (2026-10-21, desde master). **Spec 010 casi cerrada**:
   htop/proc-stat — overlay en proot con snapshot vivo (carga propia
   `/proc/<pid>/stat`, SystemClock→btime, MemoryInfo→RAM, loadavg si legible;
   nada de muestras fijas tipo Termux; per-core reparto uniforme; cadencia 1 s).
-  `specs/010-procstat-htop/{spec,plan,tasks}.md` listos para implementar
-  (T1–T7). Piezas: `ProcStatOverlayLibrary` (pura) + `ProcStatOverlaySampler`
-  (glue Android) + overload `buildProotCommand(overlayBinds)`.
+  `specs/010-procstat-htop/` T1–T5+T7 hechas (tests verdes, docs actualizadas);
+  **T5 en dispositivo: `head -c 32 /proc/stat` devuelve el snapshot y htop
+  arranca (2026-10-21)**; falta T6 (checklist completo de dispositivo: barra
+  CPU sube/baja, MemTotal ±0.5 GB, mtime congelado sin sesiones, vía directa).
+  Piezas: `ProcStatOverlayLibrary` (pura) + `ProcStatOverlaySampler`
+  (glue Android) + overload `buildProotCommand(overlayBinds)` + constantes
+  `DEBIAN_PROC_OVERLAY_*`. Al cerrar: estado del spec.md, memoria, y pendiente
+  de release 3.0: `public/index.html` aún describe 2.1.0 y su párrafo lo
+  corrige junto al release (el doc de límites en web es estático).
 - **Terminal 2.1.0 PUBLICADA** (2026-10-21): tag `v2.1.0` en master
   (`e0eb3c30` merge de release/2.0 + `a1d5b574` sitio). APK universal firmado
   subido + sha256 (asset `terminal_2.1.0_sha256sums`, hash 1f15a173…); CI

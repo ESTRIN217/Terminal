@@ -17,8 +17,10 @@
     T5/T6.
   - Hecho cuando: la creación de sesión proot escribe snapshot inicial y pasa binds; el tick de 1 s actualiza snapshots con escritura atómica; al quedar 0 sesiones proot el muestreador se para; los puntos de retirada de sesión (remoción individual y cierre masivo) están cubiertos; Smoke unitario del hilo (sin Robolectric) ejecutado con `./gradlew test` integro en verde.
 
-- [ ] **T5. Ajuste fino del orden de binds si proot los resuelve al revés.** RF-1.
-  - Hecho cuando: en el emulador o dispositivo, `head -c 32 /proc/stat` dentro del invitado devuelve nuestro snapshot (no EACCES ni el nuevo contenido del guest), o se documenta y aplica el reorden de una línea si hiciera falta.
+- [x] **T5. Ajuste fino del orden de binds si proot los resuelve al revés.** RF-1.
+  - Hecho cuando: en el dispositivo, `head -c 32 /proc/stat` dentro del invitado
+    devuelve el snapshot («cpu 84 0 0 732 …»), y `htop` arranca sin errores
+    — verificado por el mantenedor el 2026-10-21; no hizo falta reordenar.
 
 - [ ] **T6. Validación en dispositivo (mantenedor).** RF-5, RF-9, NFR-2.
   - Hecho cuando: htop arranca sin errores; con carga (`while true; do :; done`) la CPU sube, tras Ctrl-C baja; `MemTotal` coherente (±0.5 GB); sin sesiones activas el fichero de snapshot queda congelado (mtime); con `/proc/stat` legible (root/permissive si disponible) usa la vía directa y no escribe snapshot actualizado.
