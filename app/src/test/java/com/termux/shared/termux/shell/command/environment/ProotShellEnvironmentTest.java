@@ -8,7 +8,9 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 
 public class ProotShellEnvironmentTest {
 
@@ -175,6 +177,58 @@ public class ProotShellEnvironmentTest {
         Assert.assertEquals("--login", command[23]);
         Assert.assertEquals("-c", command[24]);
         Assert.assertEquals("echo hi", command[25]);
+    }
+
+    // ---- spec 010: proc-stat overlay binds ----
+
+    @Test
+    public void testBuildProotCommand_overlayBinds_insertedAfterProcBind() {
+        List<String[]> binds = Arrays.asList(
+            new String[]{"/x/host-stat", "/proc/stat"},
+            new String[]{"/x/host-meminfo", "/proc/meminfo"});
+
+        String[] command = ProotShellEnvironment.buildProotCommand("/root", null, false, binds);
+
+        int procIndex = indexOf(command, "/proc");
+        Assert.assertTrue(procIndex >= 0);
+        // Overlay binds sit right after "-b /proc" and before "-b /sys".
+        Assert.assertEquals("-b", command[procIndex + 1]);
+        Assert.assertEquals("/x/host-stat:/proc/stat", command[procIndex + 2]);
+        Assert.assertEquals("-b", command[procIndex + 3]);
+        Assert.assertEquals("/x/host-meminfo:/proc/meminfo", command[procIndex + 4]);
+        Assert.assertEquals("-b", command[procIndex + 5]);
+        Assert.assertEquals("/sys", command[procIndex + 6]);
+    }
+
+    @Test
+    public void testBuildProotCommand_nullOverlayBinds_identicalToCurrentLayout() {
+        String[] command = ProotShellEnvironment.buildProotCommand("/root", null, false, null);
+        Assert.assertEquals(24 - 2, command.length); // 22 without linkfix, no extra args
+        Assert.assertEquals("-w", command[4]);
+        Assert.assertEquals("/root", command[5]);
+        Assert.assertEquals("-b", command[8]);
+        Assert.assertEquals("/proc", command[13]);
+        Assert.assertEquals("-b", command[14]);
+        Assert.assertEquals("/sys", command[15]);
+        Assert.assertEquals("--login", command[21]);
+    }
+
+    @Test
+    public void testDebianProcOverlayConstants_underFilesDirectory() {
+        Assert.assertTrue(TermuxConstants.DEBIAN_PROC_OVERLAY_DIR_PATH.startsWith(
+            TermuxConstants.TERMUX_FILES_DIR_PATH + "/"));
+        for (String path : new String[]{
+            TermuxConstants.DEBIAN_PROC_OVERLAY_STAT_FILE_PATH,
+            TermuxConstants.DEBIAN_PROC_OVERLAY_MEMINFO_FILE_PATH,
+            TermuxConstants.DEBIAN_PROC_OVERLAY_LOADAVG_FILE_PATH}) {
+            Assert.assertTrue(path.startsWith(TermuxConstants.DEBIAN_PROC_OVERLAY_DIR_PATH + "/"));
+        }
+    }
+
+    private static int indexOf(String[] command, String needle) {
+        for (int i = 0; i < command.length; i++)
+            if (needle.equals(command[i])) return i;
+        return -1;
     }
 
     @Test

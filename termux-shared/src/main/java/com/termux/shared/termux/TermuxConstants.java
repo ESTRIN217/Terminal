@@ -550,6 +550,17 @@ public final class TermuxConstants {
 
     public static final String DEBIAN_SHM_DIR_PATH = TERMUX_FILES_DIR_PATH + "/debian-shm";
 
+    /** Directory of the synthetic proc file snapshots served to blocked procfs reads (spec 010). */
+    public static final String DEBIAN_PROC_OVERLAY_DIR_PATH = TERMUX_FILES_DIR_PATH + "/proc-stat-overlay";
+    /** Directory of the synthetic proc file snapshots (spec 010). */
+    public static final File DEBIAN_PROC_OVERLAY_DIR = new File(DEBIAN_PROC_OVERLAY_DIR_PATH);
+    /** Host path of the synthetic {@code /proc/stat} snapshot bound as {@code /proc/stat} (spec 010). */
+    public static final String DEBIAN_PROC_OVERLAY_STAT_FILE_PATH = DEBIAN_PROC_OVERLAY_DIR_PATH + "/stat";
+    /** Host path of the synthetic {@code /proc/meminfo} snapshot bound as {@code /proc/meminfo} (spec 010). */
+    public static final String DEBIAN_PROC_OVERLAY_MEMINFO_FILE_PATH = DEBIAN_PROC_OVERLAY_DIR_PATH + "/meminfo";
+    /** Host path of the synthetic {@code /proc/loadavg} snapshot bound as {@code /proc/loadavg} (spec 010). */
+    public static final String DEBIAN_PROC_OVERLAY_LOADAVG_FILE_PATH = DEBIAN_PROC_OVERLAY_DIR_PATH + "/loadavg";
+
     /** Debian rootfs staging directory path */
     public static final String DEBIAN_STAGING_ROOTFS_DIR_PATH = TERMUX_FILES_DIR_PATH + "/debian-staging";
     /** Debian rootfs staging directory */

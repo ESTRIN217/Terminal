@@ -268,6 +268,28 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
      */
     @NonNull
     static String[] buildProotCommand(@NonNull String guestWorkingDirectory, @Nullable String[] extraArgs, boolean withLinkfix) {
+        return buildProotCommand(guestWorkingDirectory, extraArgs, withLinkfix, null);
+    }
+
+    /**
+     * Build the proot guest command with explicit guest working directory,
+     * linkfix control and procfs overlay binds.
+     *
+     * @param guestWorkingDirectory The guest path to use as {@code -w}.
+     * @param extraArgs Optional extra args appended after {@code --login}, may be {@code null}.
+     * @param withLinkfix Whether to wrap the guest program with
+     * {@code /usr/bin/env LD_PRELOAD=<shim>}.
+     * @param overlayBinds Optional file binds for blocked procfs reads (spec
+     * 010), as {@code {host, guest}} pairs appended right after {@code -b /proc}
+     * so the specific file wins over the directory bind; {@code null} or empty
+     * keeps the command identical to the non-overlay layout.
+     * @return Returns the full command array with the proot binary first.
+     */
+    @NonNull
+    public static String[] buildProotCommand(@Nullable String guestWorkingDirectory,
+                                             @Nullable String[] extraArgs,
+                                             boolean withLinkfix,
+                                             @Nullable List<String[]> overlayBinds) {
         List<String> command = new ArrayList<>();
         command.add(TermuxConstants.PROOT_BIN_PATH);
         command.add("-r");
@@ -283,6 +305,16 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
         command.add("/dev/pts");
         command.add("-b");
         command.add("/proc");
+        // Synthetic proc snapshots (spec 010): the more specific bind destination
+        // /proc/<file> shadows the /proc directory bind for that file only.
+        if (overlayBinds != null) {
+            for (String[] bind : overlayBinds) {
+                if (bind == null || bind.length < 2 || bind[0] == null || bind[1] == null)
+                    continue;
+                command.add("-b");
+                command.add(bind[0] + ":" + bind[1]);
+            }
+        }
         command.add("-b");
         command.add("/sys");
         command.add("-b");

@@ -6,7 +6,7 @@
 - [x] **T2. Decisión de vías y lista de overlays.** RF-3, NFR-5.
   - Hecho cuando: tests `overlays()` en rojo (todo legible → vacía; parcial → solo necesarios) y luego verde.
 
-- [ ] **T3. Overload de `buildProotCommand` con binds + constantes del directorio overlay.** RF-1, NFR-6.
+- [x] **T3. Overload de `buildProotCommand` con binds + constantes del directorio overlay.** RF-1, NFR-6.
   - Hecho cuando: `ProotShellEnvironmentTest` en rojo (con overlay: binds tras `-b /proc` con formato `host:guest`; sin overlay: comando idéntico al vigente) y luego verde; constantes en `TermuxConstants.java`.
 
 - [ ] **T4. `ProcStatOverlaySampler` + ciclo de vida en `TermuxService`.** RF-2, RF-4, RF-5, RF-6, RF-7, NFR-3, NFR-4.
