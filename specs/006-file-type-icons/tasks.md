@@ -104,3 +104,24 @@ Gate: `./gradlew :filemanager:test` (y `./gradlew test` al cerrar). Tests primer
     `null` para el resto; spec y plan actualizados a rev 4 (única variante con color propio
     además de GIT); `./gradlew test` global en verde (sin nuevos tests: el mapping color es
     puro pintado de UI, sin lógica de libría) y `MEMORY.md` aggiornado.
+- [x] **T1 (rev 8). Tests GRADLE en rojo.** RF-18
+  - Hecho cuando: `build.gradle`/`settings.GRADLE`/`my.project.gradle` y
+    `build.gradle.kts`/`SETTINGS.GRADLE.KTS` → `IconVariant.GRADLE` con familia null;
+    lookalikes: `a.gradle.bak`/`plugin.gradlew`/`.gradle`/`gradle` → NONE,
+    `script.kts`/`Util.KTS` siguen KT y `gradle.properties` sigue SETTINGS;
+    `./gradlew :filemanager:test` en rojo (símbolo `GRADLE` inexistente).
+- [x] **T2 (rev 8). `IconVariant.GRADLE` en el detector.** RF-18
+  - Hecho cuando: extensión `gradle` → GRADLE y sufijo de nombre exacto `.gradle.kts` →
+    GRADLE (a nivel de nombre, antes del switch de extensión; entre `changelog.md` y la
+    variante de extensión `kts`); el `kts` suelto sigue KT; test en verde.
+- [x] **T3 (rev 8). Glifo del elefante vendido + azul de marca.** RF-18
+  - Hecho cuando: `GradleGlyph` vendido en `FileTypeGlyphs.kt` (pathData verbatim del
+    drawable del usuario; viewport 341.71x250 cuadrado-centrado a 341.71x341.71 con
+    `group(translationY = 45.855)`); `IconVariant.icon` → glifo e `IconVariant.tint` →
+    azul `#0288D1` (el drawable venía negro y el usuario pidió azul); `./gradlew test`
+    global en verde; `MEMORY.md` aggiornado.
+- [x] **T-cierre (rev 8). Validación en dispositivo** (criterios de finalización)
+  - Hecho cuando: la lista del gestor muestra el elefante azul para `*.gradle` y
+    `*.gradle.kts`, el `kts` suelto sigue Kotlin y `gradle.properties` sigue SETTINGS;
+    validada en dispositivo 2026-10-21 por el usuario; `spec.md` → rev 8 marcada
+    como validada; `MEMORY.md` aggiornado.

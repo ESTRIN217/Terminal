@@ -72,14 +72,26 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   faltaban en `values-pt-rBR` (caían al EN en runtime) — rellenadas.
   Literal grep limpio (solo `measureText("X")` y clip label "paths",
   preexistentes y no visibles). `./gradlew test` completo: 638/0.
-  **Spec 009 CERRADA** (2026-10-21, Estado en spec.md). Pendiente:
-  commits Conventional Commits de 008+009 en `master` (nada confirmado en
-  git todavía; no push).
+  **Spec 009 CERRADA** (2026-10-21, Estado en spec.md). Commits
+  Conventional Commits de 008+009 y de la rev 8 de iconos Gradle
+  (elefante azul) confirmados en `release/2.0` (`093d6b6b`, `0d2c9459`;
+  locales-audit incluida en `29f50751`). Nada en push.
   Aviso sesión: Kotlin no soporta literales `0o` octales (usar `0x` o decimal).
+- **Spec 006 rev 8 (2026-10-21)**: variante `GRADLE` en el gestor: extensión `gradle`
+  (Groovy DSL) y sufijo de nombre exacto `.gradle.kts` (precede a `kts`→KT en
+  `iconVariantFor`; el `.kts` suelto sigue Kotlin, `gradle.properties` sigue SETTINGS,
+  `gradlew` queda genérico). Glifo del elefante vendido en `FileTypeGlyphs.kt` (pathData
+  verbatim del drawable del usuario; viewport 341.71×250 cuadrado-centrado a 341.71×341.71
+  con `group(translationY = 45.855)`) y tinte propio azul `#0288D1` (venía en negro, el
+  usuario pidió azul). Sin familia (como `kts`); RF-18. Tests rojo→verde; `./gradlew test`
+  global verde. **Validada en dispositivo el 2026-10-21 (rev 8); spec 006 cerrada.**
 
 ## Learnings vigentes (por qué)
 - **Glifos multicolor en Compose**: los rellenos por-path de un `ImageVector` solo sobreviven con
   `tint = Color.Unspecified` (el ColorFilter los aplasta); la fila propaga `variant?.tint`.
+- **Glifos con viewport no cuadrado**: cuadrar el viewport y centrar con `group(translationY)` —
+  `VectorPainter` escala ejes por separado y en la caja cuadrada de la fila (28/44dp) el arte
+  ancho distorce. Delta exacto: `(viewport - arte)/2` (bbox muestreado).
 - **Endpoint gstatic `.../Material+Symbols/24dp/<glifo>.kt`** devuelve GZ con código Kotlin del
   `ImageVector` (no SVG; con POST dio 405, usar GET). `markdown`/`file_json` NO están en el AAR
   `material-icons-extended`: verificar clases grep-eando el AAR descomprimido.

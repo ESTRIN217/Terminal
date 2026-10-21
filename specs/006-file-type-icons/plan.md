@@ -164,6 +164,21 @@ devuelve `Color.Unspecified` para PYTHON — `Icon` no crea `ColorFilter` con un
 los dos rellenos del glifo llegan intactos; la precedencia de tinte de la fila no cambia
 (`variant?.tint ?: family?.tint ?: genérico` pasa a través del Unspecified).
 
+Cambio (rev 8): `*.gradle` (Groovy DSL) y `*.gradle.kts` (Kotlin DSL) usan el glifo oficial
+del elefante de Gradle (XML adjunto por el usuario, un solo path, `pathData` verbatim).
+El drawable venía con relleno NEGRO y el usuario pidió azul: tinte propio `#0288D1`
+(Material Light Blue 800, legible en ambos temas y distinguible de los azules de familia
+imagen `#1565C0` e índigo texto `#3F51B5`), patrón RF-13. El `kts` suelto sigue en Kotlin
+(RF-15, semánticas de extensión separadas) porque el sufijo por nombre dónde se detecta
+`.gradle.kts` es exacto; `gradle.properties` sigue SETTINGS y `gradlew` (sin extensión)
+queda fuera de la rev. El viewport original 341.71×250 se cuadra a 341.71×341.71 con
+`group(translationY = 45.855)` (el arte llena su viewBox exactamente, bbox muestreado):
+los ejes se escalan por separado a caja cuadrada y sin el padding el elefante ancho
+distorce. *Descartada:* bakear el gradiente brand de gradle.org vía `Brush.linearGradient`
+— el criterio de la rev 5 (firmeza ante gradientes en `ImageVector@28dp`) se mantiene;
+*descartada:* meter `gradle` en la familia CODE — los `.gradle` no llevan familia, como
+`kts`, y la variante es toda su identidad.
+
 - **Lógica en función pura Java + pintar en Kotlin**: la lógica (`familyFor`) va en Java
   como el resto de helpers del módulo y es testeable sin Android (C.3). *Descartada:* mapear
   extensión inline en la Compose (infringiría C.3 y no sería testeable).

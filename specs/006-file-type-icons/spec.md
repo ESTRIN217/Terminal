@@ -2,7 +2,8 @@
 
 # Spec 006 — Iconos distintivos por tipo de archivo en el gestor de archivos
 
-Estado: **cerrada** (2026-10-20; implementada en revs 1-7 y validada en dispositivo)
+Estado: **cerrada** (2026-10-20; implementada en revs 1-8 y validada en dispositivo; la rev 8
+validada en dispositivo el 2026-10-21)
 
 ## Contexto y objetivo
 
@@ -94,6 +95,15 @@ sin cambiar el resto de la fila (selección, apertura, orden).
   amarillo `#FFD43B` la inferior (bakeados en el propio glifo). Para esta variante el sistema
   NO aplicará filtro de color (tinte `Unspecified`): es la primera variante multicolor y
   prevalece sobre cualquier tinte de familia o de variante.
+- RF-18 (rev 8). CUANDO el fichero sea un script de Gradle — extensión `gradle` (Groovy DSL)
+  o nombre terminado en `.gradle.kts` (Kotlin DSL; ese sufijo exacto precede a la variante
+  `kts`→Kotlin, RF-15) — EL SISTEMA pintará el glifo oficial del elefante de Gradle vendido
+  como Kotlin (viewport original cuadrado-centrado, un solo path en azul). Los ficheros de
+  Gradle no pertenecen a ninguna familia, como GIT (RF-13, sin familia), y llevan color
+  propio AZUL `#0288D1` (Material Light Blue 800, legible en tema claro y oscuro): el
+  drawable entregado venía negro y el usuario pidió azul. `kts` sin `.gradle.` sigue
+  Kotlin, `gradle.properties` sigue SETTINGS (RF-9) y `gradlew` (sin extensión) queda
+  genérico.
 
 ## Requisitos no funcionales
 
