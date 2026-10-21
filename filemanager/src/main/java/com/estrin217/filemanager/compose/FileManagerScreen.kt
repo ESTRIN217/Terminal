@@ -623,7 +623,7 @@ fun FileManagerScreen(
                             )
                         }
                         // Kept last: cut/copy have no destination without it
-                        // (flagged as an open spec question, RF-9 note).
+                        // (decided 2026-10-21: RF-9 open question closed as "kept by design").
                         if (state.hasClipboard) {
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.action_paste)) },

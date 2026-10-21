@@ -193,6 +193,6 @@ teclas extra y quiere moverse rápido entre carpetas conocidas.
   directo» = atajo fijo en el launcher; «Compartir» = la carpeta completa (URI de
   carpeta + texto de respaldo); la fila bajo la topbar desaparece y queda el tren
   de carpetas con back/forward a la izquierda.
-- (Abierta, no bloquea el plan) RF-9 conserva «Pegar» (condicional) al final de
-  More: sin él, copiar/cortar no tiene destino. Si se quiere fuera, se retira aquí
-  antes de implementar.
+- (Resuelta 2026-10-21, decisión del autor) RF-9 conserva «Pegar» (condicional) al final de
+  More **por diseño**: sin él, copiar/cortar no tiene destino. La consulta de retirarlo
+  del menú queda cerrada; el elemento permanece.
