@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Hipervínculos — Wiki de Terminal</title>
-    <meta name="description" content="Dos formas de llegar a una URL desde la terminal de Terminal: hipervínculos OSC 8 que se abren con un toque y la acción «Seleccionar URL» del menú Más.">
+    <meta name="description" content="Cómo llegar a una URL desde la terminal de Terminal: hipervínculos OSC 8, URLs impresas que también se tocan y la acción «Seleccionar URL» del menú Más.">
     <meta name="color-scheme" content="dark">
     <link rel="canonical" href="https://terminal-gnulinux-docs.web.app/hipervinculos.html">
     <link rel="icon" href="https://terminal-gnulinux.web.app/img/icon-192.png" type="image/png">
@@ -47,7 +47,7 @@
             <article class="docs-main">
                 <header class="doc-head">
                     <h1>Hipervínculos y URLs</h1>
-                    <p class="doc-meta">Dos mecanismos independientes para llegar a una URL desde la terminal.</p>
+                    <p class="doc-meta">Cómo llegar a una URL desde la terminal: hipervínculos OSC 8, URLs impresas que se abren al toque y «Seleccionar URL».</p>
                 </header>
 
                 <div class="doc-body">
@@ -133,6 +133,23 @@
                         ese tile apaga el subrayado y el tap de los enlaces.
                     </p>
 
+                    <h2 id="urls-impresas">URLs impresas sin OSC 8</h2>
+                    <p>
+                        Una URL impresa «a pelo» por la CLI <strong>también se subraya y se abre con un
+                        toque</strong>, aunque la app no emita OSC 8: el emulador detecta los renglones que
+                        contienen una URL y los dos renderers (el canvas de Compose y la vista legada) la
+                        tratan como un enlace. Funciona igual con el transcript de scroll hacia arriba y
+                        con una URL partida por el ajuste de línea automático.
+                    </p>
+                    <p>
+                        Comparte todas las reglas de los OSC 8: lista blanca de esquemas (<code>http</code>,
+                        <code>https</code>, <code>ftp</code>, <code>file</code>, <code>gemini</code> y
+                        <code>mailto</code>), el interruptor <code>terminal_hyperlinks</code> de
+                        <strong>Ajustes → Experimental</strong>, y las habituales guardas del toque (con
+                        selección de texto activa o delante de una TUI con seguimiento del ratón, el toque
+                        no se toca). Si una celda lleva a la vez OSC 8 y URL impresa, gana el OSC 8.
+                    </p>
+
                     <h3>¿Cuál usar?</h3>
                     <table>
                         <thead>
@@ -148,7 +165,7 @@
                             </tr>
                             <tr>
                                 <td>URL impresa a pelo (sin OSC 8)</td>
-                                <td>Menú «Más» → <strong>Seleccionar URL</strong>.</td>
+                                <td>Toca directamente la URL subrayada; «Más» → <strong>Seleccionar URL</strong> si quieres copiarla.</td>
                             </tr>
                             <tr>
                                 <td>Quieres copiar varias de golpe</td>

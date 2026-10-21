@@ -16,7 +16,7 @@ the Termux team.** Report issues at [this fork's Issues].
 
 - **Repository** — <https://github.com/ESTRIN217/Terminal>
 - **Issues** — <https://github.com/ESTRIN217/Terminal/issues>
-- **Wiki** — <https://github.com/ESTRIN217/Terminal/wiki>
+- **Wiki** — <https://terminal-gnulinux-docs.web.app> (documentación en español)
 - **Releases** — <https://github.com/ESTRIN217/Terminal/releases>
 
 ## Guides

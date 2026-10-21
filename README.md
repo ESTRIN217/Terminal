@@ -54,9 +54,13 @@ Versión actual: Ver el [CHANGELOG](CHANGELOG.md) o las release.
 - **Color de 24 bits** — esquemas personalizados desde `~/.termux/colors.properties`.
 - **Imágenes en la terminal** — protocolo Kitty Graphics y OSC 1337 (iTerm2). Sixel no está
   soportado.
-- **Hipervínculos OSC 8** — se subrayan y se abren con un toque.
+- **Hipervínculos OSC 8** — se subrayan y se abren con un toque; las URLs impresas sin
+  OSC 8 reciben el mismo trato (detección por renglón en ambos renderers).
 - **Gestor de archivos integrado** — funciona como pestaña más, con symlinks, papelera,
-  marcadores y edición de archivos con `nano`/`vim`.
+  marcadores, iconos por tipo de fichero, topbar con breadcrumb y menú «Organizar»,
+  selección en la topbar, compresión **zip/tar.xz/7z** (con contraseña en `.7z`),
+  propiedades en dos pestañas (permisos POSIX + SELinux) y edición de archivos con
+  `nano`/`vim`.
 - **Refresco a 90/120 Hz**, con opción de forzar 60 Hz para ahorrar batería.
 - **Atribución de recursos** según el hardware del dispositivo (scrollback, parpadeo del
   cursor y renderer por defecto).
