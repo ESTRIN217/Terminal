@@ -486,4 +486,24 @@ public class FileOperationsHelper {
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         context.startActivity(Intent.createChooser(intent, context.getString(R.string.action_share)));
     }
+
+    /**
+     * Shares one folder through the system chooser (spec 008, RF-14): the
+     * resolved folder as a FileProvider URI, plus the absolute path as a
+     * plain-text fallback that any receiving app understands.
+     *
+     * @param context Android context for the intent.
+     * @param folder The folder to share.
+     */
+    public static void shareFolder(Context context, File folder) {
+        File resolved = resolveFileForOpen(folder);
+        Intent intent = new Intent(Intent.ACTION_SEND);
+        Uri uri = FileProvider.getUriForFile(context,
+            context.getPackageName() + ".fileprovider", resolved);
+        intent.putExtra(Intent.EXTRA_STREAM, uri);
+        intent.putExtra(Intent.EXTRA_TEXT, resolved.getAbsolutePath());
+        intent.setType("*/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.action_share)));
+    }
 }

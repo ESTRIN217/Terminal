@@ -49,13 +49,13 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
      * file manager tabs exist (e.g. "File Manager 2").
      * @return The stable id of the new session
      */
-    fun createFileManagerSession(baseName: String): String {
+    fun createFileManagerSession(baseName: String, initialPath: String? = null): String {
         val id = UUID.randomUUID().toString()
         viewModelScope.launch {
             _uiState.update { state ->
                 val fmCount = state.sessions.count { it is TermuxSessionUiModel.FileManager }
                 val name = if (fmCount == 0) baseName else "$baseName ${fmCount + 1}"
-                val newModel = TermuxSessionUiModel.FileManager(id = id, name = name)
+                val newModel = TermuxSessionUiModel.FileManager(id = id, name = name, initialPath = initialPath)
                 val newSessions = state.sessions + newModel
                 sanitizeSplit(activateSession(state.copy(
                     sessions = newSessions

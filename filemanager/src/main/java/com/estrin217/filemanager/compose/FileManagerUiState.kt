@@ -14,8 +14,9 @@ import java.io.File
  * target for every symlink in the current listing; [brokenLinks] holds the
  * absolute paths of dangling links whose target does not exist.
  *
- * [focusedIndex] is the keyboard/extra-keys cursor into [files] (a negative
- * value means the list is empty).
+ * [focusedIndex] is the keyboard/extra-keys cursor into [files]: a negative
+ * value means there is no cursor yet (no highlight shown) — either because
+ * the listing is empty or because the directory just changed (spec 007).
  */
 @Immutable
 data class FileManagerUiState(
@@ -28,6 +29,29 @@ data class FileManagerUiState(
     val searchQuery: String = "",
     val sortOption: FileSortOption = FileSortOption.NAME,
     val sortAscending: Boolean = true,
+    /**
+     * Whether directories sort first (grouped, historical behaviour) or
+     * merge into the plain criteria order (spec 008, RF-7).
+     */
+    val foldersFirst: Boolean = true,
+    /** Presentation mode of the listing (list rows or tile grid, RF-7). */
+    val viewMode: FileViewMode = FileViewMode.LIST,
+    /**
+     * Whether the open folder has its own listing-preferences override
+     * ("Organize > this folder only", RF-8). When set, organize changes
+     * write to the folder override instead of the global prefs.
+     */
+    val folderScoped: Boolean = false,
+    /** Visible directory tally of the current listing (RF-1/RF-18). */
+    val folderCount: Int = 0,
+    /** Visible non-directory tally of the current listing (RF-1/RF-18). */
+    val fileCount: Int = 0,
+    /** User favorites (label + path) for the bookmarks drawer (RF-5). */
+    val favorites: List<BreadcrumbPolicy.Crumb> = emptyList(),
+    /** Whether the open folder is in [favorites] (RF-6). */
+    val isFavorite: Boolean = false,
+    /** Whether the open folder has a navigable parent (RF-11). */
+    val canGoUp: Boolean = false,
     val showHidden: Boolean = false,
     val canGoBack: Boolean = false,
     val canGoForward: Boolean = false,
@@ -38,8 +62,30 @@ data class FileManagerUiState(
     val symlinkTargets: Map<String, String?> = emptyMap(),
     val brokenLinks: Set<String> = emptySet(),
     /**
-     * Cache of computed directory sizes (absolute path -> size in bytes),
-     * filled on demand when the details dialog is shown for a folder.
+     * Cached permissions snapshot per properties dialog request (spec 009,
+     * RF-12): read-only display text; unreadable data stays null so the
+     * dialog renders the "—" dash.
      */
-    val folderSizes: Map<String, Long> = emptyMap()
+    val properties: FileProperties? = null,
+    /**
+     * Cached "N folders · M files" content counts requested by the
+     * properties dialog (spec 009, RF-12), computed with the hidden-files
+     * setting in force and never the search filter.
+     */
+    val folderContents: Map<String, ListingCounts.Counts> = emptyMap()
+)
+
+/**
+ * Read-only permissions snapshot for the properties dialog (spec 009,
+ * RF-12): owner/group resolved names (numeric ids as fallback), the mode in
+ * `rwxr-xr-x (644)` form and the SELinux context. Everything is pre-formatted
+ * display text so the dialog only paints.
+ */
+data class FileProperties(
+    val path: String,
+    val owner: String,
+    val group: String,
+    val modeText: String,
+    /** SELinux context, or null when unreadable (the dialog shows a dash). */
+    val selinuxContext: String?
 )

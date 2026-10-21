@@ -31,7 +31,7 @@ import com.termux.shared.shell.command.ExecutionCommand.Runner;
  * plugins that contains info on command execution and forwards the extras to {@link TermuxService}
  * for the actual execution.
  *
- * Check https://github.com/ESTRIN217/Terminal/wiki/RUN_COMMAND-Intent for more info.
+ * Check https://terminal-gnulinux-docs.web.app for more info.
  */
 public class RunCommandService extends Service {
 

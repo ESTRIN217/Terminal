@@ -7,10 +7,10 @@ android {
     namespace = "com.estrin217.filemanager"
 
     compileSdk { version = release(37) { minorApiLevel = 1 } }
-    ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties["ndkVersion"]?.toString() ?: ""
+    ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: providers.gradleProperty("ndkVersion").orNull ?: ""
 
     defaultConfig {
-        minSdk = project.properties["minSdkVersion"]?.toString()?.toInt() ?: 24
+        minSdk = providers.gradleProperty("minSdkVersion").orNull?.toInt() ?: 24
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -43,6 +43,12 @@ android {
 dependencies {
     implementation(project(":termux-shared"))
     implementation(libs.androidx.core)
+
+    // Compressión del item-menu «Comprimir…» (spec 009): delta del catálogo
+    // ya citado en RNF-1 (ambas ya estaban solo en :app; xz es el backend de
+    // TarArchiveOutputStream para `.tar.xz`).
+    implementation(libs.commons.compress)
+    implementation(libs.xz)
 
     // Compose
     implementation(platform(libs.compose.bom))

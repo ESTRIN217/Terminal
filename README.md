@@ -1,7 +1,11 @@
 # Terminal
 
+[![Latest release](https://img.shields.io/github/v/release/ESTRIN217/Terminal?style=for-the-badge&labelColor=0d1117)](https://github.com/ESTRIN217/Terminal/releases)
+![License](https://img.shields.io/badge/license-GPLv3-blue.svg)
 [![Build status](https://github.com/ESTRIN217/Terminal/workflows/Build/badge.svg)](https://github.com/ESTRIN217/Terminal/actions)
 [![Testing status](https://github.com/ESTRIN217/Terminal/workflows/Unit%20tests/badge.svg)](https://github.com/ESTRIN217/Terminal/actions)
+
+<img src="public/img/banner.png" width="720" alt="Banner de Terminal: emulador de terminal con entorno Debian completo en Android sin root"/>
 
 > **ES — Aviso de fork independiente:** este repositorio (`ESTRIN217/Terminal`) es un fork
 > independiente y **no está afiliado, respaldado ni soportado por el equipo de Termux**.
@@ -16,25 +20,26 @@
 **Terminal** es una aplicación Android de terminal + entorno Linux (Debian vía proot),
 con UI moderna en Jetpack Compose y emulación de terminal nativa.
 
-Versión actual: **2.0.0** (`versionCode` 120). Ver el [CHANGELOG](CHANGELOG.md).
+Versión actual: Ver el [CHANGELOG](CHANGELOG.md) o las release.
 ## 📸 Capturas de Pantalla
 
 <table align="center">
   <tr>
     <td align="center">
-      <img src="assets/Terminal.png" width="220" alt="Vista Principal (Material 3)"/>
-      <br><b>Terminal</b>
+      <img src="public/img/captura-terminal.png" width="220" alt="Consola de Terminal con el mensaje de bienvenida a Debian Linux y el cheat sheet de apt"/>
     </td>
     <td align="center">
-      <img src="assets/Opencode.png" width="220" alt="Opencode"/>
-      <br><b>Opencode</b>
+      <img src="public/img/captura-cli.png" width="220" alt="Ejecutando opencode, un agente de IA, dentro de la terminal de Terminal"/>
+    </td>
+    <td align="center">
+      <img src="public/img/captura-archivos.png" width="220" alt="Pestaña Gestor de archivos de Terminal mostrando la carpeta Home con sdcard y storage"/>
     </td>
   </tr>
 </table>
 
 ---
 
-## Características
+## Características clave
 
 - **Entorno Debian completo** vía proot, sin root. El rootfs se descarga y verifica en el
   primer arranque.
@@ -49,9 +54,13 @@ Versión actual: **2.0.0** (`versionCode` 120). Ver el [CHANGELOG](CHANGELOG.md)
 - **Color de 24 bits** — esquemas personalizados desde `~/.termux/colors.properties`.
 - **Imágenes en la terminal** — protocolo Kitty Graphics y OSC 1337 (iTerm2). Sixel no está
   soportado.
-- **Hipervínculos OSC 8** — se subrayan y se abren con un toque.
+- **Hipervínculos OSC 8** — se subrayan y se abren con un toque; las URLs impresas sin
+  OSC 8 reciben el mismo trato (detección por renglón en ambos renderers).
 - **Gestor de archivos integrado** — funciona como pestaña más, con symlinks, papelera,
-  marcadores y edición de archivos con `nano`/`vim`.
+  marcadores, iconos por tipo de fichero, topbar con breadcrumb y menú «Organizar»,
+  selección en la topbar, compresión **zip/tar.xz/7z** (con contraseña en `.7z`),
+  propiedades en dos pestañas (permisos POSIX + SELinux) y edición de archivos con
+  `nano`/`vim`.
 - **Refresco a 90/120 Hz**, con opción de forzar 60 Hz para ahorrar batería.
 - **Atribución de recursos** según el hardware del dispositivo (scrollback, parpadeo del
   cursor y renderer por defecto).
@@ -91,9 +100,10 @@ si los necesitas.
 ## Enlaces
 
 - Repo: <https://github.com/ESTRIN217/Terminal>
+- Website: <https://terminal-gnulinux.web.app>
 - Issues: <https://github.com/ESTRIN217/Terminal/issues>
 - Discussions: <https://github.com/ESTRIN217/Terminal/discussions>
-- Wiki: <https://github.com/ESTRIN217/Terminal/wiki>
+- Wiki: <https://terminal-gnulinux-docs.web.app>
 
 ## Depuración
 
@@ -176,3 +186,11 @@ Excepciones heredadas del upstream:
   (Apache 2.0) en las librerías [`terminal-view`](terminal-view) y
   [`terminal-emulator`](terminal-emulator).
 - Ver [`termux-shared/LICENSE.md`](termux-shared/LICENSE.md) para excepciones de `termux-shared`.
+
+<p align="center">
+  Desarrollado con pasión por <b>ESTRIN217</b>.
+</p>
+
+<p align="center">
+  Hecho con ❤️ en Venezuela.
+</p>

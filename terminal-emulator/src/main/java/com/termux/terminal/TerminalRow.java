@@ -54,9 +54,10 @@ public final class TerminalRow {
      */
     int[] mHyperlinkIds;
     /**
-     * Inline image registry index per column, parallel to {@link #mStyle}.
-     * Lazily allocated (null until the row holds at least one image); {@code 0} means
-     * "no image" for a cell. Indices refer to {@link TerminalEmulator}'s image table.
+     * Inline image placement key per column, parallel to {@link #mStyle}.
+     * Lazily allocated (null until the row holds at least one image reservation); {@code 0} means
+     * "no image" for a cell. Values refer to {@link TerminalEmulator}'s placement table
+     * ({@link TerminalImagePlacement#key}), not to image ids.
      */
     int[] mImageIds;
     /** If this row might contain chars with width != 1, used for deactivating fast path */
@@ -332,31 +333,32 @@ public final class TerminalRow {
     }
 
     /**
-     * Inline image registry index for a column.
+     * Placement key of the inline image reserving a column.
      *
      * @param column the cell column
-     * @return the image index, or {@code 0} when the cell has no image
+     * @return the 1-based {@link TerminalImagePlacement#key}, or {@code 0} when the cell has no
+     * image reservation
      */
     public final int getImage(int column) {
         return (mImageIds == null) ? 0 : mImageIds[column];
     }
 
     /**
-     * Set (or clear with 0) the inline image index for a column. Allocates the
+     * Set (or clear with 0) the placement key reserving a column. Allocates the
      * side-band array on first non-zero write.
      *
-     * @param column  the cell column
-     * @param imageId image registry index, or {@code 0} to clear
+     * @param column       the cell column
+     * @param placementKey 1-based placement key, or {@code 0} to clear the reservation
      */
-    public final void setImage(int column, int imageId) {
+    public final void setImage(int column, int placementKey) {
         if (column < 0 || column >= mColumns)
-            throw new IllegalArgumentException("TerminalRow.setImage(): column=" + column + ", imageId=" + imageId);
-        if (imageId == 0) {
+            throw new IllegalArgumentException("TerminalRow.setImage(): column=" + column + ", imageId=" + placementKey);
+        if (placementKey == 0) {
             if (mImageIds != null) mImageIds[column] = 0;
             return;
         }
         if (mImageIds == null) mImageIds = new int[mColumns];
-        mImageIds[column] = imageId;
+        mImageIds[column] = placementKey;
     }
 
 }

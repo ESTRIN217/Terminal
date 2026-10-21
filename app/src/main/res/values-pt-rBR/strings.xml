@@ -27,6 +27,8 @@
     <!-- Terminal Bootstrap Packages Installation -->
     <string name="bootstrap_installer_body">Instalando pacotes de bootstrap…</string>
     <string name="bootstrap_error_title">Não foi possível instalar o bootstrap</string>
+    <string name="error_filemanager_shortcut_unsupported">Este launcher não suporta atalhos fixados</string>
+    <string name="error_file_open_failed">Nenhum app pode abrir este arquivo</string>
     <string name="bootstrap_error_body">&TERMUX_APP_NAME; não conseguiu instalar os pacotes de bootstrap.</string>
     <string name="bootstrap_error_abort">Cancelar</string>
     <string name="bootstrap_error_try_again">Tentar novamente</string>
@@ -306,5 +308,9 @@
 
     <!-- File Details -->
     <string name="title_details">Detalhes do arquivo</string>
+
+    <!-- Settings: terminal (Spec 003, RF-11; catches up with the EN/es sections) -->
+    <string name="terminal_hyperlinks">Hiperlinks de terminal [Experimental]</string>
+    <string name="terminal_hyperlinks_desc">Sublinhe os links OSC 8 e as URLs impressas e abra-os ao tocar</string>
 
 </resources>

@@ -168,6 +168,27 @@ Default **ON**: es un kill-switch, no una feature opt-in. Apagar sube el flag a 
 
 ---
 
+### URLs impresas tocables (spec 003)
+
+Desde la spec 003, las URLs **impresas a pelo** (sin OSC 8) también se abren por toque:
+el emulador detecta renglones que contienen una URL y los renderers la subrayan y la
+abren al tocarla, igual que haría una CLI cooperativa:
+
+- Detección por **renglón lógico** (no por celda): `TerminalUrlScanner`
+  (`terminal-emulator/.../TerminalUrlScanner.java`); `TermuxUrlUtils.getUrlMatchRegex()`
+  delega en él.
+- Volcado en ambos renderers: legacy (`TerminalRenderer`) y Compose
+  (`ComposeTerminalFrame`/`ComposeTerminalCanvas`, runs con `insideUrl`).
+- Rige el mismo kill-switch: el pref `terminal_hyperlinks`; el ajuste conserva su nombre,
+  solo se amplía su descripción (RF-11).
+- Mismas guardas de tap: sin selección de texto, sin gestos en curso, con mouse-tracking
+  el toque se reporta a la TUI y el mismo `allowlist` de `scheme`.
+- Los ajustes de OSC 8 tienen prioridad: si una celda ya lleva `osc8`, ese `URI` gana (RF-2).
+
+«Seleccionar URL» sigue siendo útil para copiar varias de golpe o abrirlas desde el diálogo.
+
+---
+
 ## 3. Relación entre ambos
 
 Son **caminos independientes** que no se pisan:
@@ -181,7 +202,12 @@ Son **caminos independientes** que no se pisan:
 | Mouse-tracking | N/A (es un diálogo) | El tap **no** abre; se reporta al TUI |
 | Pref | Ninguno | `terminal_hyperlinks` |
 
-Una URL impresa sin OSC 8 solo es alcanzable vía **Seleccionar URL** (o seleccionando el texto a mano). Una URL marcada con OSC 8 se abre con un toque **y** también aparece en el diálogo si está en el transcript.
+Una URL impresa sin OSC 8 ya **no** es solo alcanzable vía «Seleccionar URL»: con la
+detección por renglón de la spec 003 se subraya y se abre con un toque como cualquier
+hipervínculo (mismas guardas y `allowlist`; ver la sección anterior). «Seleccionar URL»
+conserva su rol para copiar varias de golpe. Una URL marcada con OSC 8 se abre con un toque
+**y** también aparece en el diálogo si está en el transcript. En una celda con ambas cosas,
+gana la URI de OSC 8 (RF-2).
 
 ---
 

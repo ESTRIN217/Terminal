@@ -62,4 +62,32 @@ public class ScreenBufferTest extends TerminalTestCase {
 		assertEquals("", mTerminal.getScreen().getWordAtLocation(1, 2));
 		assertEquals("", mTerminal.getScreen().getWordAtLocation(2, 2));
 	}
+
+	/**
+	 * getStyleAt() is a read that still allocates its line, so an out-of-grid row (a tap row
+	 * computed from pixels that the grid has since outgrown) must neither throw nor allocate.
+	 */
+	public void testGetStyleAtOutsideGrid() {
+		// 25 cells over 5 columns scroll two lines into the transcript.
+		withTerminalSized(5, 3).enterString("ABCDEFGHIJKLMNOPQRSTUVWXY");
+		TerminalBuffer screen = mTerminal.getScreen();
+		assertEquals(2, screen.getActiveTranscriptRows());
+		final int allocated = countAllocatedLines(screen);
+
+		assertEquals(TextStyle.NORMAL, screen.getStyleAt(3, 0));
+		assertEquals(TextStyle.NORMAL, screen.getStyleAt(3 + 11, 0));
+		assertEquals(TextStyle.NORMAL, screen.getStyleAt(-3, 0));
+		assertEquals("out-of-grid reads must not allocate a line", allocated,
+			countAllocatedLines(screen));
+
+		// Live rows keep reading their style.
+		assertEquals(TextStyle.NORMAL, screen.getStyleAt(0, 0));
+		assertEquals(TextStyle.NORMAL, screen.getStyleAt(-1, 0));
+	}
+
+	private static int countAllocatedLines(TerminalBuffer screen) {
+		int count = 0;
+		for (TerminalRow row : screen.mLines) if (row != null) count++;
+		return count;
+	}
 }

@@ -7,10 +7,10 @@ public enum FileSortOption {
 
     NAME("Name") {
         @Override
-        public Comparator<File> getComparator(boolean ascending) {
+        public Comparator<File> getComparator(boolean ascending, boolean foldersFirst) {
             return (a, b) -> {
                 int dirCompare = Boolean.compare(b.isDirectory(), a.isDirectory());
-                if (dirCompare != 0) return ascending ? dirCompare : -dirCompare;
+                if (foldersFirst && dirCompare != 0) return ascending ? dirCompare : -dirCompare;
                 return ascending ?
                     a.getName().compareToIgnoreCase(b.getName()) :
                     b.getName().compareToIgnoreCase(a.getName());
@@ -20,10 +20,10 @@ public enum FileSortOption {
 
     DATE("Date") {
         @Override
-        public Comparator<File> getComparator(boolean ascending) {
+        public Comparator<File> getComparator(boolean ascending, boolean foldersFirst) {
             return (a, b) -> {
                 int dirCompare = Boolean.compare(b.isDirectory(), a.isDirectory());
-                if (dirCompare != 0) return ascending ? dirCompare : -dirCompare;
+                if (foldersFirst && dirCompare != 0) return ascending ? dirCompare : -dirCompare;
                 return ascending ?
                     Long.compare(a.lastModified(), b.lastModified()) :
                     Long.compare(b.lastModified(), a.lastModified());
@@ -33,10 +33,10 @@ public enum FileSortOption {
 
     SIZE("Size") {
         @Override
-        public Comparator<File> getComparator(boolean ascending) {
+        public Comparator<File> getComparator(boolean ascending, boolean foldersFirst) {
             return (a, b) -> {
                 int dirCompare = Boolean.compare(b.isDirectory(), a.isDirectory());
-                if (dirCompare != 0) return ascending ? dirCompare : -dirCompare;
+                if (foldersFirst && dirCompare != 0) return ascending ? dirCompare : -dirCompare;
                 long sizeA = a.isDirectory() ? 0 : a.length();
                 long sizeB = b.isDirectory() ? 0 : b.length();
                 return ascending ?
@@ -48,10 +48,10 @@ public enum FileSortOption {
 
     TYPE("Type") {
         @Override
-        public Comparator<File> getComparator(boolean ascending) {
+        public Comparator<File> getComparator(boolean ascending, boolean foldersFirst) {
             return (a, b) -> {
                 int dirCompare = Boolean.compare(b.isDirectory(), a.isDirectory());
-                if (dirCompare != 0) return ascending ? dirCompare : -dirCompare;
+                if (foldersFirst && dirCompare != 0) return ascending ? dirCompare : -dirCompare;
                 String extA = getExtension(a.getName());
                 String extB = getExtension(b.getName());
                 int extCompare = extA.compareToIgnoreCase(extB);
@@ -73,7 +73,20 @@ public enum FileSortOption {
         return displayName;
     }
 
-    public abstract Comparator<File> getComparator(boolean ascending);
+    public abstract Comparator<File> getComparator(boolean ascending, boolean foldersFirst);
+
+    /**
+     * Legacy one-argument entry point: delegates to the two-argument
+     * comparator with folders first (the historical behaviour, spec 001-007
+     * callers keep it unchanged).
+     *
+     * @param ascending Whether the criteria order goes ascending.
+     * @return The comparator with directories grouped first ("last" in
+     *         descending keeps the historical rebound).
+     */
+    public Comparator<File> getComparator(boolean ascending) {
+        return getComparator(ascending, true);
+    }
 
     private static String getExtension(String name) {
         int idx = name.lastIndexOf('.');

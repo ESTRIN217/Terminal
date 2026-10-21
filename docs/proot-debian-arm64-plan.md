@@ -11,7 +11,7 @@
 - **Integración (Fase 3+) — COMPLETADA:** proot compilado con CMake y embebido en los assets;
   rootfs Debian OCI descargado en el primer arranque (`DebianInstaller`), con verificación
   SHA-256 en streaming; binds de proot cableados (`ProotShellEnvironment`).
-- **Estado actual:** versión 2.0.0. Ver [`roadmap-2.0.md`](roadmap-2.0.md) y
+- **Estado actual:** versión 2.1.0. Ver [`roadmap-2.0.md`](roadmap-2.0.md) y
   [`../CHANGELOG.md`](../CHANGELOG.md). Este documento conserva el diseño original como
   referencia; ya no describe trabajo pendiente.
 

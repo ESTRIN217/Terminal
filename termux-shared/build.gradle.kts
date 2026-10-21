@@ -6,10 +6,10 @@ android {
     namespace = "com.termux.shared"
 
     compileSdk { version = release(37) { minorApiLevel = 1 } }
-    ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties["ndkVersion"]?.toString() ?: ""
+    ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: providers.gradleProperty("ndkVersion").orNull ?: ""
 
     defaultConfig {
-        minSdk = project.properties["minSdkVersion"]?.toString()?.toInt() ?: 21
+        minSdk = providers.gradleProperty("minSdkVersion").orNull?.toInt() ?: 21
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

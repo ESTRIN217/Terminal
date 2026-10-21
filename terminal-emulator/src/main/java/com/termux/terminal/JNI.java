@@ -38,4 +38,17 @@ final class JNI {
     /** Close a file descriptor through the close(2) system call. */
     public static native void close(int fileDescriptor);
 
+    /**
+     * Set the identity of the calling task visible in {@code /proc/<pid>/comm}, as read by CLI
+     * tools that detect the terminal (see {@link TerminalProcessName}). Call from the app's main
+     * thread so the process-level {@code comm} is the one replaced.
+     * <p/>
+     * The kernel truncates any name longer than 15 characters; use {@link TerminalProcessName}
+     * so no truncation happens.
+     *
+     * @param name The process identity to install.
+     * @return if the {@code prctl(PR_SET_NAME)} call succeeded.
+     */
+    static native boolean setProcessName(String name);
+
 }

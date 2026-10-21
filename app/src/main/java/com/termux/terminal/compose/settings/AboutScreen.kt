@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Code
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -58,6 +60,8 @@ private const val GITHUB_REPO_URL = "https://github.com/ESTRIN217/Terminal"
 private const val GITHUB_ISSUES_URL = "https://github.com/ESTRIN217/Terminal/issues"
 private const val GITHUB_LICENSE_URL = "https://github.com/ESTRIN217/Terminal/blob/master/LICENSE"
 private const val GITHUB_AVATAR_URL = "https://github.com/ESTRIN217.png"
+
+private const val WEBSITE_APP_URL = "https://terminal-gnulinux.web.app"
 
 private val DEBIAN_OS_RELEASE_PATH = TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/etc/os-release"
 private val DEBIAN_VERSION_FILE_PATH = TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/etc/debian_version"
@@ -112,7 +116,8 @@ fun AboutScreen(
                 withContext(Dispatchers.IO) { buildAboutReport(context) }
             } catch (e: Exception) {
                 Log.e(LOG_TAG, "Failed to build about report", e)
-                Toast.makeText(context, context.getString(R.string.about_generate_info_failed), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.about_generate_info_failed), Toast.LENGTH_SHORT)
+                    .show()
                 return@launch
             }
             try {
@@ -123,12 +128,14 @@ fun AboutScreen(
                         report,
                         context.getString(R.string.about_share_chooser_title)
                     )
+
                     AboutAction.COPY -> ShareUtils.copyTextToClipboard(
                         context,
                         context.getString(R.string.about_copy_label),
                         report,
                         context.getString(R.string.about_info_copied)
                     )
+
                     AboutAction.SAVE -> ShareUtils.saveTextToFile(
                         context,
                         context.getString(R.string.about_report_label),
@@ -220,8 +227,8 @@ fun AboutScreen(
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding),
+                .fillMaxSize()
+                .padding(innerPadding),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
@@ -268,6 +275,7 @@ fun AboutScreen(
             item {
                 SettingsSectionTitle(title = stringResource(R.string.about_section_developer))
                 DeveloperCard(
+                    onWebsiteClick = { openUrl(WEBSITE_APP_URL) },
                     onGithubClick = { openUrl(GITHUB_DEV_URL) }
                 )
             }
@@ -292,6 +300,17 @@ fun AboutScreen(
                         subtitle = stringResource(R.string.about_repository_name),
                         trailingIcon = Icons.Default.ChevronRight,
                         onClick = { openUrl(GITHUB_REPO_URL) }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    SettingsListTile(
+                        leadingIcon = Icons.AutoMirrored.Filled.MenuBook,
+                        title = stringResource(R.string.about_view_wiki),
+                        subtitle = stringResource(R.string.about_wiki_url),
+                        trailingIcon = Icons.Default.ChevronRight,
+                        onClick = { openUrl(TermuxConstants.TERMUX_WIKI_URL) }
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = 16.dp),
@@ -350,8 +369,8 @@ private fun HeaderCard(
     ) {
         Row(
             modifier = Modifier
-            .fillMaxWidth()
-            .padding(24.dp),
+                .fillMaxWidth()
+                .padding(24.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (image != null) {
@@ -359,8 +378,8 @@ private fun HeaderCard(
                     model = image,
                     contentDescription = appName,
                     modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(18.dp)),
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(18.dp)),
                     contentScale = ContentScale.Crop
                 )
             } else {
@@ -406,6 +425,7 @@ private fun HeaderCard(
 
 @Composable
 private fun DeveloperCard(
+    onWebsiteClick: () -> Unit,
     onGithubClick: () -> Unit
 ) {
     Card(
@@ -417,8 +437,8 @@ private fun DeveloperCard(
     ) {
         Column(
             modifier = Modifier
-            .fillMaxWidth()
-            .padding(24.dp),
+                .fillMaxWidth()
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(
@@ -430,8 +450,8 @@ private fun DeveloperCard(
                     contentDescription = "Desarrollador",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                    .size(70.dp)
-                    .clip(CircleShape)
+                        .size(70.dp)
+                        .clip(CircleShape)
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -453,12 +473,19 @@ private fun DeveloperCard(
             Spacer(modifier = Modifier.height(20.dp))
 
             Row(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                SocialButton(
+                    icon = Icons.Default.Web,
+                    label = stringResource(R.string.about_view_website),
+                    modifier = Modifier.weight(1f),
+                    onClick = onWebsiteClick
+                )
                 SocialButton(
                     icon = Icons.Default.Code,
                     label = stringResource(R.string.about_view_on_github),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.weight(1f),
                     onClick = onGithubClick
                 )
             }
@@ -523,7 +550,7 @@ private fun loadDebianInfo(): DebianInfo {
 
 private fun isDebianInstalled(): Boolean {
     return File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/bin/bash").isFile &&
-        File(DEBIAN_VERSION_FILE_PATH).isFile
+            File(DEBIAN_VERSION_FILE_PATH).isFile
 }
 
 private fun readOsReleasePrettyName(): String? {

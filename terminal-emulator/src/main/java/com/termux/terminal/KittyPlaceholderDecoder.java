@@ -104,6 +104,18 @@ public final class KittyPlaceholderDecoder {
     }
 
     /**
+     * Visitor for placeholder cells that hold {@link #PLACEHOLDER_CODE_POINT} but cannot be
+     * resolved to an image target. Kitty never draws the placeholder glyph, so renderers
+     * blank these cells with their effective background instead (spec 002, RF-1/RF-4).
+     */
+    public interface UnresolvedCellVisitor {
+        /**
+         * @param column screen column of the placeholder cell without a target
+         */
+        void visit(int column);
+    }
+
+    /**
      * Left-to-right inheritance state for placeholder cells of one screen row.
      * Reset at the start of each row unless the previous row wrapped.
      */
@@ -132,7 +144,8 @@ public final class KittyPlaceholderDecoder {
      * @param charsUsed  valid length of {@code text}
      * @param state      row inheritance state; updated on success
      * @return the decoded target, or {@code null} when the cell cannot be
-     * resolved (renderers then keep the plain glyph as fallback)
+     * resolved (renderers blank it with the cell background instead of drawing
+     * the placeholder glyph)
      */
     public static Target decode(long style, char[] text, int charIndex, int charsUsed, RowState state) {
         final int fgRaw = TextStyle.decodeForeColor(style);
@@ -216,9 +229,26 @@ public final class KittyPlaceholderDecoder {
      * @param lineObject the row to scan
      * @param columns    screen columns
      * @param state      inheritance state (caller resets per logical line)
-     * @param visitor    receives each placeholder cell
+     * @param visitor    receives each placeholder cell with a target
      */
     public static void collectRow(TerminalRow lineObject, int columns, RowState state, CellVisitor visitor) {
+        collectRow(lineObject, columns, state, visitor, null);
+    }
+
+    /**
+     * Walk a screen row's cells left to right and report every placeholder cell, either
+     * with its decoded target or as unresolved. Unresolved cells do not touch the
+     * inheritance state, so later cells keep decoding from the last valid placeholder.
+     *
+     * @param lineObject        the row to scan
+     * @param columns           screen columns
+     * @param state             inheritance state (caller resets per logical line)
+     * @param visitor           receives each placeholder cell with a target
+     * @param unresolvedVisitor receives each placeholder cell without a target, or
+     *                          {@code null} to ignore them (legacy overload)
+     */
+    public static void collectRow(TerminalRow lineObject, int columns, RowState state,
+                                  CellVisitor visitor, UnresolvedCellVisitor unresolvedVisitor) {
         final char[] text = lineObject.mText;
         final int charsUsed = lineObject.getSpaceUsed();
         int charIndex = 0;
@@ -230,6 +260,7 @@ public final class KittyPlaceholderDecoder {
             if (codePoint == PLACEHOLDER_CODE_POINT) {
                 final Target target = decode(lineObject.getStyle(column), text, charIndex, charsUsed, state);
                 if (target != null) visitor.visit(column, target);
+                else if (unresolvedVisitor != null) unresolvedVisitor.visit(column);
             }
             if (width > 0) column += width;
             charIndex += surrogate ? 2 : 1;

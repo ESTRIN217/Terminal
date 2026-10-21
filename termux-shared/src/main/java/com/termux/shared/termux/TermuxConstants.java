@@ -508,15 +508,10 @@ public final class TermuxConstants {
     public static final String TERMUX_WIKI = TERMUX_APP_NAME + " Wiki"; // Default: "Terminal Wiki"
 
     /** Termux Wiki url (fork) */
-    public static final String TERMUX_WIKI_URL = "https://github.com/ESTRIN217/Terminal/wiki"; // Default: "https://github.com/ESTRIN217/Terminal/wiki"
-
-    /** Termux GitHub wiki repo url (fork) */
-    public static final String TERMUX_GITHUB_WIKI_REPO_URL = TERMUX_GITHUB_REPO_URL + "/wiki"; // Default: "https://github.com/ESTRIN217/Terminal/wiki"
-
+    public static final String TERMUX_WIKI_URL = "https://terminal-gnulinux-docs.web.app"; // Default: "https://terminal-gnulinux-docs.web.app"
 
     /** Termux support url (fork issues, no upstream support) */
     public static final String TERMUX_SUPPORT_EMAIL_URL = "https://github.com/ESTRIN217/Terminal/issues"; // Default: "https://github.com/ESTRIN217/Terminal/issues"
-
     /** Termux support mailto url (fork issues, no upstream support) */
     public static final String TERMUX_SUPPORT_EMAIL_MAILTO_URL = "https://github.com/ESTRIN217/Terminal/issues"; // Default: "https://github.com/ESTRIN217/Terminal/issues"
 
@@ -982,6 +977,18 @@ public final class TermuxConstants {
             /** Intent extra for if termux failsafe session needs to be started and is used by {@link TERMUX_ACTIVITY} and {@link TERMUX_SERVICE#ACTION_STOP_SERVICE} */
             public static final String EXTRA_FAILSAFE_SESSION = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.failsafe_session"; // Default: "com.estrin217.terminal.app.failsafe_session"
 
+            /** Intent action to open a file manager session at the optional folder path of {@link TERMUX_ACTIVITY#EXTRA_OPEN_FILE_MANAGER_PATH} (spec 008). */
+            public static final String ACTION_OPEN_FILE_MANAGER = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.action.open_file_manager"; // Default: "com.estrin217.terminal.app.action.open_file_manager"
+
+            /** Intent {@code String} extra for the open folder path of the {@link TERMUX_ACTIVITY#ACTION_OPEN_FILE_MANAGER} intent. */
+            public static final String EXTRA_OPEN_FILE_MANAGER_PATH = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.open_file_manager_path"; // Default: "com.estrin217.terminal.app.open_file_manager_path"
+
+            /** Intent action to open the file at the required {@link TERMUX_ACTIVITY#EXTRA_OPEN_FILE_PATH} with its Android app (file-manager item shortcut, spec 009 RF-11). */
+            public static final String ACTION_OPEN_FILE = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.action.open_file"; // Default: "com.estrin217.terminal.app.action.open_file"
+
+            /** Intent {@code String} extra for the file host path of the {@link TERMUX_ACTIVITY#ACTION_OPEN_FILE} intent (spec 009 RF-11). */
+            public static final String EXTRA_OPEN_FILE_PATH = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.open_file_path"; // Default: "com.estrin217.terminal.app.open_file_path"
+
 
             /** Intent action to make termux app notify user that a crash happened. */
             public static final String ACTION_NOTIFY_APP_CRASH = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.notify_app_crash"; // Default: "com.estrin217.terminal.app.notify_app_crash"
@@ -1164,9 +1171,8 @@ public final class TermuxConstants {
          */
         public static final class RUN_COMMAND_SERVICE {
 
-            /** Termux RUN_COMMAND Intent help url */
-            public static final String RUN_COMMAND_API_HELP_URL = TERMUX_GITHUB_WIKI_REPO_URL + "/RUN_COMMAND-Intent"; // Default: "https://github.com/ESTRIN217/Terminal/wiki/RUN_COMMAND-Intent"
-
+            /** Termux RUN_COMMAND Intent help url (published wiki) */
+            public static final String RUN_COMMAND_API_HELP_URL = TERMUX_WIKI_URL; // Default: "https://terminal-gnulinux-docs.web.app"
 
             /** Intent action to execute command with RUN_COMMAND_SERVICE */
             public static final String ACTION_RUN_COMMAND = TERMUX_PACKAGE_NAME + ".RUN_COMMAND"; // Default: "com.estrin217.terminal.RUN_COMMAND"

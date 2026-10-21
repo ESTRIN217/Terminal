@@ -4,6 +4,7 @@ import com.termux.terminal.TerminalBuffer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -92,7 +93,7 @@ class ComposeTerminalFrameTest {
         // A whitespace cell is selected alone (legacy setInitialTextSelectionPosition parity).
         assertEquals(
             ComposeTerminalFrame.TextSelection(5, 0, 5, 0),
-            ComposeTerminalFrame.selectWord(screen, 5, 0, 6)
+            ComposeTerminalFrame.selectWord(screen, 5, 0, 6, 6)
         )
     }
 
@@ -105,8 +106,21 @@ class ComposeTerminalFrameTest {
         // (getSelectedText returns "" past the used text, trimming trailing spaces).
         assertEquals(
             ComposeTerminalFrame.TextSelection(0, 0, 1, 0),
-            ComposeTerminalFrame.selectWord(screen, 1, 0, 6)
+            ComposeTerminalFrame.selectWord(screen, 1, 0, 6, 6)
         )
+    }
+
+    @Test
+    fun selectWord_rowOutsideGridIsNull() {
+        val screen = TerminalBuffer(6, 6, 6)
+        screen.setChar(0, 0, 'l'.code, 0)
+        // A long press row comes from pixels and onLongPress fires after the double-tap
+        // timeout, so it can sit outside the grid when the pane shrank in between (IME
+        // animation, pane split, rotation). Legacy setInitialTextSelectionPosition clamps
+        // such a row to nothing; it must not become a phantom selection on a stale row.
+        assertNull(ComposeTerminalFrame.selectWord(screen, 1, 6, 6, 6))
+        assertNull(ComposeTerminalFrame.selectWord(screen, 1, 6 + 11, 6, 6))
+        assertNull(ComposeTerminalFrame.selectWord(screen, 1, -1, 6, 6))
     }
 
     @Test

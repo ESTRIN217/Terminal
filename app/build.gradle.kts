@@ -22,7 +22,7 @@ android {
     namespace = "com.termux"
 
     compileSdk { version = release(37) { minorApiLevel = 1 } }
-    ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties["ndkVersion"]?.toString() ?: ""
+    ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: providers.gradleProperty("ndkVersion").orNull ?: ""
 
     dependencies {
         implementation(libs.androidx.annotation)
@@ -45,10 +45,10 @@ android {
 
     defaultConfig {
         applicationId = "com.estrin217.terminal"
-        minSdk = project.properties["minSdkVersion"]?.toString()?.toInt() ?: 24
-        targetSdk = project.properties["targetSdkVersion"]?.toString()?.toInt() ?: 28
-        versionCode = 120
-        val verName = appVersionName.ifEmpty { "2.0.0" }
+        minSdk = providers.gradleProperty("minSdkVersion").orNull?.toInt() ?: 24
+        targetSdk = providers.gradleProperty("targetSdkVersion").orNull?.toInt() ?: 28
+        versionCode = 121
+        val verName = appVersionName.ifEmpty { "2.1.0" }
         versionName = verName
         validateVersionName(verName)
 

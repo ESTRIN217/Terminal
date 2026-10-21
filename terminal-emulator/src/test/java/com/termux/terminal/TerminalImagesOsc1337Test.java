@@ -25,13 +25,15 @@ public class TerminalImagesOsc1337Test extends TerminalTestCase {
 		withTerminalSized(10, 4);
 		enterString(imageOsc("2", "2", PNG_1x1_B64));
 
+		final TerminalImagePlacement placement = mTerminal.getPlacementAt(0, 0);
+		assertNotNull(placement);
 		final TerminalImageData data = mTerminal.getImageDataAt(0, 0);
 		assertNotNull(data);
 		assertEquals(1, data.id);
-		assertEquals(0, data.startRow);
-		assertEquals(0, data.startCol);
-		assertEquals(2, data.cellsW);
-		assertEquals(2, data.cellsH);
+		assertEquals(0, placement.startRow);
+		assertEquals(0, placement.startCol);
+		assertEquals(2, placement.cellsW);
+		assertEquals(2, placement.cellsH);
 		assertArrayEquals(ImageBase64.decode(PNG_1x1_B64), data.encoded);
 
 		// Entire 2×2 rectangle is stamped; cursor does not advance.
@@ -48,10 +50,11 @@ public class TerminalImagesOsc1337Test extends TerminalTestCase {
 		withTerminalSized(40, 10);
 		// Cell is 13×15 (TerminalTestCase): 26px → 2 cols, 30px → 2 rows.
 		enterString(imageOsc("26px", "30px", PNG_1x1_B64));
+		final TerminalImagePlacement placement = mTerminal.getPlacementAt(0, 0);
+		assertNotNull(placement);
+		assertEquals(2, placement.cellsW);
+		assertEquals(2, placement.cellsH);
 		final TerminalImageData data = mTerminal.getImageDataAt(0, 0);
-		assertNotNull(data);
-		assertEquals(2, data.cellsW);
-		assertEquals(2, data.cellsH);
 		assertEquals(26, data.pixelWidth);
 		assertEquals(30, data.pixelHeight);
 	}
@@ -59,22 +62,22 @@ public class TerminalImagesOsc1337Test extends TerminalTestCase {
 	public void testPercentWidthOfScreen() {
 		withTerminalSized(20, 5);
 		enterString(imageOsc("50%", "1", PNG_1x1_B64));
-		final TerminalImageData data = mTerminal.getImageDataAt(0, 0);
-		assertNotNull(data);
-		assertEquals(10, data.cellsW);
-		assertEquals(1, data.cellsH);
+		final TerminalImagePlacement placement = mTerminal.getPlacementAt(0, 0);
+		assertNotNull(placement);
+		assertEquals(10, placement.cellsW);
+		assertEquals(1, placement.cellsH);
 	}
 
 	public void testMissingHeightDerivesFromAspectRatio() {
 		withTerminalSized(40, 10);
 		// width=2 cells (26px), intrinsic 26×30 → height should be 2 cells (30/15).
 		enterString(imageOsc("26px", null, PNG_1x1_B64));
-		final TerminalImageData data = mTerminal.getImageDataAt(0, 0);
-		assertNotNull(data);
-		assertEquals(2, data.cellsW);
+		final TerminalImagePlacement placement = mTerminal.getPlacementAt(0, 0);
+		assertNotNull(placement);
+		assertEquals(2, placement.cellsW);
 		// PNG sniffing is not implemented for OSC 1337 (no header parse); aspect
 		// fallback without intrinsic pixels is 1 cell — still a valid placement.
-		assertTrue(data.cellsH >= 1);
+		assertTrue(placement.cellsH >= 1);
 	}
 
 	public void testNoSizeIsRejected() {

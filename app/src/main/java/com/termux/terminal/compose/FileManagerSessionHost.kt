@@ -41,12 +41,16 @@ import java.io.File
  * which survives rotation because the ViewModel is stored in the activity's ViewModelStore.
  *
  * @param sessionId Stable id for the file manager session
+ * @param initialPath Optional folder the session opens at (launcher shortcut, spec 008)
  * @param isActivePane Whether this pane is the focused (active) pane of a split view; only the
  * focused pane registers the extra-keys handler and the back handler
  * @param onActivatePane Callback when the pane requests focus while it is not the active pane
  * @param onCloseSession Callback when the tab should be closed (back at root / X button)
  * @param onOpenInTerminal Callback with the directory host path to open a terminal in
  * @param onEditFile Callback with the file host path to open in a rootfs editor
+ * @param onNewFileManagerTab Callback to open an additional file manager tab (RF-10)
+ * @param onCreateShortcut Callback to pin a launcher shortcut to the open folder (RF-16)
+ * @param onCreateFileShortcut Callback to pin a launcher shortcut to a file (spec 009, RF-11)
  * @param modifier Modifier to apply
  */
 @Composable
@@ -55,8 +59,12 @@ fun FileManagerSessionHost(
     onCloseSession: () -> Unit,
     onOpenInTerminal: (String) -> Unit,
     onEditFile: (String) -> Unit,
+    initialPath: String? = null,
     isActivePane: Boolean = true,
     onActivatePane: () -> Unit = {},
+    onNewFileManagerTab: (() -> Unit)? = null,
+    onCreateShortcut: ((File) -> Unit)? = null,
+    onCreateFileShortcut: ((File) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -67,7 +75,7 @@ fun FileManagerSessionHost(
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
-                return FileManagerViewModel(appContext) as T
+                return FileManagerViewModel(appContext, initialPath) as T
             }
         }
     )
@@ -170,7 +178,6 @@ fun FileManagerSessionHost(
 
     FileManagerScreen(
         viewModel = viewModel,
-        onNavigateUp = onBackRequested,
         onOpenFile = { openFile(it) },
         onEnsureStorageAccess = { dir, onGranted -> ensureStorageAccess(dir, onGranted) },
         onShareFiles = {
@@ -184,6 +191,9 @@ fun FileManagerSessionHost(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         onOpenInTerminal = { dir -> onOpenInTerminal(dir.absolutePath) },
         onEditFile = { file -> onEditFile(file.absolutePath) },
+        onNewFileManagerTab = onNewFileManagerTab,
+        onCreateShortcut = onCreateShortcut,
+        onCreateFileShortcut = onCreateFileShortcut,
         // A secondary file manager pane promotes itself on focus, mirroring the terminal
         // panes: focusable() catches taps on empty areas, and onFocusChanged also fires when
         // a descendant (a list item row) takes focus. Only wired while the pane is secondary.

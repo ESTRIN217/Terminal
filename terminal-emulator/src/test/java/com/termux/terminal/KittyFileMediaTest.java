@@ -80,8 +80,10 @@ public class KittyFileMediaTest extends TerminalTestCase {
 		assertTrue("expected OK, got: " + reply, reply.contains("OK"));
 		final TerminalImageData data = mTerminal.getImageDataAt(0, 0);
 		assertNotNull(data);
-		assertEquals(2, data.cellsW);
-		assertEquals(1, data.cellsH);
+		final TerminalImagePlacement placement = mTerminal.getPlacementAt(0, 0);
+		assertNotNull(placement);
+		assertEquals(2, placement.cellsW);
+		assertEquals(1, placement.cellsH);
 		final int[] argb = data.decodeRawArgb();
 		assertNotNull(argb);
 		assertEquals(0xFFFF0000, argb[0]);

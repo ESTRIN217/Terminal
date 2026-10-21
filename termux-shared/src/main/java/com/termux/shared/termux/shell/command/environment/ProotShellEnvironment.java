@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.TimeZone;
 
 /**
  * Guest environment for the Debian rootfs executed via proot (Fase 4).
@@ -44,6 +45,8 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
     public static final String ENV_LANGUAGE = "LANGUAGE";
     public static final String ENV_DEBIAN_FRONTEND = "DEBIAN_FRONTEND";
     public static final String ENV_LD_PRELOAD = "LD_PRELOAD";
+    /** Guest IANA timezone (from the host device settings). */
+    public static final String ENV_TZ = "TZ";
 
     /** Guest user and home (proot {@code -0} maps to root). */
     public static final String GUEST_USER = "root";
@@ -57,6 +60,9 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
 
     /** Guest {@code PATH} (pure Debian FHS, no host paths). */
     public static final String GUEST_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+
+    /** Guest directory of the IANA zoneinfo database (provided by the tzdata package). */
+    public static final String GUEST_ZONEINFO_DIR = "/usr/share/zoneinfo";
 
     /**
      * Translate an Android {@code hostPath} to the equivalent Debian guest path.
@@ -159,6 +165,38 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
     public static boolean isLinkfixInstalledOnHost() {
         return new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH
             + TermuxConstants.LINKFIX_GUEST_SO_PATH).isFile();
+    }
+
+    /**
+     * Whether the on-device rootfs tzdata contains a guest zoneinfo entry for
+     * {@code timeZoneId}.
+     *
+     * <p>Probing the entry keeps {@code TZ} away from zones the guest cannot
+     * resolve: glibc would silently fall back to UTC, and POSIX-style IDs like
+     * {@code GMT+04:00} (which glibc parses with an inverted offset sign) are
+     * rejected up front since they never exist as zoneinfo files.</p>
+     *
+     * @param timeZoneId The IANA zone id to look for (e.g. {@code America/Caracas}).
+     * @return Returns {@code true} if the zonefile exists in the guest rootfs.
+     */
+    public static boolean isGuestTimeZoneAvailable(@NonNull String timeZoneId) {
+        return isGuestTimeZoneAvailable(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH, timeZoneId);
+    }
+
+    /**
+     * Testable core of {@link #isGuestTimeZoneAvailable(String)} over an explicit
+     * rootfs directory path.
+     *
+     * @param rootfsDirPath The host path of the guest rootfs directory.
+     * @param timeZoneId    The IANA zone id to look for.
+     * @return Returns {@code true} if {@code <rootfsDirPath>/usr/share/zoneinfo/<timeZoneId>}
+     * is an existing regular file.
+     */
+    static boolean isGuestTimeZoneAvailable(@Nullable String rootfsDirPath, @Nullable String timeZoneId) {
+        if (rootfsDirPath == null || timeZoneId == null
+            || timeZoneId.isEmpty() || timeZoneId.contains(".."))
+            return false;
+        return new File(new File(rootfsDirPath + GUEST_ZONEINFO_DIR), timeZoneId).isFile();
     }
 
     /**
@@ -281,6 +319,15 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
         environment.put(ENV_LC_ALL, GUEST_LANG);
         environment.put(ENV_LANGUAGE, "C");
         environment.put(ENV_DEBIAN_FRONTEND, GUEST_DEBIAN_FRONTEND);
+
+        // Export the device timezone so glibc shows the local time: without TZ the
+        // guest falls back to the rootfs /etc/localtime (UTC in a fresh rootfs).
+        // Gated on the presence of the zonefile in the guest tzdata (see
+        // isGuestTimeZoneAvailable); recomputed per command so runtime timezone
+        // changes (device settings) are picked up on the next session.
+        String guestTimeZoneId = TimeZone.getDefault().getID();
+        if (isGuestTimeZoneAvailable(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH, guestTimeZoneId))
+            environment.put(ENV_TZ, guestTimeZoneId);
 
         // Advertise kitty terminal branding so yazi and other KGP-aware TUIs select the
         // Kitty Graphics Protocol image adapter without requiring manual env setup.

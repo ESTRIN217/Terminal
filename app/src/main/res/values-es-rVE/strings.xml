@@ -27,6 +27,8 @@
     <!-- Terminal Bootstrap Packages Installation -->
     <string name="bootstrap_installer_body">Instalando paquetes de bootstrap…</string>
     <string name="bootstrap_error_title">No se pudo instalar bootstrap</string>
+    <string name="error_filemanager_shortcut_unsupported">Este launcher no admite atajos fijados</string>
+    <string name="error_file_open_failed">Ninguna app puede abrir este archivo</string>
     <string name="bootstrap_error_body">&TERMUX_APP_NAME; no pudo instalar los paquetes de bootstrap.</string>
     <string name="bootstrap_error_abort">Cancelar</string>
     <string name="bootstrap_error_try_again">Intentar de nuevo</string>
@@ -334,7 +336,7 @@
     <string name="native_compose_renderer">Renderizado Compose nativo [Experimental]</string>
     <string name="native_compose_renderer_desc">Pinta la terminal con un prototipo Canvas de Compose. La vista clásica sigue como respaldo</string>
     <string name="terminal_hyperlinks">Hipervínculos de terminal [Experimental]</string>
-    <string name="terminal_hyperlinks_desc">Subraya los enlaces OSC 8 y ábrelos al tocarlos</string>
+    <string name="terminal_hyperlinks_desc">Subraya los enlaces OSC 8 y las URLs impresas, y ábrelos al tocarlos</string>
     <string name="terminal_images">Imágenes de terminal [Experimental]</string>
     <string name="terminal_images_desc">Muestra imágenes en línea (OSC 1337 / kitty graphics)</string>
     <string name="force_60hz">Forzar 60 Hz (batería)</string>
@@ -360,6 +362,8 @@
     <string name="about_third_party_library">Biblioteca de terceros</string>
     <string name="about_view_repository">Ver repositorio</string>
     <string name="about_repository_name">ESTRIN217/Terminal</string>
+    <string name="about_view_wiki">Wiki de documentación</string>
+    <string name="about_wiki_url">terminal-gnulinux-docs.web.app</string>
     <string name="about_report_issue">Reportar un problema</string>
     <string name="about_issues_path">ESTRIN217/Terminal/issues</string>
     <string name="about_license_gplv3">Licencia GPLv3</string>
@@ -369,6 +373,7 @@
     <string name="about_developer_name">ESTRIN217</string>
     <string name="about_main_developer">Desarrollador principal</string>
     <string name="about_view_on_github">Ver en GitHub</string>
+    <string name="about_view_website">Sitio web</string>
 
     <!-- Licenses Screen -->
     <string name="licenses_title">Licencias</string>

@@ -27,6 +27,8 @@
     <!-- Terminal Bootstrap Packages Installation -->
     <string name="bootstrap_installer_body">Installing bootstrap packages…</string>
     <string name="bootstrap_error_title">Unable to install bootstrap</string>
+    <string name="error_filemanager_shortcut_unsupported">This launcher does not support pinned shortcuts</string>
+    <string name="error_file_open_failed">No app can open this file</string>
     <string name="bootstrap_error_body">&TERMUX_APP_NAME; was unable to install the bootstrap packages.</string>
     <string name="bootstrap_error_abort">Abort</string>
     <string name="bootstrap_error_try_again">Try again</string>
@@ -343,7 +345,7 @@
     <string name="native_compose_renderer">Native Compose renderer [Experimental]</string>
     <string name="native_compose_renderer_desc">Paint the terminal with a Compose Canvas spike. Legacy view stays as fallback</string>
     <string name="terminal_hyperlinks">Terminal hyperlinks [Experimental]</string>
-    <string name="terminal_hyperlinks_desc">Underline OSC 8 links and open them on tap</string>
+    <string name="terminal_hyperlinks_desc">Underline OSC 8 links and printed URLs, and open them on tap</string>
     <string name="terminal_images">Terminal images [Experimental]</string>
     <string name="terminal_images_desc">Show inline images (OSC 1337 / kitty graphics)</string>
     <string name="force_60hz">Force 60 Hz (battery)</string>
@@ -369,6 +371,8 @@
     <string name="about_third_party_library">Third-party library</string>
     <string name="about_view_repository">View repository</string>
     <string name="about_repository_name">ESTRIN217/Terminal</string>
+    <string name="about_view_wiki">Documentation wiki</string>
+    <string name="about_wiki_url">terminal-gnulinux-docs.web.app</string>
     <string name="about_report_issue">Report a problem</string>
     <string name="about_issues_path">ESTRIN217/Terminal/issues</string>
     <string name="about_license_gplv3">GPLv3 license</string>
@@ -378,6 +382,7 @@
     <string name="about_developer_name">ESTRIN217</string>
     <string name="about_main_developer">Lead developer</string>
     <string name="about_view_on_github">View on GitHub</string>
+    <string name="about_view_website">Website</string>
 
     <!-- Licenses Screen -->
     <string name="licenses_title">Licenses</string>

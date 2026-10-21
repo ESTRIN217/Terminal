@@ -156,10 +156,12 @@ sealed class TermuxSessionUiModel {
      *
      * @param id Stable id for the tab
      * @param name Display name for the session
+     * @param initialPath Optional folder the session opens at (launcher shortcut, spec 008)
      */
     data class FileManager(
         override val id: String,
-        override val name: String
+        override val name: String,
+        val initialPath: String? = null
     ) : TermuxSessionUiModel() {
         override val title: String = ""
     }

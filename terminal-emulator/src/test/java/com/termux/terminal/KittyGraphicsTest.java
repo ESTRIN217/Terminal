@@ -69,15 +69,30 @@ public class KittyGraphicsTest extends TerminalTestCase {
 		final String reply = mOutput.getOutputAndClear();
 		assertTrue("expected OK reply, got: " + reply, reply.contains("OK"));
 
-		final TerminalImageData data = mTerminal.getImageDataAt(0, 0);
-		assertNotNull(data);
-		assertEquals(2, data.cellsW);
-		assertEquals(2, data.cellsH);
+		final TerminalImagePlacement placement = mTerminal.getPlacementAt(0, 0);
+		assertNotNull(placement);
+		assertEquals(2, placement.cellsW);
+		assertEquals(2, placement.cellsH);
 		assertEquals(1, mTerminal.getScreen().getImageAt(0, 1));
 		assertEquals(1, mTerminal.getScreen().getImageAt(1, 0));
 		assertEquals(1, mTerminal.getScreen().getImageAt(1, 1));
 		assertEquals(0, mTerminal.getScreen().getImageAt(0, 2));
 		assertCursorAt(0, 0);
+	}
+
+	/**
+	 * Same stale-pixel-row race as {@link HyperlinkTest}: a row outside the grid must read as
+	 * "no image" instead of throwing out of externalToInternalRow().
+	 */
+	public void testImageLookupOutsideGridIsEmpty() {
+		withTerminalSized(20, 6);
+		enterString(kg("a=T,i=1,f=100,s=1,v=1,w=2,h=2", PNG_1x1_B64));
+		mOutput.getOutputAndClear();
+		assertEquals(1, mTerminal.getScreen().getImageAt(0, 0));
+
+		assertEquals(0, mTerminal.getScreen().getImageAt(6, 0));
+		assertEquals(0, mTerminal.getScreen().getImageAt(6 + 11, 0));
+		assertEquals(0, mTerminal.getScreen().getImageAt(-1, 0));
 	}
 
 	public void testTransmitOnlyDoesNotStamp() {
@@ -94,13 +109,13 @@ public class KittyGraphicsTest extends TerminalTestCase {
 		enterString(kg("a=t,i=7,f=100,s=1,v=1,w=2,h=2", PNG_1x1_B64));
 		mOutput.getOutputAndClear();
 		enterString("\033[2;3H");
-		enterString(kg("a=p,i=7,w=2,h=2", ""));
+		enterString(kg("a=p,i=7,c=2,r=2", ""));
 		final String reply = mOutput.getOutputAndClear();
 		assertTrue("expected OK, got: " + reply, reply.contains("OK"));
-		final TerminalImageData data = mTerminal.getImageDataAt(1, 2);
-		assertNotNull(data);
-		assertEquals(1, data.startRow);
-		assertEquals(2, data.startCol);
+		final TerminalImagePlacement placement = mTerminal.getPlacementAt(1, 2);
+		assertNotNull(placement);
+		assertEquals(1, placement.startRow);
+		assertEquals(2, placement.startCol);
 		assertEquals(1, mTerminal.getScreen().getImageAt(1, 3));
 	}
 
@@ -129,7 +144,7 @@ public class KittyGraphicsTest extends TerminalTestCase {
 		assertNull(mTerminal.getImageDataAt(0, 0));
 		assertEquals(0, mTerminal.getScreen().getImageAt(0, 0));
 		// Payload still addressable via protocol id → re-place works.
-		enterString(kg("a=p,i=3,w=2,h=1", ""));
+		enterString(kg("a=p,i=3,c=2,r=1", ""));
 		mOutput.getOutputAndClear();
 		assertNotNull(mTerminal.getImageDataAt(0, 0));
 	}
@@ -218,10 +233,11 @@ public class KittyGraphicsTest extends TerminalTestCase {
 	public void testPixelSizeConvertsToCells() {
 		withTerminalSized(20, 6);
 		enterString(kg("a=T,f=100,s=26,v=30", PNG_1x1_B64));
+		final TerminalImagePlacement placement = mTerminal.getPlacementAt(0, 0);
+		assertNotNull(placement);
+		assertEquals(2, placement.cellsW);
+		assertEquals(2, placement.cellsH);
 		final TerminalImageData data = mTerminal.getImageDataAt(0, 0);
-		assertNotNull(data);
-		assertEquals(2, data.cellsW);
-		assertEquals(2, data.cellsH);
 		assertEquals(26, data.pixelWidth);
 		assertEquals(30, data.pixelHeight);
 	}
@@ -234,8 +250,10 @@ public class KittyGraphicsTest extends TerminalTestCase {
 		assertNotNull(data);
 		assertEquals(1, data.pixelWidth);
 		assertEquals(1, data.pixelHeight);
-		assertTrue(data.cellsW >= 1);
-		assertTrue(data.cellsH >= 1);
+		final TerminalImagePlacement placement = mTerminal.getPlacementAt(0, 0);
+		assertNotNull(placement);
+		assertTrue(placement.cellsW >= 1);
+		assertTrue(placement.cellsH >= 1);
 	}
 
 	public void testRawRgbPayloadKeepsFormat() {
@@ -266,11 +284,12 @@ public class KittyGraphicsTest extends TerminalTestCase {
 		final TerminalImageData after = mTerminal.getImageData(regId);
 		assertNotNull(after);
 		assertEquals(regId, after.id);
-		assertFalse(after.isPlaced());
+		assertTrue("the replaced image must keep no placement",
+			mTerminal.getPlacementsForImage(regId).isEmpty());
 		assertNull(mTerminal.getImageDataAt(0, 0));
 		assertEquals(0, mTerminal.getScreen().getImageAt(0, 0));
 		// The protocol id mapping survives, so a re-place works.
-		enterString(kg("a=p,i=5,w=1,h=1", ""));
+		enterString(kg("a=p,i=5,c=1,r=1", ""));
 		mOutput.getOutputAndClear();
 		assertNotNull(mTerminal.getImageDataAt(0, 0));
 	}
@@ -305,7 +324,7 @@ public class KittyGraphicsTest extends TerminalTestCase {
 		enterString(kg("a=t,i=0,f=100,s=1,v=1,w=1,h=1", PNG_1x1_B64));
 		mOutput.getOutputAndClear();
 		// The raw registry index must not resolve through the removed fallback.
-		enterString(kg("a=p,i=1,w=1,h=1", ""));
+		enterString(kg("a=p,i=1,c=1,r=1", ""));
 		final String placeReply = mOutput.getOutputAndClear();
 		assertTrue("expected ENOENT, got: " + placeReply, placeReply.contains("ENOENT"));
 		enterString(kg("a=d,d=i,i=1", ""));

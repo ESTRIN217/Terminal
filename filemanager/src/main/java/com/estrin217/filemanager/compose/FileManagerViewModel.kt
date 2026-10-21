@@ -5,9 +5,13 @@ import android.content.Context
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.estrin217.filemanager.ArchiveCreator
 import com.estrin217.filemanager.FileOperationsHelper
 import com.estrin217.filemanager.FileSortOption
 import com.estrin217.filemanager.R
+import com.termux.shared.android.SELinuxUtils
+import com.termux.shared.android.UserUtils
+import com.termux.shared.file.filesystem.FileAttributes
 import com.termux.shared.termux.TermuxConstants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,8 +23,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.util.ArrayDeque
-
 /**
  * ViewModel for the Compose file manager.
  *
@@ -28,8 +32,16 @@ import java.util.ArrayDeque
  * behaviour matches the old `FileManagerActivity`. All filesystem work
  * (listing, create/rename/delete/copy/paste, undo) runs on Dispatchers.IO
  * via [viewModelScope]; callbacks fire on the main thread.
+ *
+ * @param application The host application for resources and prefs.
+ * @param initialPath Optional folder this session opens at (launcher
+ *                    shortcut, spec 008); ignored when not an existing
+ *                    directory — the session then opens at the default.
  */
-class FileManagerViewModel(application: Application) : AndroidViewModel(application) {
+class FileManagerViewModel(
+    application: Application,
+    initialPath: String? = null
+) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(FileManagerUiState())
     val uiState: StateFlow<FileManagerUiState> = _uiState.asStateFlow()
@@ -59,8 +71,22 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
 
     private val prefsName = "file_manager"
 
+    companion object {
+        /** Preferences keys for the per-folder listing-preferences override (RF-8). */
+        private const val KEY_SORT = "sort"
+        private const val KEY_ASC = "asc"
+        private const val KEY_FOLDERS_FIRST = "ff"
+        private const val KEY_VIEW = "view"
+        private const val KEY_GLOBAL_VIEW = "view_mode"
+        private const val KEY_GLOBAL_FOLDERS_FIRST = "folders_first"
+        private const val KEY_FAVORITES = "favorites"
+    }
+
+    /** Debian home path, the "Home" crumb rank of the bookmarks (RF-5). */
+    private val homeDirectoryPath = TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH
+
     init {
-        val prefs = application.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+        val prefs = sharedPrefs()
         val sort = try {
             FileSortOption.valueOf(
                 prefs.getString("sort_option", FileSortOption.NAME.name)
@@ -73,10 +99,18 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
             it.copy(
                 sortOption = sort,
                 sortAscending = prefs.getBoolean("sort_ascending", true),
-                showHidden = prefs.getBoolean("show_hidden", false)
+                showHidden = prefs.getBoolean("show_hidden", false),
+                foldersFirst = prefs.getBoolean(KEY_GLOBAL_FOLDERS_FIRST, true),
+                viewMode = runCatching {
+                    FileViewMode.valueOf(prefs.getString(KEY_GLOBAL_VIEW, FileViewMode.LIST.name)!!)
+                }.getOrDefault(FileViewMode.LIST),
+                favorites = loadFavorites()
             )
         }
-        navigateToInternal(defaultDir(), pushHistory = false, clearSearch = true)
+        // Launcher shortcut cold start (spec 008, RF-16): open at the pinned
+        // folder when it is a real directory, the default otherwise.
+        val start = initialPath?.let { path -> File(path).takeIf { it.isDirectory } }
+        navigateTo(start ?: defaultDir())
     }
 
     private fun defaultDir(): File {
@@ -86,13 +120,142 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private fun persistPrefs() {
-        val s = _uiState.value
+        val editor = sharedPrefs().edit()
+        storeGlobalPreferences(editor)
+        editor.apply()
+    }
+
+    /** The shared preferences file backing all listing preferences. */
+    private fun sharedPrefs() =
         getApplication<Application>().getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-            .edit()
-            .putString("sort_option", s.sortOption.name)
-            .putBoolean("sort_ascending", s.sortAscending)
-            .putBoolean("show_hidden", s.showHidden)
-            .apply()
+
+    /** Writes the global listing-preferences keys from the current state. */
+    private fun storeGlobalPreferences(editor: android.content.SharedPreferences.Editor) {
+        val s = _uiState.value
+        editor.putString("sort_option", s.sortOption.name)
+        editor.putBoolean("sort_ascending", s.sortAscending)
+        editor.putBoolean("show_hidden", s.showHidden)
+        editor.putBoolean(KEY_GLOBAL_FOLDERS_FIRST, s.foldersFirst)
+        editor.putString(KEY_GLOBAL_VIEW, s.viewMode.name)
+    }
+
+    /** Per-folder override key prefix for [dir], like `folder:/sdcard:`. */
+    private fun folderPrefix(dir: File) = "folder:" + dir.absolutePath + ":"
+
+    /** Whether [dir] carries its own Organize preferences override (RF-8). */
+    private fun hasFolderOverride(dir: File) =
+        sharedPrefs().contains(folderPrefix(dir) + KEY_SORT)
+
+    /** Stores the current listing preferences into [dir]'s override keys. */
+    private fun storeFolderPreferences(editor: android.content.SharedPreferences.Editor, dir: File) {
+        val prefix = folderPrefix(dir)
+        val s = _uiState.value
+        editor.putString(prefix + KEY_SORT, s.sortOption.name)
+        editor.putBoolean(prefix + KEY_ASC, s.sortAscending)
+        editor.putBoolean(prefix + KEY_FOLDERS_FIRST, s.foldersFirst)
+        editor.putString(prefix + KEY_VIEW, s.viewMode.name)
+    }
+
+    /** Removes every listing-preferences key of [dir] (RF-8 scope off). */
+    private fun clearFolderPreferences(editor: android.content.SharedPreferences.Editor, dir: File) {
+        val prefix = folderPrefix(dir)
+        editor.remove(prefix + KEY_SORT)
+        editor.remove(prefix + KEY_ASC)
+        editor.remove(prefix + KEY_FOLDERS_FIRST)
+        editor.remove(prefix + KEY_VIEW)
+    }
+
+    /**
+     * Applies the listing preferences of [dir] to the state: the folder
+     * override when it exists, the global values otherwise (RF-8); also
+     * refreshes the folder-scoped and favorite flags.
+     */
+    private fun applyFolderPreferences(dir: File) {
+        val prefs = sharedPrefs()
+        val prefix = folderPrefix(dir)
+        val hasOverride = prefs.contains(prefix + KEY_SORT)
+        _uiState.update { state ->
+            if (hasOverride) {
+                state.copy(
+                    sortOption = runCatching {
+                        FileSortOption.valueOf(prefs.getString(prefix + KEY_SORT, state.sortOption.name)!!)
+                    }.getOrDefault(state.sortOption),
+                    sortAscending = prefs.getBoolean(prefix + KEY_ASC, state.sortAscending),
+                    foldersFirst = prefs.getBoolean(prefix + KEY_FOLDERS_FIRST, state.foldersFirst),
+                    viewMode = runCatching {
+                        FileViewMode.valueOf(prefs.getString(prefix + KEY_VIEW, state.viewMode.name)!!)
+                    }.getOrDefault(state.viewMode),
+                    folderScoped = true,
+                    isFavorite = state.favorites.any { it.path == dir.absolutePath }
+                )
+            } else {
+                state.copy(
+                    sortOption = runCatching {
+                        FileSortOption.valueOf(prefs.getString("sort_option", state.sortOption.name)!!)
+                    }.getOrDefault(state.sortOption),
+                    sortAscending = prefs.getBoolean("sort_ascending", state.sortAscending),
+                    foldersFirst = prefs.getBoolean(KEY_GLOBAL_FOLDERS_FIRST, state.foldersFirst),
+                    viewMode = runCatching {
+                        FileViewMode.valueOf(prefs.getString(KEY_GLOBAL_VIEW, state.viewMode.name)!!)
+                    }.getOrDefault(state.viewMode),
+                    folderScoped = false,
+                    isFavorite = state.favorites.any { it.path == dir.absolutePath }
+                )
+            }
+        }
+    }
+
+    /**
+     * Applies a listing-preferences change from the Organize menu: without
+     * a folder override it persists the global keys (RF-8), with one it
+     * persists the current folder's override; then re-sorts in memory.
+     */
+    private fun updateListingPrefs() {
+        val dir = currentDir ?: return
+        val editor = sharedPrefs().edit()
+        if (hasFolderOverride(dir)) storeFolderPreferences(editor, dir)
+        else storeGlobalPreferences(editor)
+        editor.apply()
+        reapplyCachedListing()
+    }
+
+    /** Selects a sort criteria from the Organize menu (RF-7), keeping the direction. */
+    fun setSortOption(option: FileSortOption) {
+        _uiState.update { it.copy(sortOption = option) }
+        updateListingPrefs()
+    }
+
+    /** Sets the sort direction from the Organize menu (RF-7). */
+    fun setSortAscending(ascending: Boolean) {
+        _uiState.update { it.copy(sortAscending = ascending) }
+        updateListingPrefs()
+    }
+
+    /** Toggles the folders-first grouping from the Organize menu (RF-7). */
+    fun setFoldersFirst(foldersFirst: Boolean) {
+        _uiState.update { it.copy(foldersFirst = foldersFirst) }
+        updateListingPrefs()
+    }
+
+    /** Selects the listing presentation from the Organize menu (RF-7). */
+    fun setViewMode(viewMode: FileViewMode) {
+        _uiState.update { it.copy(viewMode = viewMode) }
+        updateListingPrefs()
+    }
+
+    /**
+     * Toggles "this folder only": on activation the folder snapshots the
+     * values in effect as its override, on deactivation the override is
+     * cleared and the folder falls back to the global values (RF-8).
+     */
+    fun setFolderScoped(scoped: Boolean) {
+        val dir = currentDir ?: return
+        val editor = sharedPrefs().edit()
+        if (scoped) storeFolderPreferences(editor, dir)
+        else clearFolderPreferences(editor, dir)
+        editor.apply()
+        _uiState.update { it.copy(folderScoped = scoped) }
+        if (!scoped) applyFolderPreferences(dir)
     }
 
     fun bookmarkDirs(): List<Pair<String, File>> {
@@ -102,6 +265,57 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         list.add("SDCard" to Environment.getExternalStorageDirectory())
         list.add("Root" to File("/"))
         return list
+    }
+
+    /** Loads the user favorites into drawer crumbs (label + path, RF-5). */
+    private fun loadFavorites(): List<BreadcrumbPolicy.Crumb> =
+        favoritePaths().sorted().map { path ->
+            BreadcrumbPolicy.Crumb(friendlyLabel(path), path)
+        }
+
+    /** The persisted favorite paths (RF-6). */
+    private fun favoritePaths(): Set<String> =
+        sharedPrefs().getStringSet(KEY_FAVORITES, emptySet()) ?: emptySet()
+
+    /** Friendly label of a favorite: its breadcrumb tail (Home/Root/name). */
+    private fun friendlyLabel(path: String): String =
+        BreadcrumbPolicy.crumbs(path, homeDirectoryPath).lastOrNull()?.label ?: path
+
+    /** Adds the open folder to the persisted user favorites (RF-6). */
+    fun addFavorite() {
+        currentDir?.let { addFavoriteFor(it) }
+    }
+
+    /**
+     * Adds an arbitrary folder to the persisted favorites (spec 009, RF-10):
+     * the item-menu "Add to favorites" entry, whatever the open folder is.
+     *
+     * @param dir Folder the item menu acted on.
+     */
+    fun addFavoriteFor(dir: File) {
+        val editor = sharedPrefs().edit()
+        editor.putStringSet(KEY_FAVORITES, favoritePaths() + dir.absolutePath)
+        editor.apply()
+        _uiState.update { state ->
+            state.copy(
+                favorites = loadFavorites(),
+                isFavorite = state.currentPath == dir.absolutePath || state.isFavorite
+            )
+        }
+    }
+
+    /** Removes a favorite path from the persisted user favorites (RF-5/RF-6). */
+    fun removeFavorite(path: String) {
+        if (path !in favoritePaths()) return
+        val editor = sharedPrefs().edit()
+        editor.putStringSet(KEY_FAVORITES, favoritePaths() - path)
+        editor.apply()
+        _uiState.update { state ->
+            state.copy(
+                favorites = loadFavorites(),
+                isFavorite = if (state.currentPath == path) false else state.isFavorite
+            )
+        }
     }
 
     fun navigateTo(dir: File) {
@@ -150,6 +364,29 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         return true
     }
 
+    /**
+     * Navigates to the user-typed "Go to…" target (RF-12): absolute paths
+     * are used as-is, relative ones against the open folder. A target that
+     * is not an existing directory publishes the cannot-read status and
+     * keeps the current folder.
+     *
+     * @param text The path text typed in the Go to dialog.
+     */
+    fun goTo(text: String) {
+        val trimmed = text.trim()
+        val base = currentDir ?: return
+        if (trimmed.isEmpty()) return
+        val target = if (trimmed.startsWith("/")) File(trimmed) else File(base, trimmed)
+        if (!target.isDirectory) {
+            _uiState.update {
+                it.copy(statusMessage = getApplication<Application>().getString(
+                    R.string.filemanager_error_cannot_read, target.absolutePath))
+            }
+            return
+        }
+        navigateTo(target)
+    }
+
     /** Back press handling: exit selection first, then history/up. */
     fun onBackPressed(): Boolean {
         val s = _uiState.value
@@ -180,6 +417,7 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         val target = if (isShared) dir
         else if (canonical.isDirectory) canonical else canonical.parentFile ?: return
         currentDir = target
+        applyFolderPreferences(target)
         if (clearSearch) _uiState.update { it.copy(searchQuery = "") }
         refresh()
     }
@@ -249,6 +487,9 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
                         focusedIndex = -1,
                         canGoBack = backStack.isNotEmpty(),
                         canGoForward = forwardStack.isNotEmpty(),
+                        canGoUp = canGoUpFrom(dir),
+                        folderCount = 0,
+                        fileCount = 0,
                         hasClipboard = FileOperationsHelper.hasClipboard(),
                         statusMessage = if (FileOperationsHelper.isSharedStoragePath(dir))
                             getApplication<Application>().getString(R.string.filemanager_error_cannot_read_access, dir.absolutePath)
@@ -261,9 +502,12 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         }
         val s = _uiState.value
         val visible = listed.filter { s.showHidden || !it.name.startsWith(".") }
+        val counts = ListingCounts.counts(listed.toList(), s.showHidden)
         val filtered = if (s.searchQuery.isEmpty()) visible
         else visible.filter { it.name.contains(s.searchQuery, ignoreCase = true) }
-        val sorted = filtered.sortedWith(s.sortOption.getComparator(s.sortAscending))
+        val sorted = filtered.sortedWith(
+            s.sortOption.getComparator(s.sortAscending, s.foldersFirst)
+        )
         val symlinkTargets = HashMap<String, String?>()
         val brokenLinks = HashSet<String>()
         for (f in listed) {
@@ -276,10 +520,15 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         withContext(Dispatchers.Main) {
             if (currentDir != dir) return@withContext
             _uiState.update {
-                // Normalize the focused cursor to the new listing: keep the current
-                // position when it still fits, else fall back to the first entry.
-                val normalized = if (sorted.isEmpty()) -1
-                else it.focusedIndex.coerceIn(0, sorted.lastIndex)
+                // The cursor policy unsets it on a directory change (a
+                // phantom carry-over made new folders auto-scroll) and keeps
+                // it only for same-directory re-listings (spec 007).
+                val normalized = FocusCursorPolicy.normalizedIndex(
+                    previous = it.focusedIndex,
+                    previousPath = it.currentPath,
+                    listedPath = dir.absolutePath,
+                    size = sorted.size
+                )
                 it.copy(
                     busy = false,
                     currentPath = dir.absolutePath,
@@ -288,6 +537,9 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
                     focusedIndex = normalized,
                     canGoBack = backStack.isNotEmpty(),
                     canGoForward = forwardStack.isNotEmpty(),
+                    canGoUp = canGoUpFrom(dir),
+                    folderCount = counts.folders,
+                    fileCount = counts.files,
                     hasClipboard = FileOperationsHelper.hasClipboard(),
                     symlinkTargets = symlinkTargets,
                     brokenLinks = brokenLinks
@@ -301,6 +553,19 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         if (dir.absolutePath == TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH) return "Home"
         if (dir.name == "home" && (dir.parent ?: "").endsWith("/files")) return "Home"
         return dir.name.ifEmpty { dir.absolutePath }
+    }
+
+    /**
+     * Whether [dir] has a navigable parent (RF-11 "succumb" enablement):
+     * the root folder has none, and a shared-storage folder can always go
+     * up because its parent chain stays FUSE-accessible.
+     *
+     * @param dir The open folder.
+     * @return Whether the Subir menu entry should be enabled.
+     */
+    private fun canGoUpFrom(dir: File): Boolean {
+        val parent = dir.parentFile ?: return false
+        return parent.exists() || FileOperationsHelper.isSharedStoragePath(dir)
     }
 
     fun setSearchQuery(query: String) {
@@ -325,14 +590,18 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
 
     /**
      * Move the focused list entry by [delta] rows (clamped to the visible list).
+     * Delegates the index math to [FocusCursorPolicy.movedIndex]: an unset
+     * cursor counts as one step before the first row (spec 007).
      *
      * @param delta How many rows to move (negative moves up).
      */
     fun moveFocus(delta: Int) {
-        val size = _uiState.value.files.size
-        if (size == 0) return
-        val current = _uiState.value.focusedIndex.coerceAtLeast(0)
-        setFocusedIndex((current + delta).coerceIn(0, size - 1))
+        val next = FocusCursorPolicy.movedIndex(
+            current = _uiState.value.focusedIndex,
+            delta = delta,
+            size = _uiState.value.files.size
+        ) ?: return
+        setFocusedIndex(next)
     }
 
     /**
@@ -473,19 +742,59 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         FileOperationsHelper.resolveFileForOpen(file)
 
     /**
-     * Computes the size of a folder off the main thread and caches it in
-     * [FileManagerUiState.folderSizes] keyed by absolute path. Files (and
-     * already-cached folders) are a no-op.
+     * Computes the properties snapshot of a file off the main thread (spec
+     * 009, RF-12): lstat of the entry itself (a symlink keeps its own
+     * permissions, RF-13), owner/group resolved via `UserUtils` with the
+     * numeric id as fallback, the mode in `rwxr-xr-x (644)` form and the
+     * SELinux context. Any unreadable piece is null so the dialog renders
+     * the dash; an unreadable entry yields a null snapshot.
      *
-     * @param file The folder to measure.
+     * @param file The entry the properties dialog is showing.
      */
-    fun loadFolderSize(file: File) {
-        if (!file.isDirectory) return
-        if (_uiState.value.folderSizes.containsKey(file.absolutePath)) return
+    fun loadProperties(file: File) {
         viewModelScope.launch(Dispatchers.IO) {
-            val size = FileOperationsHelper.getDirectorySize(file)
+            val snapshot = try {
+                val attrs = FileAttributes.get(file.absolutePath, false)
+                val app = getApplication<Application>()
+                FileProperties(
+                    path = file.absolutePath,
+                    owner = UserUtils.getNameForUid(app, attrs.uid())
+                        ?: attrs.uid().toString(),
+                    group = UserUtils.getNameForUidFromLibcore(attrs.gid())
+                        ?: attrs.gid().toString(),
+                    modeText = PosixModeText.format(attrs.mode(), attrs.permissions()),
+                    selinuxContext = try {
+                        SELinuxUtils.getFileContext(file.absolutePath)
+                    } catch (t: Throwable) {
+                        // Reflection inside the helper can fail on hardened
+                        // builds; the row falls back to the dash.
+                        null
+                    }
+                )
+            } catch (e: IOException) {
+                null
+            }
+            _uiState.update { it.copy(properties = snapshot) }
+        }
+    }
+
+    /**
+     * Computes the "N folders · M files" content counts of a folder off the
+     * main thread and caches them in [FileManagerUiState.folderContents]
+     * (spec 009, RF-12): the visible entries only (hidden filter is the
+     * [FileManagerUiState.showHidden] flag in force; the search filter never
+     * applies here).
+     *
+     * @param file The folder the properties dialog is showing.
+     */
+    fun loadFolderCounts(file: File) {
+        if (!file.isDirectory) return
+        if (_uiState.value.folderContents.containsKey(file.absolutePath)) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val entries = file.listFiles()?.toList() ?: emptyList()
+            val counts = ListingCounts.counts(entries, _uiState.value.showHidden)
             _uiState.update {
-                it.copy(folderSizes = it.folderSizes + (file.absolutePath to size))
+                it.copy(folderContents = it.folderContents + (file.absolutePath to counts))
             }
         }
     }
@@ -499,6 +808,27 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         val raw = FileOperationsHelper.readSymlinkTargetRaw(file)
         _uiState.update {
             it.copy(statusMessage = getApplication<Application>().getString(R.string.filemanager_error_broken_symlink, file.name, raw ?: "?"))
+        }
+    }
+
+    /** Posts a "share failed" status message (RF-14 fallback). */
+    fun notifyShareFailed() {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>().getString(R.string.msg_share_failed))
+        }
+    }
+
+    /** Posts a "paste failed" status message (spec 009, RF-4). */
+    fun notifyPasteFailed() {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>().getString(R.string.msg_paste_failed))
+        }
+    }
+
+    /** Posts the "no rootfs editor" status message (spec 009, RF-2). */
+    fun notifyNoRootfsEditor() {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>().getString(R.string.msg_no_rootfs_editor))
         }
     }
 
@@ -533,6 +863,34 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
             selectedFiles(), FileOperationsHelper.ClipboardOperation.CUT
         )
         clearSelection()
+        refresh()
+    }
+
+    /**
+     * Copies a single item to the file-manager clipboard (spec 009, RF-3),
+     * as the item-menu "Copy" entry. Unlike {@link #copySelection}, the
+     * multi-selection state and the selection bar are never touched.
+     *
+     * @param file The entry the item menu acted on.
+     */
+    fun copyItem(file: File) {
+        FileOperationsHelper.setClipboard(
+            listOf(file), FileOperationsHelper.ClipboardOperation.COPY
+        )
+        refresh()
+    }
+
+    /**
+     * Cuts a single item to the file-manager clipboard (spec 009, RF-3), as
+     * the item-menu "Cut" entry. Unlike {@link #cutSelection}, the
+     * multi-selection state and the selection bar are never touched.
+     *
+     * @param file The entry the item menu acted on.
+     */
+    fun cutItem(file: File) {
+        FileOperationsHelper.setClipboard(
+            listOf(file), FileOperationsHelper.ClipboardOperation.CUT
+        )
         refresh()
     }
 
@@ -583,6 +941,18 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         return if (FileOperationsHelper.moveFile(file, trashFile)) trashFile else null
     }
 
+    /**
+     * Pastes the clipboard contents into the open folder off the main thread
+     * (spec 009, RF-4). The result follows {@link PastePolicy}: a paste where
+     * nothing moved posts the "failed to paste" message instead of the old
+     * "0 pasted" success, and a cut clipboard is cleared only when at least
+     * one source moved (a copy clipboard is never cleared, so retries stay
+     * valid).
+     *
+     * @param onDone Invoked on the main thread with the count of pasted
+     * entries; not invoked at all on a full failure (the failure reaches the
+     * user through the status message snack bar).
+     */
     fun paste(onDone: (count: Int) -> Unit) {
         if (!FileOperationsHelper.hasClipboard()) return
         val dest = currentDir ?: return
@@ -598,11 +968,91 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
                 else FileOperationsHelper.copyFile(src, target)
                 if (ok) count++
             }
-            if (isCut) FileOperationsHelper.clearClipboard()
+            val outcome = PastePolicy.outcome(count, sources.size, isCut)
+            if (outcome.clearClipboard) FileOperationsHelper.clearClipboard()
             withContext(Dispatchers.Main) {
+                if (outcome.allFailed) notifyPasteFailed()
+                else if (count > 0) onDone(count)
                 refresh()
-                onDone(count)
             }
+        }
+    }
+
+    /**
+     * Compresses [file] into the open folder off the main thread (spec 009,
+     * RF-7): input is validated through {@link buildCompressionPlan} before
+     * any disk write, an existing destination is refused twice (the plan and
+     * {@link ArchiveCreator#create}, RNF-5), the busy indicator covers the
+     * write and the listing refreshes afterwards. Every outcome posts its
+     * status message.
+     *
+     * @param file The file or folder the item menu acted on.
+     * @param name Raw archive name from the compress dialog.
+     * @param format One of the three dialog formats.
+     * @param password Optional password; honored by `.7z` only.
+     * @param onDone Invoked on the main thread with {@code true} when the
+     * archive was created.
+     */
+    fun compressItem(
+        file: File,
+        name: String,
+        format: ArchiveFormat,
+        password: CharArray?,
+        onDone: (Boolean) -> Unit
+    ) {
+        val dest = currentDir ?: run { onDone(false); return }
+        _uiState.update { it.copy(busy = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val trimmed = name.trim()
+            val exists = File(dest, "$trimmed.${format.extension}").exists()
+            val plan = buildCompressionPlan(dest, name, format, exists)
+            val ok = plan is CompressionPlan.Ready &&
+                ArchiveCreator.create(plan.outputFile, file, format, password)
+            withContext(Dispatchers.Main) {
+                if (ok) {
+                    notifyCompressCreated(plan.outputFile.name)
+                } else {
+                    when (plan) {
+                        is CompressionPlan.Collision -> notifyCompressCollision(plan.outputFile.name)
+                        is CompressionPlan.Invalid -> notifyCompressInvalidName()
+                        is CompressionPlan.Ready -> notifyCompressFailed()
+                    }
+                }
+                refresh()
+                onDone(ok)
+            }
+        }
+    }
+
+    /** Posts the "compressed to <name>" status message (spec 009, RF-7). */
+    fun notifyCompressCreated(archiveName: String) {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>()
+                .getString(R.string.msg_compress_created, archiveName))
+        }
+    }
+
+    /** Posts the "<name> already exists" status message (RF-7, RNF-5). */
+    fun notifyCompressCollision(archiveName: String) {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>()
+                .getString(R.string.msg_compress_collision, archiveName))
+        }
+    }
+
+    /** Posts the "invalid archive name" status message (RF-7). */
+    fun notifyCompressInvalidName() {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>()
+                .getString(R.string.msg_compress_invalid_name))
+        }
+    }
+
+    /** Posts the "compression failed" status message (RF-7). */
+    fun notifyCompressFailed() {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>()
+                .getString(R.string.msg_compress_failed))
         }
     }
 

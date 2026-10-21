@@ -51,6 +51,24 @@ app  →  termux-shared  →  terminal-view  →  terminal-emulator
 - The `filemanager` module also uses Compose (Material3) for its `FileManagerScreen`; it does not host activities — the app wires the theme, permissions, and `FileProvider`.
 - **Session tabs are polymorphic:** `TermuxSessionUiModel` is a sealed type (`Terminal` = pty session, `FileManager` = UI-only session). The `FileManagerSessionHost` composable hosts `FileManagerScreen` as a tab with a per-session `FileManagerViewModel` keyed by session id. Closing a file-manager tab never touches `TermuxService`. The file manager can open a terminal in the current directory via `onOpenInTerminal` (nav-row icon + More-menu item), wired in the app to `TermuxComposeActivity.openTerminalIn()`.
 
+## Sitio web (`public/`)
+
+- Página estática de una sola página: `index.html` + `styles.css` + `main.js` + `img/`, servida por
+  `firebase.json` (rewrite `**` → `/index.html`). **Sin build, sin `node_modules` ni framework.**
+  El JS solo mejora (menú móvil, cabecera sticky, copiar hash): con JS apagado la página funciona.
+- **Lo que caduca (versión, enlaces de descarga, nombre del APK, tamaño, fecha y SHA-256) no se
+  escribe a mano: lo pone `scripts/update-site.py`.** Tras publicar una release:
+  ```sh
+  python3 scripts/update-site.py            # escribe
+  python3 scripts/update-site.py --dry-run  # solo diff
+  ```
+  Lee la última release de la API de GitHub y es idempotente. El hash sale del asset
+  `<versión>_sha256sums` de esa misma release, no de una copia.
+- **Si añades un dato que caduca, márcalo con `data-site="<clave>"` y añádelo a `update-site.py`.**
+  Sin marcador se queda viejo en silencio. La versión es el caso especial: se propaga sola con
+  reemplazo global del texto de `data-site="version"`.
+- Texto visible en español (el idioma del repo); identificadores y comentarios técnicos en inglés.
+
 ## Error Handling
 
 - **Return `Error` objects, don't throw.** `null` means success:
@@ -71,9 +89,11 @@ app  →  termux-shared  →  terminal-view  →  terminal-emulator
 - **Client Interface Pattern:** Interfaces define contracts (`TerminalSessionClient`, `TerminalViewClient`). Base classes provide no-op defaults (`TermuxTerminalSessionClientBase`). Concrete implementations in `app` extend bases. Follow this pattern for new callbacks.
 - **Service lifecycle:** `TermuxService` outlives `TermuxComposeActivity`. Activity re-binds on rotation/restart. Don't store activity references in the service — use the client interface.
 - **Static utility classes** for stateless helpers (`TermuxUtils`, `TermuxThemeUtils`, `DataUtils`).
+- **Shared logic lives at the bottom of the module graph (`terminal-emulator`) and uppers delegate.** When a utility consumed by `termux-shared` is also needed by `terminal-view` or `terminal-emulator`, move the implementation to `terminal-emulator` and delegate from the original class instead of duplicating the logic or injecting it through client plumbing: `termux-shared` cannot be seen from `terminal-view` (and a dependency that way would be a cycle). Example: the URL recognizer moved there as `TerminalUrlScanner` (`TermuxUrlUtils.getUrlMatchRegex()` delegates, spec 003), shared by the More-menu dialog, both renderers and both tap paths. Keep the delegating class's public API so callers don't change.
 
 ## Gotchas
 
+- **When touching a persisted-prefs block, keep EVERY existing key** — rewriting the serializer and dropping one key silently loses the setting. Seen in spec 008: `show_hidden` was lost when `persistPrefs()` was refactored. Current file-manager keys: `sort_option`, `sort_ascending`, `show_hidden`, `folders_first`, `view_mode`, `favorites`, `folder:<path>:*`.
 - **targetSdk 28 is intentional** — raising it triggers scoped storage and other restrictions that break file access model.
 - **minSdk 24** — proot uses `getifaddrs` (Bionic API 24+). Native code is compiled against android-28.
 - **ABI splits** are enabled by default for debug builds (`arm64-v8a` + universal). Controlled by `TERMUX_SPLIT_APKS_FOR_DEBUG_BUILDS` env var.
