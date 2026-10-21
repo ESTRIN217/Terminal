@@ -85,6 +85,10 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   con `group(translationY = 45.855)`) y tinte propio azul `#0288D1` (venía en negro, el
   usuario pidió azul). Sin familia (como `kts`); RF-18. Tests rojo→verde; `./gradlew test`
   global verde. **Validada en dispositivo el 2026-10-21 (rev 8); spec 006 cerrada.**
+- Selección del gestor = segundo estado de la topbar (2026-10-21): título «n seleccionados»,
+  nav-icon «Cerrar»→`clearSelection()` (el cajón no abre durante la selección), acciones
+  copiar/cortar/copiar ruta/compartir/editar/borrar en la propia topbar; `BottomAppBar`
+  retirada del Scaffold. Sin strings nuevos.
 
 ## Learnings vigentes (por qué)
 - **Glifos multicolor en Compose**: los rellenos por-path de un `ImageVector` solo sobreviven con

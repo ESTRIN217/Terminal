@@ -66,7 +66,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -307,6 +307,66 @@ fun FileManagerScreen(
             },
         contentWindowInsets = contentWindowInsets,
         topBar = {
+            if (state.selectionMode) {
+                // Selection mode is a second state of the top bar: count as
+                // title, close icon clears the selection, action icons match
+                // the selection semantics (no bottom bar).
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = stringResource(R.string.selection_mode_title, state.selectedPaths.size),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.clearSelection() }) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = stringResource(R.string.filemanager_clear)
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.copySelection() }, enabled = !state.busy) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.action_copy))
+                        }
+                        IconButton(onClick = { viewModel.cutSelection() }, enabled = !state.busy) {
+                            Icon(Icons.Default.ContentCut, contentDescription = stringResource(R.string.action_cut))
+                        }
+                        IconButton(
+                            onClick = { copyPathsToClipboard(viewModel.selectedFiles()) },
+                            enabled = !state.busy
+                        ) {
+                            Icon(Icons.Default.FileCopy, contentDescription = stringResource(R.string.action_copy_path))
+                        }
+                        IconButton(
+                            onClick = { onShareFiles(viewModel.selectedFiles()) },
+                            enabled = !state.busy
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
+                        }
+                        // Edit: single selected file only (one editor tab per invocation).
+                        if (onEditFile != null) {
+                            val editSelection = viewModel.selectedFiles()
+                            if (editSelection.size == 1 && !editSelection[0].isDirectory) {
+                                IconButton(onClick = {
+                                    onEditFile(viewModel.resolveForOpen(editSelection[0]))
+                                }, enabled = !state.busy) {
+                                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.action_edit))
+                                }
+                            }
+                        }
+                        IconButton(onClick = {
+                            dialogFile = null
+                            nameInput = ""
+                            dialog = DialogKind.DELETE
+                        }, enabled = !state.busy) {
+                            Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete))
+                        }
+                    }
+                )
+            } else {
             TopAppBar(
                 title = {
                     Column {
@@ -582,45 +642,6 @@ fun FileManagerScreen(
                     }
                 }
             )
-        },
-        bottomBar = {
-            if (state.selectionMode) {
-                BottomAppBar {
-                    IconButton(onClick = { viewModel.copySelection() }, enabled = !state.busy) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.action_copy))
-                    }
-                    IconButton(onClick = { viewModel.cutSelection() }, enabled = !state.busy) {
-                        Icon(Icons.Default.ContentCut, contentDescription = stringResource(R.string.action_cut))
-                    }
-                    IconButton(onClick = { copyPathsToClipboard(viewModel.selectedFiles()) }, enabled = !state.busy) {
-                        Icon(Icons.Default.FileCopy, contentDescription = stringResource(R.string.action_copy_path))
-                    }
-                    IconButton(onClick = { onShareFiles(viewModel.selectedFiles()) }, enabled = !state.busy) {
-                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
-                    }
-                    // Edit: single selected file only (one editor tab per invocation).
-                    if (onEditFile != null) {
-                        val editSelection = viewModel.selectedFiles()
-                        if (editSelection.size == 1 && !editSelection[0].isDirectory) {
-                            IconButton(onClick = {
-                                onEditFile(viewModel.resolveForOpen(editSelection[0]))
-                            }, enabled = !state.busy) {
-                                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.action_edit))
-                            }
-                        }
-                    }
-                    IconButton(onClick = {
-                        dialogFile = null
-                        nameInput = ""
-                        dialog = DialogKind.DELETE
-                    }, enabled = !state.busy) {
-                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete))
-                    }
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = { viewModel.clearSelection() }) {
-                        Text(stringResource(R.string.filemanager_clear))
-                    }
-                }
             }
         },
         floatingActionButton = {
