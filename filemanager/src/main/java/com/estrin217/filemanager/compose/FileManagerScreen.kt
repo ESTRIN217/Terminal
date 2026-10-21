@@ -6,6 +6,8 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +28,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -77,12 +80,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.material3.TopAppBar
@@ -109,6 +115,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -123,8 +130,11 @@ import com.estrin217.filemanager.R
 import com.termux.shared.termux.TermuxConstants
 import kotlinx.coroutines.launch
 import java.io.File
+import java.text.DateFormat
+import java.text.SimpleDateFormat
+import java.util.Date
 
-private enum class DialogKind { NONE, NEW_FOLDER, NEW_FILE, NEW_SYMLINK, RENAME, DELETE, DETAILS, GO_TO }
+private enum class DialogKind { NONE, NEW_FOLDER, NEW_FILE, NEW_SYMLINK, RENAME, DELETE, PROPERTIES, GO_TO, COMPRESS }
 
 /**
  * Expressive file manager screen. Ports all `FileManagerActivity`
@@ -148,7 +158,12 @@ fun FileManagerScreen(
     /** App-side "New tab" action; hidden when the host does not support it (RF-10). */
     onNewFileManagerTab: (() -> Unit)? = null,
     /** App-side launcher shortcut pinning for the open folder (RF-16). */
-    onCreateShortcut: ((File) -> Unit)? = null
+    onCreateShortcut: ((File) -> Unit)? = null,
+    /**
+     * App-side launcher shortcut pinning that opens one *file* with its
+     * Android app (spec 009, RF-11); hidden while the host does not wire it.
+     */
+    onCreateFileShortcut: ((File) -> Unit)? = null
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -166,6 +181,8 @@ fun FileManagerScreen(
     var nameInput by remember { mutableStateOf("") }
     var menuExpanded by remember { mutableStateOf(false) }
     var organizeMenuExpanded by remember { mutableStateOf(false) }
+    // Which entry's item menu is open (spec 009, RF-1); null when closed.
+    var itemMenuFile by remember { mutableStateOf<File?>(null) }
     var fabMenuExpanded by remember { mutableStateOf(false) }
     var searchActive by remember { mutableStateOf(false) }
 
@@ -746,6 +763,10 @@ fun FileManagerScreen(
                         val linkTarget = state.symlinkTargets[file.absolutePath]
                         val isLink = linkTarget != null
                         val isBroken = state.brokenLinks.contains(file.absolutePath)
+                        val rowFavorite = state.favorites.any { it.path == file.absolutePath }
+                        val resolved = remember(file.absolutePath) {
+                            viewModel.resolveForOpen(file)
+                        }
                         val (icon, tint) = entryIconAndTint(file, isLink, isBroken)
                         Row(
                             modifier = Modifier
@@ -802,12 +823,112 @@ fun FileManagerScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            IconButton(onClick = {
-                                dialogFile = file
-                                nameInput = file.name
-                                dialog = DialogKind.DETAILS
-                            }) {
-                                Icon(Icons.Default.Info, contentDescription = stringResource(R.string.action_details))
+                            Box {
+                                IconButton(onClick = { itemMenuFile = file }) {
+                                    Icon(
+                                        Icons.Default.MoreVert,
+                                        contentDescription = stringResource(R.string.filemanager_more)
+                                    )
+                                }
+                                ItemMoreMenu(
+                                    file = file,
+                                    expanded = itemMenuFile == file,
+                                    busy = state.busy,
+                                    hasClipboard = state.hasClipboard,
+                                    favorite = rowFavorite,
+                                    onDismiss = { itemMenuFile = null },
+                                    onOpenWithSystem = {
+                                        itemMenuFile = null
+                                        onOpenFile(resolved)
+                                    },
+                                    onOpenWithRootfs = if (onEditFile != null) {
+                                        {
+                                            itemMenuFile = null
+                                            // RF-2 pre-check (spec 009): the pure
+                                            // policy decides nano→vim availability;
+                                            // the host session handles MAX_SESSIONS
+                                            // and the guest path mapping.
+                                            val candidates = TermuxConstants.DEBIAN_EDITOR_CANDIDATES
+                                                .map { name ->
+                                                    EditorCandidate(
+                                                        name,
+                                                        File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/usr/bin/" + name)
+                                                            .canExecute()
+                                                    )
+                                                }
+                                            if (EditorPolicy.chooseEditor(candidates) == null) {
+                                                viewModel.notifyNoRootfsEditor()
+                                            } else {
+                                                onEditFile(resolved)
+                                            }
+                                        }
+                                    } else null,
+                                    onCut = {
+                                        itemMenuFile = null
+                                        viewModel.cutItem(file)
+                                    },
+                                    onCopy = {
+                                        itemMenuFile = null
+                                        viewModel.copyItem(file)
+                                    },
+                                    onPaste = {
+                                        itemMenuFile = null
+                                        viewModel.paste { count ->
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    context.getString(R.string.msg_paste_success, count)
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onDelete = {
+                                        itemMenuFile = null
+                                        dialogFile = file
+                                        dialog = DialogKind.DELETE
+                                    },
+                                    onRename = {
+                                        itemMenuFile = null
+                                        nameInput = file.name
+                                        dialogFile = file
+                                        dialog = DialogKind.RENAME
+                                    },
+                                    onCompress = {
+                                        itemMenuFile = null
+                                        dialogFile = file
+                                        dialog = DialogKind.COMPRESS
+                                    },
+                                    onShare = {
+                                        itemMenuFile = null
+                                        onShareFiles(listOf(file))
+                                    },
+                                    onCopyPath = {
+                                        itemMenuFile = null
+                                        copyPathsToClipboard(listOf(file))
+                                    },
+                                    onToggleFavorite = {
+                                        itemMenuFile = null
+                                        if (rowFavorite) viewModel.removeFavorite(file.absolutePath)
+                                        else viewModel.addFavoriteFor(file)
+                                    },
+                                    onCreateShortcut = if (onCreateShortcut != null) {
+                                        {
+                                            itemMenuFile = null
+                                            onCreateShortcut(file)
+                                        }
+                                    } else null,
+                                    onCreateFileShortcut = if (onCreateFileShortcut != null) {
+                                        {
+                                            itemMenuFile = null
+                                            onCreateFileShortcut(file)
+                                        }
+                                    } else null,
+                                    onProperties = {
+                                        itemMenuFile = null
+                                        dialogFile = file
+                                        // Tabs-only properties dialog (T8, RF-12).
+                                        dialog = DialogKind.PROPERTIES
+                                    }
+                                )
                             }
                         }
                     }
@@ -884,8 +1005,10 @@ fun FileManagerScreen(
                             IconButton(
                                 onClick = {
                                     dialogFile = file
-                                    nameInput = file.name
-                                    dialog = DialogKind.DETAILS
+                                    // The tile keeps its "Info" icon; it now
+                                    // opens the tabs-only properties dialog
+                                    // (spec 009, fuera de alcance del menú).
+                                    dialog = DialogKind.PROPERTIES
                                 },
                                 modifier = Modifier.size(28.dp)
                             ) {
@@ -994,73 +1117,24 @@ fun FileManagerScreen(
                 }
             )
         }
-        DialogKind.DETAILS -> {
+        DialogKind.PROPERTIES -> {
             val f = dialogFile
             if (f != null) {
-                val linkTarget = state.symlinkTargets[f.absolutePath]
-                val isBroken = state.brokenLinks.contains(f.absolutePath)
-                LaunchedEffect(f) { viewModel.loadFolderSize(f) }
-                val sizeText = if (f.isDirectory) {
-                    state.folderSizes[f.absolutePath]
-                        ?.let { FileOperationsHelper.formatSize(it) }
-                        ?: stringResource(R.string.filemanager_calculating)
-                } else {
-                    FileOperationsHelper.formatSize(remember(f.absolutePath) { f.length() })
+                // Two-tab read-only snapshot (spec 009, RF-12); folder counts
+                // and permissions load on demand, stale dialog data guards
+                // against the entry path.
+                LaunchedEffect(f.absolutePath) {
+                    viewModel.loadProperties(f)
+                    viewModel.loadFolderCounts(f)
                 }
-                AlertDialog(
-                    onDismissRequest = { dialog = DialogKind.NONE },
-                    title = { Text(f.name) },
-                    text = {
-                        Text(
-                            (if (f.isDirectory) stringResource(R.string.filemanager_folder) + "\n" else "") +
-                                (if (linkTarget != null) stringResource(R.string.filemanager_link_target, linkTarget) + "\n" else "") +
-                                (if (isBroken) stringResource(R.string.filemanager_broken_status) + "\n" else "") +
-                                stringResource(R.string.filemanager_detail_path, f.absolutePath) + "\n" +
-                                stringResource(R.string.filemanager_detail_size, sizeText) + "\n" +
-                                stringResource(R.string.filemanager_detail_type, FileOperationsHelper.getMimeType(f.name))
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            dialog = DialogKind.NONE
-                            if (isBroken) {
-                                viewModel.notifyBrokenSymlink(f)
-                            } else {
-                                val resolved = viewModel.resolveForOpen(f)
-                                if (resolved.isDirectory) {
-                                    if (FileOperationsHelper.isSharedStoragePath(resolved)) {
-                                        onEnsureStorageAccess(resolved) {
-                                            viewModel.navigateTo(resolved)
-                                        }
-                                    } else {
-                                        viewModel.navigateTo(resolved)
-                                    }
-                                } else {
-                                    onOpenFile(resolved)
-                                }
-                            }
-                        }) { Text(stringResource(R.string.filemanager_open)) }
-                    },
-                    dismissButton = {
-                        Row {
-                            TextButton(onClick = {
-                                copyPathsToClipboard(listOf(f))
-                                dialog = DialogKind.NONE
-                            }) { Text(stringResource(R.string.action_copy_path)) }
-                            TextButton(onClick = {
-                                nameInput = f.name
-                                dialog = DialogKind.RENAME
-                            }) { Text(stringResource(R.string.action_rename)) }
-                            if (onEditFile != null && !f.isDirectory) {
-                                TextButton(onClick = {
-                                    val target = viewModel.resolveForOpen(f)
-                                    dialog = DialogKind.NONE
-                                    onEditFile(target)
-                                }) { Text(stringResource(R.string.action_edit)) }
-                            }
-                            TextButton(onClick = { dialog = DialogKind.NONE }) { Text(stringResource(R.string.filemanager_close)) }
-                        }
-                    }
+                PropertiesDialog(
+                    file = f,
+                    properties = state.properties?.takeIf { it.path == f.absolutePath },
+                    counts = state.folderContents[f.absolutePath],
+                    isFolder = f.isDirectory,
+                    linkTarget = state.symlinkTargets[f.absolutePath],
+                    isBroken = state.brokenLinks.contains(f.absolutePath),
+                    onAccept = { dialog = DialogKind.NONE }
                 )
             } else {
                 dialog = DialogKind.NONE
@@ -1098,8 +1172,437 @@ fun FileManagerScreen(
                 }
             )
         }
+        DialogKind.COMPRESS -> {
+            val f = dialogFile
+            if (f != null) {
+                CompressDialog(
+                    initial = f.name,
+                    onDismiss = { dialog = DialogKind.NONE },
+                    onConfirm = { name, format, password ->
+                        val target = dialogFile
+                        dialog = DialogKind.NONE
+                        // Status messages per outcome (created/collision/
+                        // invalid/failed) come from the ViewModel itself.
+                        target?.let {
+                            viewModel.compressItem(it, name, format, password) { }
+                        }
+                    }
+                )
+            } else {
+                dialog = DialogKind.NONE
+            }
+        }
         DialogKind.NONE -> Unit
     }
+}
+
+/**
+ * The per-item "More" menu anchored to a list row (spec 009, RF-1), in the
+ * fixed order: Open with… (files, submenu System/Rootfs), Cut, Copy, Paste
+ * (conditional), Delete, Rename, Compress…, Share, Copy path, Favorites
+ * (folders only), Create shortcut and Properties. Busy disables the
+ * disk-touching entries; selection state is never modified.
+ *
+ * All actions carry the row's own [file]; "Open with" resolves symlinks on
+ * its own (RF-13), everything else operates on the link.
+ *
+ * @param file The entry the menu acts on.
+ * @param expanded Whether this row's menu is the open one.
+ * @param busy Whether a file operation is in flight.
+ * @param hasClipboard Whether paste has anything to paste (RF-4 conditional).
+ * @param favorite Whether this folder is already a user favorite (RF-10).
+ * @param onDismiss Closes the menu.
+ * @param onCut Puts the item on the clipboard in cut mode.
+ * @param onCopy Puts the item on the clipboard in copy mode.
+ * @param onPaste Pastes the clipboard into the open folder.
+ * @param onDelete Opens the trash confirmation for this item.
+ * @param onRename Opens the rename dialog for this item.
+ * @param onCompress Opens the compress dialog for this item (RF-7).
+ * @param onShare Shares this item with the Android picker.
+ * @param onCopyPath Copies the item's absolute path.
+ * @param onToggleFavorite Adds/removes this folder to/from favorites.
+ * @param onOpenWithSystem Opens this item's resolved destination with its
+ * Android app ("Open with › System", RF-2).
+ * @param onOpenWithRootfs Opens the resolved destination in the rootfs
+ * editor after the nano→vim availability pre-check, or null when the host
+ * does not wire an editor session (the option hides, 008 precedent).
+ * @param onCreateShortcut Folder shortcut callback, or null when the host
+ * does not wire it (element hidden, 008 precedent).
+ * @param onCreateFileShortcut File shortcut callback (opens the file with
+ * its Android app), or null when unwired (hidden, 008 precedent).
+ * @param onProperties Opens the properties dialog for this item.
+ */
+@Composable
+private fun ItemMoreMenu(
+    file: File,
+    expanded: Boolean,
+    busy: Boolean,
+    hasClipboard: Boolean,
+    favorite: Boolean,
+    onDismiss: () -> Unit,
+    onCut: () -> Unit,
+    onCopy: () -> Unit,
+    onPaste: () -> Unit,
+    onDelete: () -> Unit,
+    onRename: () -> Unit,
+    onCompress: () -> Unit,
+    onShare: () -> Unit,
+    onCopyPath: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onOpenWithSystem: () -> Unit,
+    onOpenWithRootfs: (() -> Unit)?,
+    onCreateShortcut: (() -> Unit)?,
+    onCreateFileShortcut: (() -> Unit)?,
+    onProperties: () -> Unit
+) {    val isFolder = remember(file.absolutePath) { file.isDirectory }
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        if (!isFolder) {
+            // "Open with…" submenu (spec 009, RF-2): files only; the link is
+            // resolved by the caller so even symlinks offer the target.
+            var openWithExpanded by remember { mutableStateOf(false) }
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_open_with)) },
+                trailingIcon = {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null
+                    )
+                },
+                onClick = { openWithExpanded = !openWithExpanded }
+            )
+            if (openWithExpanded) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.open_with_system)) },
+                    onClick = {
+                        onDismiss()
+                        onOpenWithSystem()
+                    }
+                )
+                if (onOpenWithRootfs != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.open_with_rootfs)) },
+                        onClick = {
+                            onDismiss()
+                            onOpenWithRootfs()
+                        }
+                    )
+                }
+            }
+        }
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.action_cut)) },
+            leadingIcon = { Icon(Icons.Default.ContentCut, null) },
+            onClick = onCut
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.action_copy)) },
+            leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+            onClick = onCopy
+        )
+        if (hasClipboard) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_paste)) },
+                leadingIcon = { Icon(Icons.Default.ContentPaste, null) },
+                enabled = !busy,
+                onClick = onPaste
+            )
+        }
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.action_delete)) },
+            leadingIcon = { Icon(Icons.Default.Delete, null) },
+            enabled = !busy,
+            onClick = onDelete
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.action_rename)) },
+            leadingIcon = { Icon(Icons.Default.Edit, null) },
+            enabled = !busy,
+            onClick = onRename
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.action_compress)) },
+            leadingIcon = { Icon(Icons.Default.Archive, null) },
+            enabled = !busy,
+            onClick = onCompress
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.action_share)) },
+            leadingIcon = { Icon(Icons.Default.Share, null) },
+            onClick = onShare
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.action_copy_path)) },
+            leadingIcon = { Icon(Icons.Default.FileCopy, null) },
+            onClick = onCopyPath
+        )
+        if (isFolder) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        if (favorite) stringResource(R.string.action_remove_favorite)
+                        else stringResource(R.string.action_add_favorite)
+                    )
+                },
+                leadingIcon = { Icon(Icons.Default.Bookmark, null) },
+                onClick = onToggleFavorite
+            )
+        }
+        if (isFolder) {
+            if (onCreateShortcut != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.action_create_shortcut)) },
+                    leadingIcon = { Icon(Icons.Default.Add, null) },
+                    onClick = onCreateShortcut
+                )
+            }
+        } else if (onCreateFileShortcut != null) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_create_shortcut)) },
+                leadingIcon = { Icon(Icons.Default.Add, null) },
+                onClick = onCreateFileShortcut
+            )
+        }
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.action_details)) },
+            leadingIcon = { Icon(Icons.Default.Info, null) },
+            onClick = onProperties
+        )
+    }
+}
+
+/**
+ * Two-tab read-only properties dialog (spec 009, RF-12): the *basic* tab
+ * paints name, amble parent folder, MIME type, content (formatted size, or
+ * the "N folders · M files" counts for folders), last modified, and for
+ * symlinks the raw target plus broken state; the *permissions* tab paints
+ * owner, group, mode (`rwxr-xr-x (644)`) and the SELinux context read via
+ * lstat of the entry itself (RF-13). Any unreadable datum renders the "—"
+ * dash without blocking the dialog. One accept button closes it.
+ *
+ * @param file The entry whose data the dialog shows.
+ * @param properties Latest permissions snapshot for [file], null until (or
+ * when) the read fails — dash rows meanwhile.
+ * @param counts Folder content counts for [file], or null while loading.
+ * @param isFolder Whether the entry is a folder (content as counts). * @param linkTarget Raw symlink target, null for non-links.
+ * @param isBroken Whether the symlink target is missing.
+ * @param onAccept Closes the dialog.
+ */
+@Composable
+private fun PropertiesDialog(
+    file: File,
+    properties: FileProperties?,
+    counts: ListingCounts.Counts?,
+    isFolder: Boolean,
+    linkTarget: String?,
+    isBroken: Boolean,
+    onAccept: () -> Unit
+) {
+    var tab by remember { mutableStateOf(0) }
+    val dash = stringResource(R.string.properties_unavailable)
+    AlertDialog(
+        onDismissRequest = onAccept,
+        title = { Text(stringResource(R.string.properties_title, file.name)) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                TabRow(selectedTabIndex = tab) {
+                    Tab(
+                        selected = tab == 0,
+                        onClick = { tab = 0 },
+                        text = { Text(stringResource(R.string.properties_tab_basic)) }
+                    )
+                    Tab(
+                        selected = tab == 1,
+                        onClick = { tab = 1 },
+                        text = { Text(stringResource(R.string.properties_tab_permissions)) }
+                    )
+                }
+                if (tab == 0) {
+                    PropertyRow(
+                        label = stringResource(R.string.properties_name),
+                        value = file.name
+                    )
+                    PropertyRow(
+                        label = stringResource(R.string.properties_parent),
+                        value = BreadcrumbPolicy.crumbs(
+                            file.parent ?: "/", TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH
+                        ).lastOrNull()?.label ?: (file.parent ?: dash)
+                    )
+                    PropertyRow(
+                        label = stringResource(R.string.properties_type),
+                        value = FileOperationsHelper.getMimeType(file.name)
+                    )
+                    PropertyRow(
+                        label = stringResource(R.string.properties_content),
+                        value = if (isFolder) {
+                            counts?.let { stringResource(R.string.filemanager_counts, it.folders, it.files) }
+                                ?: stringResource(R.string.filemanager_calculating)
+                        } else {
+                            FileOperationsHelper.formatSize(remember(file.absolutePath) { file.length() })
+                        }
+                    )
+                    PropertyRow(
+                        label = stringResource(R.string.properties_last_modified),
+                        value = remember(file.absolutePath) {
+                            SimpleDateFormat
+                                .getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                                .format(Date(file.lastModified()))
+                        }
+                    )
+                    linkTarget?.let {
+                        PropertyRow(
+                            label = stringResource(R.string.properties_link),
+                            value = it
+                        )
+                    }
+                    if (isBroken) {
+                        PropertyRow(
+                            label = stringResource(R.string.properties_status),
+                            value = stringResource(R.string.filemanager_broken_status),
+                            isError = true
+                        )
+                    }
+                } else {
+                    PropertyRow(
+                        label = stringResource(R.string.properties_owner),
+                        value = properties?.owner ?: dash
+                    )
+                    PropertyRow(
+                        label = stringResource(R.string.properties_group),
+                        value = properties?.group ?: dash
+                    )
+                    PropertyRow(
+                        label = stringResource(R.string.properties_mode),
+                        value = properties?.modeText ?: dash
+                    )
+                    PropertyRow(
+                        label = stringResource(R.string.properties_selinux),
+                        value = properties?.selinuxContext ?: dash
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onAccept) { Text(stringResource(R.string.filemanager_ok)) }
+        }
+    )
+}
+
+/**
+ * One label/value line of the properties dialog; the value wraps so long
+ * SELinux contexts stay readable.
+ *
+ * @param label Left column key.
+ * @param value Right column value (never null: the caller pre-renders the
+ * dash for unreadable data).
+ * @param isError Whether the value paints in the error color (broken links).
+ */
+@Composable
+private fun PropertyRow(label: String, value: String, isError: Boolean = false) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(112.dp)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (isError) MaterialTheme.colorScheme.error
+            else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+/**
+ * Dialog to compress an entry (spec 009, RF-7): archive name (blank keeps
+ * the confirm disabled like the other name dialogs), three format radios and
+ * an optional password field that only appears for the 7z format (the only
+ * one that encrypts in this stack). Trimming and the collision check live in
+ * {@link buildCompressionPlan}; the dialog hands over the raw inputs.
+ *
+ * @param initial Name the archive should get by default (the item's own).
+ * @param onDismiss Called when the dialog is cancelled.
+ * @param onConfirm Called with the trimmed name, the chosen format and the
+ * optional password (null for the un-encrypted formats or a blank field).
+ */
+@Composable
+private fun CompressDialog(
+    initial: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String, ArchiveFormat, CharArray?) -> Unit
+) {
+    var name by remember { mutableStateOf(initial) }
+    var format by remember { mutableStateOf(ArchiveFormat.ZIP) }
+    var password by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.action_compress)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.compress_name_label)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(4.dp))
+                ArchiveFormat.entries.forEach { option ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = format == option,
+                            onClick = { format = option }
+                        )
+                        Text(
+                            text = stringResource(
+                                when (option) {
+                                    ArchiveFormat.ZIP -> R.string.compress_format_zip
+                                    ArchiveFormat.TAR_XZ -> R.string.compress_format_tarxz
+                                    ArchiveFormat.SEVEN_Z -> R.string.compress_format_7z
+                                }
+                            )
+                        )
+                    }
+                }
+                if (format == ArchiveFormat.SEVEN_Z) {
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text(stringResource(R.string.compress_password_label)) },
+                        singleLine = true,
+                        // Masked input; the optionality is the label's wording.
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val chars =
+                        if (format == ArchiveFormat.SEVEN_Z && password.isNotEmpty()) password.toCharArray()
+                        else null
+                    onConfirm(name.trim(), format, chars)
+                },
+                enabled = name.trim().isNotEmpty()
+            ) { Text(stringResource(R.string.filemanager_ok)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        }
+    )
 }
 
 /**

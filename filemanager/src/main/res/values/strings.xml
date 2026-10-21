@@ -20,6 +20,30 @@
     <string name="action_details">Details</string>
     <string name="action_select_all">Select all</string>
     <string name="action_undo">Undo</string>
+    <string name="action_open_with">Open with…</string>
+    <string name="open_with_system">System app</string>
+    <string name="open_with_rootfs">Rootfs editor</string>
+    <string name="action_compress">Compress…</string>
+    <string name="properties_title">Properties of %1$s</string>
+    <string name="properties_tab_basic">Basic</string>
+    <string name="properties_tab_permissions">Permissions</string>
+    <string name="properties_name">Name</string>
+    <string name="properties_parent">Parent folder</string>
+    <string name="properties_type">Type</string>
+    <string name="properties_content">Content</string>
+    <string name="properties_last_modified">Last modified</string>
+    <string name="properties_status">Status</string>
+    <string name="properties_link">Link target</string>
+    <string name="properties_owner">Owner</string>
+    <string name="properties_group">Group</string>
+    <string name="properties_mode">Mode</string>
+    <string name="properties_selinux">SELinux context</string>
+    <string name="properties_unavailable">—</string>
+    <string name="compress_name_label">Archive name</string>
+    <string name="compress_format_zip">.zip</string>
+    <string name="compress_format_tarxz">.tar.xz</string>
+    <string name="compress_format_7z">.7z (supports a password)</string>
+    <string name="compress_password_label">Password (optional)</string>
     <string name="action_go_back">Back</string>
     <string name="action_go_forward">Forward</string>
     <string name="action_cancel">Cancel</string>
@@ -27,6 +51,12 @@
 
     <!-- File Manager Messages -->
     <string name="msg_paste_success">Pasted %1$d item(s)</string>
+    <string name="msg_paste_failed">Failed to paste</string>
+    <string name="msg_no_rootfs_editor">No editor available in the rootfs</string>
+    <string name="msg_compress_created">Compressed to %1$s</string>
+    <string name="msg_compress_failed">Compression failed</string>
+    <string name="msg_compress_collision">%1$s already exists</string>
+    <string name="msg_compress_invalid_name">Invalid archive name</string>
     <string name="msg_error_rename">Failed to rename</string>
     <string name="msg_path_copied">Path copied to clipboard</string>
     <string name="msg_paths_copied">%1$d paths copied to clipboard</string>

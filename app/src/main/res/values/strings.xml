@@ -28,6 +28,7 @@
     <string name="bootstrap_installer_body">Installing bootstrap packages…</string>
     <string name="bootstrap_error_title">Unable to install bootstrap</string>
     <string name="error_filemanager_shortcut_unsupported">This launcher does not support pinned shortcuts</string>
+    <string name="error_file_open_failed">No app can open this file</string>
     <string name="bootstrap_error_body">&TERMUX_APP_NAME; was unable to install the bootstrap packages.</string>
     <string name="bootstrap_error_abort">Abort</string>
     <string name="bootstrap_error_try_again">Try again</string>

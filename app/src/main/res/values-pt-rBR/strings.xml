@@ -28,6 +28,7 @@
     <string name="bootstrap_installer_body">Instalando pacotes de bootstrap…</string>
     <string name="bootstrap_error_title">Não foi possível instalar o bootstrap</string>
     <string name="error_filemanager_shortcut_unsupported">Este launcher não suporta atalhos fixados</string>
+    <string name="error_file_open_failed">Nenhum app pode abrir este arquivo</string>
     <string name="bootstrap_error_body">&TERMUX_APP_NAME; não conseguiu instalar os pacotes de bootstrap.</string>
     <string name="bootstrap_error_abort">Cancelar</string>
     <string name="bootstrap_error_try_again">Tentar novamente</string>

@@ -62,8 +62,30 @@ data class FileManagerUiState(
     val symlinkTargets: Map<String, String?> = emptyMap(),
     val brokenLinks: Set<String> = emptySet(),
     /**
-     * Cache of computed directory sizes (absolute path -> size in bytes),
-     * filled on demand when the details dialog is shown for a folder.
+     * Cached permissions snapshot per properties dialog request (spec 009,
+     * RF-12): read-only display text; unreadable data stays null so the
+     * dialog renders the "—" dash.
      */
-    val folderSizes: Map<String, Long> = emptyMap()
+    val properties: FileProperties? = null,
+    /**
+     * Cached "N folders · M files" content counts requested by the
+     * properties dialog (spec 009, RF-12), computed with the hidden-files
+     * setting in force and never the search filter.
+     */
+    val folderContents: Map<String, ListingCounts.Counts> = emptyMap()
+)
+
+/**
+ * Read-only permissions snapshot for the properties dialog (spec 009,
+ * RF-12): owner/group resolved names (numeric ids as fallback), the mode in
+ * `rwxr-xr-x (644)` form and the SELinux context. Everything is pre-formatted
+ * display text so the dialog only paints.
+ */
+data class FileProperties(
+    val path: String,
+    val owner: String,
+    val group: String,
+    val modeText: String,
+    /** SELinux context, or null when unreadable (the dialog shows a dash). */
+    val selinuxContext: String?
 )

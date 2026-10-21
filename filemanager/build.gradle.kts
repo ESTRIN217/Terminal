@@ -44,6 +44,12 @@ dependencies {
     implementation(project(":termux-shared"))
     implementation(libs.androidx.core)
 
+    // Compressión del item-menu «Comprimir…» (spec 009): delta del catálogo
+    // ya citado en RNF-1 (ambas ya estaban solo en :app; xz es el backend de
+    // TarArchiveOutputStream para `.tar.xz`).
+    implementation(libs.commons.compress)
+    implementation(libs.xz)
+
     // Compose
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
+import com.estrin217.filemanager.FileOperationsHelper
 import com.termux.R
 import com.termux.app.activities.HelpActivity
 import com.termux.app.activities.SettingsComposeActivity
@@ -78,6 +79,7 @@ import com.termux.terminal.compose.TermuxSessionUiModel
 import com.termux.terminal.compose.TermuxViewModel
 import com.termux.terminal.compose.TerminalViewRegistry
 import androidx.activity.enableEdgeToEdge
+import androidx.core.content.FileProvider
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
@@ -295,6 +297,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                         onOpenFileManager = { addFileManagerSession(null) },
                         onNewFileManagerTab = { addFileManagerSession(null) },
                         onCreateFileManagerShortcut = { createFileManagerLauncherShortcut(it) },
+                        onCreateFileShortcut = { createFileLauncherShortcut(it) },
                         onOpenInTerminal = { openTerminalIn(it) },
                         onEditFile = { openFileInEditor(it) },
                         onOpenSettings = {
@@ -387,6 +390,20 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             val path = intent.getStringExtra(TERMUX_ACTIVITY.EXTRA_OPEN_FILE_MANAGER_PATH)
             intent.action = null
             addFileManagerSession(path)
+        } else if (TERMUX_ACTIVITY.ACTION_OPEN_FILE == action) {
+            // File item launcher shortcut (spec 009, RF-11): opens the file
+            // with its Android app; consume the action so a later recreation
+            // (rotation) does not re-process the same intent.
+            val path = intent.getStringExtra(TERMUX_ACTIVITY.EXTRA_OPEN_FILE_PATH)
+            intent.action = null
+            val file = path?.let { File(it) }
+            if (file != null && file.exists()) {
+                openFileWithSystem(file)
+            } else {
+                // Deleted after pinning (or a bad path): plain file manager
+                // tab instead of an error, per spec 009 decision.
+                addFileManagerSession(null)
+            }
         }
     }
 
@@ -429,6 +446,55 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             .setIntent(intent)
             .build()
         ShortcutManagerCompat.requestPinShortcut(this, shortcut, null)
+    }
+
+    /**
+     * Pins a launcher shortcut that opens [file] with its Android app
+     * (spec 009, RF-11); announces when the launcher refuses.
+     *
+     * @param file The file to pin.
+     */
+    private fun createFileLauncherShortcut(file: File) {
+        if (!ShortcutManagerCompat.isRequestPinShortcutSupported(this)) {
+            Toast.makeText(this, R.string.error_filemanager_shortcut_unsupported, Toast.LENGTH_LONG).show()
+            return
+        }
+        val label = file.name.ifBlank { "Root" }
+        val shortcutId = "fmf_" + Integer.toHexString(file.absolutePath.hashCode())
+        val intent = Intent(this, TermuxComposeActivity::class.java)
+            .setAction(TERMUX_ACTIVITY.ACTION_OPEN_FILE)
+            .putExtra(TERMUX_ACTIVITY.EXTRA_OPEN_FILE_PATH, file.absolutePath)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        val shortcut = ShortcutInfoCompat.Builder(this, shortcutId)
+            .setShortLabel(label)
+            .setIcon(IconCompat.createWithResource(this, R.drawable.ic_file))
+            .setIntent(intent)
+            .build()
+        ShortcutManagerCompat.requestPinShortcut(this, shortcut, null)
+    }
+
+    /**
+     * Opens [file] with its Android app through the {@link FileProvider},
+     * the same `ACTION_VIEW` flow the file manager host paints; silent
+     * failure falls back to a toast.
+     *
+     * @param file The host file to open.
+     */
+    private fun openFileWithSystem(file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(
+                this, "$packageName.fileprovider", file
+            )
+            val intent = Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, FileOperationsHelper.getMimeType(file.name))
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(Intent.createChooser(intent, file.name))
+        } catch (e: Exception) {
+            Logger.logStackTraceWithMessage(
+                LOG_TAG, "Failed to open file: " + file.absolutePath, e
+            )
+            Toast.makeText(this, R.string.error_file_open_failed, Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onStop() {

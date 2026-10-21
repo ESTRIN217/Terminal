@@ -983,6 +983,12 @@ public final class TermuxConstants {
             /** Intent {@code String} extra for the open folder path of the {@link TERMUX_ACTIVITY#ACTION_OPEN_FILE_MANAGER} intent. */
             public static final String EXTRA_OPEN_FILE_MANAGER_PATH = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.open_file_manager_path"; // Default: "com.estrin217.terminal.app.open_file_manager_path"
 
+            /** Intent action to open the file at the required {@link TERMUX_ACTIVITY#EXTRA_OPEN_FILE_PATH} with its Android app (file-manager item shortcut, spec 009 RF-11). */
+            public static final String ACTION_OPEN_FILE = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.action.open_file"; // Default: "com.estrin217.terminal.app.action.open_file"
+
+            /** Intent {@code String} extra for the file host path of the {@link TERMUX_ACTIVITY#ACTION_OPEN_FILE} intent (spec 009 RF-11). */
+            public static final String EXTRA_OPEN_FILE_PATH = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.open_file_path"; // Default: "com.estrin217.terminal.app.open_file_path"
+
 
             /** Intent action to make termux app notify user that a crash happened. */
             public static final String ACTION_NOTIFY_APP_CRASH = TermuxConstants.TERMUX_PACKAGE_NAME + ".app.notify_app_crash"; // Default: "com.estrin217.terminal.app.notify_app_crash"

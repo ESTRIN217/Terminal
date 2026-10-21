@@ -50,6 +50,7 @@ import java.io.File
  * @param onEditFile Callback with the file host path to open in a rootfs editor
  * @param onNewFileManagerTab Callback to open an additional file manager tab (RF-10)
  * @param onCreateShortcut Callback to pin a launcher shortcut to the open folder (RF-16)
+ * @param onCreateFileShortcut Callback to pin a launcher shortcut to a file (spec 009, RF-11)
  * @param modifier Modifier to apply
  */
 @Composable
@@ -63,6 +64,7 @@ fun FileManagerSessionHost(
     onActivatePane: () -> Unit = {},
     onNewFileManagerTab: (() -> Unit)? = null,
     onCreateShortcut: ((File) -> Unit)? = null,
+    onCreateFileShortcut: ((File) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -191,6 +193,7 @@ fun FileManagerSessionHost(
         onEditFile = { file -> onEditFile(file.absolutePath) },
         onNewFileManagerTab = onNewFileManagerTab,
         onCreateShortcut = onCreateShortcut,
+        onCreateFileShortcut = onCreateFileShortcut,
         // A secondary file manager pane promotes itself on focus, mirroring the terminal
         // panes: focusable() catches taps on empty areas, and onFocusChanged also fires when
         // a descendant (a list item row) takes focus. Only wired while the pane is secondary.

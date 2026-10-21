@@ -5,9 +5,13 @@ import android.content.Context
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.estrin217.filemanager.ArchiveCreator
 import com.estrin217.filemanager.FileOperationsHelper
 import com.estrin217.filemanager.FileSortOption
 import com.estrin217.filemanager.R
+import com.termux.shared.android.SELinuxUtils
+import com.termux.shared.android.UserUtils
+import com.termux.shared.file.filesystem.FileAttributes
 import com.termux.shared.termux.TermuxConstants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,6 +23,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.util.ArrayDeque
 /**
  * ViewModel for the Compose file manager.
@@ -278,14 +283,23 @@ class FileManagerViewModel(
 
     /** Adds the open folder to the persisted user favorites (RF-6). */
     fun addFavorite() {
-        val dir = currentDir ?: return
+        currentDir?.let { addFavoriteFor(it) }
+    }
+
+    /**
+     * Adds an arbitrary folder to the persisted favorites (spec 009, RF-10):
+     * the item-menu "Add to favorites" entry, whatever the open folder is.
+     *
+     * @param dir Folder the item menu acted on.
+     */
+    fun addFavoriteFor(dir: File) {
         val editor = sharedPrefs().edit()
         editor.putStringSet(KEY_FAVORITES, favoritePaths() + dir.absolutePath)
         editor.apply()
-        _uiState.update {
-            it.copy(
+        _uiState.update { state ->
+            state.copy(
                 favorites = loadFavorites(),
-                isFavorite = true
+                isFavorite = state.currentPath == dir.absolutePath || state.isFavorite
             )
         }
     }
@@ -728,19 +742,59 @@ class FileManagerViewModel(
         FileOperationsHelper.resolveFileForOpen(file)
 
     /**
-     * Computes the size of a folder off the main thread and caches it in
-     * [FileManagerUiState.folderSizes] keyed by absolute path. Files (and
-     * already-cached folders) are a no-op.
+     * Computes the properties snapshot of a file off the main thread (spec
+     * 009, RF-12): lstat of the entry itself (a symlink keeps its own
+     * permissions, RF-13), owner/group resolved via `UserUtils` with the
+     * numeric id as fallback, the mode in `rwxr-xr-x (644)` form and the
+     * SELinux context. Any unreadable piece is null so the dialog renders
+     * the dash; an unreadable entry yields a null snapshot.
      *
-     * @param file The folder to measure.
+     * @param file The entry the properties dialog is showing.
      */
-    fun loadFolderSize(file: File) {
-        if (!file.isDirectory) return
-        if (_uiState.value.folderSizes.containsKey(file.absolutePath)) return
+    fun loadProperties(file: File) {
         viewModelScope.launch(Dispatchers.IO) {
-            val size = FileOperationsHelper.getDirectorySize(file)
+            val snapshot = try {
+                val attrs = FileAttributes.get(file.absolutePath, false)
+                val app = getApplication<Application>()
+                FileProperties(
+                    path = file.absolutePath,
+                    owner = UserUtils.getNameForUid(app, attrs.uid())
+                        ?: attrs.uid().toString(),
+                    group = UserUtils.getNameForUidFromLibcore(attrs.gid())
+                        ?: attrs.gid().toString(),
+                    modeText = PosixModeText.format(attrs.mode(), attrs.permissions()),
+                    selinuxContext = try {
+                        SELinuxUtils.getFileContext(file.absolutePath)
+                    } catch (t: Throwable) {
+                        // Reflection inside the helper can fail on hardened
+                        // builds; the row falls back to the dash.
+                        null
+                    }
+                )
+            } catch (e: IOException) {
+                null
+            }
+            _uiState.update { it.copy(properties = snapshot) }
+        }
+    }
+
+    /**
+     * Computes the "N folders · M files" content counts of a folder off the
+     * main thread and caches them in [FileManagerUiState.folderContents]
+     * (spec 009, RF-12): the visible entries only (hidden filter is the
+     * [FileManagerUiState.showHidden] flag in force; the search filter never
+     * applies here).
+     *
+     * @param file The folder the properties dialog is showing.
+     */
+    fun loadFolderCounts(file: File) {
+        if (!file.isDirectory) return
+        if (_uiState.value.folderContents.containsKey(file.absolutePath)) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val entries = file.listFiles()?.toList() ?: emptyList()
+            val counts = ListingCounts.counts(entries, _uiState.value.showHidden)
             _uiState.update {
-                it.copy(folderSizes = it.folderSizes + (file.absolutePath to size))
+                it.copy(folderContents = it.folderContents + (file.absolutePath to counts))
             }
         }
     }
@@ -761,6 +815,20 @@ class FileManagerViewModel(
     fun notifyShareFailed() {
         _uiState.update {
             it.copy(statusMessage = getApplication<Application>().getString(R.string.msg_share_failed))
+        }
+    }
+
+    /** Posts a "paste failed" status message (spec 009, RF-4). */
+    fun notifyPasteFailed() {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>().getString(R.string.msg_paste_failed))
+        }
+    }
+
+    /** Posts the "no rootfs editor" status message (spec 009, RF-2). */
+    fun notifyNoRootfsEditor() {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>().getString(R.string.msg_no_rootfs_editor))
         }
     }
 
@@ -795,6 +863,34 @@ class FileManagerViewModel(
             selectedFiles(), FileOperationsHelper.ClipboardOperation.CUT
         )
         clearSelection()
+        refresh()
+    }
+
+    /**
+     * Copies a single item to the file-manager clipboard (spec 009, RF-3),
+     * as the item-menu "Copy" entry. Unlike {@link #copySelection}, the
+     * multi-selection state and the selection bar are never touched.
+     *
+     * @param file The entry the item menu acted on.
+     */
+    fun copyItem(file: File) {
+        FileOperationsHelper.setClipboard(
+            listOf(file), FileOperationsHelper.ClipboardOperation.COPY
+        )
+        refresh()
+    }
+
+    /**
+     * Cuts a single item to the file-manager clipboard (spec 009, RF-3), as
+     * the item-menu "Cut" entry. Unlike {@link #cutSelection}, the
+     * multi-selection state and the selection bar are never touched.
+     *
+     * @param file The entry the item menu acted on.
+     */
+    fun cutItem(file: File) {
+        FileOperationsHelper.setClipboard(
+            listOf(file), FileOperationsHelper.ClipboardOperation.CUT
+        )
         refresh()
     }
 
@@ -845,6 +941,18 @@ class FileManagerViewModel(
         return if (FileOperationsHelper.moveFile(file, trashFile)) trashFile else null
     }
 
+    /**
+     * Pastes the clipboard contents into the open folder off the main thread
+     * (spec 009, RF-4). The result follows {@link PastePolicy}: a paste where
+     * nothing moved posts the "failed to paste" message instead of the old
+     * "0 pasted" success, and a cut clipboard is cleared only when at least
+     * one source moved (a copy clipboard is never cleared, so retries stay
+     * valid).
+     *
+     * @param onDone Invoked on the main thread with the count of pasted
+     * entries; not invoked at all on a full failure (the failure reaches the
+     * user through the status message snack bar).
+     */
     fun paste(onDone: (count: Int) -> Unit) {
         if (!FileOperationsHelper.hasClipboard()) return
         val dest = currentDir ?: return
@@ -860,11 +968,91 @@ class FileManagerViewModel(
                 else FileOperationsHelper.copyFile(src, target)
                 if (ok) count++
             }
-            if (isCut) FileOperationsHelper.clearClipboard()
+            val outcome = PastePolicy.outcome(count, sources.size, isCut)
+            if (outcome.clearClipboard) FileOperationsHelper.clearClipboard()
             withContext(Dispatchers.Main) {
+                if (outcome.allFailed) notifyPasteFailed()
+                else if (count > 0) onDone(count)
                 refresh()
-                onDone(count)
             }
+        }
+    }
+
+    /**
+     * Compresses [file] into the open folder off the main thread (spec 009,
+     * RF-7): input is validated through {@link buildCompressionPlan} before
+     * any disk write, an existing destination is refused twice (the plan and
+     * {@link ArchiveCreator#create}, RNF-5), the busy indicator covers the
+     * write and the listing refreshes afterwards. Every outcome posts its
+     * status message.
+     *
+     * @param file The file or folder the item menu acted on.
+     * @param name Raw archive name from the compress dialog.
+     * @param format One of the three dialog formats.
+     * @param password Optional password; honored by `.7z` only.
+     * @param onDone Invoked on the main thread with {@code true} when the
+     * archive was created.
+     */
+    fun compressItem(
+        file: File,
+        name: String,
+        format: ArchiveFormat,
+        password: CharArray?,
+        onDone: (Boolean) -> Unit
+    ) {
+        val dest = currentDir ?: run { onDone(false); return }
+        _uiState.update { it.copy(busy = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val trimmed = name.trim()
+            val exists = File(dest, "$trimmed.${format.extension}").exists()
+            val plan = buildCompressionPlan(dest, name, format, exists)
+            val ok = plan is CompressionPlan.Ready &&
+                ArchiveCreator.create(plan.outputFile, file, format, password)
+            withContext(Dispatchers.Main) {
+                if (ok) {
+                    notifyCompressCreated(plan.outputFile.name)
+                } else {
+                    when (plan) {
+                        is CompressionPlan.Collision -> notifyCompressCollision(plan.outputFile.name)
+                        is CompressionPlan.Invalid -> notifyCompressInvalidName()
+                        is CompressionPlan.Ready -> notifyCompressFailed()
+                    }
+                }
+                refresh()
+                onDone(ok)
+            }
+        }
+    }
+
+    /** Posts the "compressed to <name>" status message (spec 009, RF-7). */
+    fun notifyCompressCreated(archiveName: String) {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>()
+                .getString(R.string.msg_compress_created, archiveName))
+        }
+    }
+
+    /** Posts the "<name> already exists" status message (RF-7, RNF-5). */
+    fun notifyCompressCollision(archiveName: String) {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>()
+                .getString(R.string.msg_compress_collision, archiveName))
+        }
+    }
+
+    /** Posts the "invalid archive name" status message (RF-7). */
+    fun notifyCompressInvalidName() {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>()
+                .getString(R.string.msg_compress_invalid_name))
+        }
+    }
+
+    /** Posts the "compression failed" status message (RF-7). */
+    fun notifyCompressFailed() {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>()
+                .getString(R.string.msg_compress_failed))
         }
     }
 

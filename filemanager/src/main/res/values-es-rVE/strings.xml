@@ -20,6 +20,30 @@
     <string name="action_details">Detalles</string>
     <string name="action_select_all">Seleccionar todo</string>
     <string name="action_undo">Deshacer</string>
+    <string name="action_open_with">Abrir con…</string>
+    <string name="open_with_system">App del sistema</string>
+    <string name="open_with_rootfs">Editor del rootfs</string>
+    <string name="action_compress">Comprimir…</string>
+    <string name="properties_title">Propiedades de %1$s</string>
+    <string name="properties_tab_basic">Básico</string>
+    <string name="properties_tab_permissions">Permisos</string>
+    <string name="properties_name">Nombre</string>
+    <string name="properties_parent">Carpeta superior</string>
+    <string name="properties_type">Tipo</string>
+    <string name="properties_content">Contenido</string>
+    <string name="properties_last_modified">Última modificación</string>
+    <string name="properties_status">Estado</string>
+    <string name="properties_link">Destino del enlace</string>
+    <string name="properties_owner">Propietario</string>
+    <string name="properties_group">Grupo</string>
+    <string name="properties_mode">Modo</string>
+    <string name="properties_selinux">Contexto de SELinux</string>
+    <string name="properties_unavailable">—</string>
+    <string name="compress_name_label">Nombre del archivo</string>
+    <string name="compress_format_zip">.zip</string>
+    <string name="compress_format_tarxz">.tar.xz</string>
+    <string name="compress_format_7z">.7z (admite contraseña)</string>
+    <string name="compress_password_label">Contraseña (opcional)</string>
     <string name="action_go_back">Atrás</string>
     <string name="action_go_forward">Adelante</string>
     <string name="action_cancel">Cancelar</string>
@@ -27,6 +51,12 @@
 
     <!-- File Manager Messages -->
     <string name="msg_paste_success">%1$d elemento(s) pegado(s)</string>
+    <string name="msg_paste_failed">Error al pegar</string>
+    <string name="msg_no_rootfs_editor">No hay ningún editor disponible en el rootfs</string>
+    <string name="msg_compress_created">Comprimido en %1$s</string>
+    <string name="msg_compress_failed">Error al comprimir</string>
+    <string name="msg_compress_collision">%1$s ya existe</string>
+    <string name="msg_compress_invalid_name">Nombre de archivo no válido</string>
     <string name="msg_error_rename">Error al renombrar</string>
     <string name="msg_path_copied">Ruta copiada al portapapeles</string>
     <string name="msg_paths_copied">%1$d rutas copiadas al portapapeles</string>

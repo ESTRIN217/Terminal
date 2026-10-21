@@ -85,6 +85,7 @@ private const val LOG_TAG = "TermuxMainScreen"
  * @param onOpenFileManager Callback to open the file manager
  * @param onNewFileManagerTab Callback to open an additional file manager tab (spec 008, RF-10)
  * @param onCreateFileManagerShortcut Callback to pin a launcher shortcut to a folder (RF-16)
+ * @param onCreateFileShortcut Callback to pin a launcher shortcut to a file (spec 009, RF-11)
  * @param onOpenInTerminal Callback to open a terminal in a directory (file manager panes)
  * @param onEditFile Callback to open a file in a rootfs editor (file manager panes)
  * @param onOpenSettings Callback to open settings
@@ -112,6 +113,7 @@ fun TermuxMainScreen(
     onOpenFileManager: () -> Unit,
     onNewFileManagerTab: () -> Unit,
     onCreateFileManagerShortcut: (File) -> Unit,
+    onCreateFileShortcut: (File) -> Unit,
     onOpenInTerminal: (String) -> Unit,
     onEditFile: (String) -> Unit,
     onOpenSettings: () -> Unit,
@@ -315,6 +317,7 @@ fun TermuxMainScreen(
                                         onEditFile = onEditFile,
                                         onNewFileManagerTab = onNewFileManagerTab,
                                         onCreateFileManagerShortcut = onCreateFileManagerShortcut,
+                                        onCreateFileShortcut = onCreateFileShortcut,
                                         onShowMoreMenu = onShowMoreMenu,
                                         onFontSizeStep = viewModel::setFontSize,
                                         modifier = Modifier
@@ -346,6 +349,7 @@ fun TermuxMainScreen(
                                         onEditFile = onEditFile,
                                         onNewFileManagerTab = onNewFileManagerTab,
                                         onCreateFileManagerShortcut = onCreateFileManagerShortcut,
+                                        onCreateFileShortcut = onCreateFileShortcut,
                                         onShowMoreMenu = onShowMoreMenu,
                                         onFontSizeStep = viewModel::setFontSize,
                                         modifier = Modifier
@@ -373,6 +377,7 @@ fun TermuxMainScreen(
                                     onEditFile = onEditFile,
                                     onNewFileManagerTab = onNewFileManagerTab,
                                     onCreateFileManagerShortcut = onCreateFileManagerShortcut,
+                                    onCreateFileShortcut = onCreateFileShortcut,
                                     onShowMoreMenu = onShowMoreMenu,
                                     onFontSizeStep = viewModel::setFontSize,
                                     modifier = Modifier.fillMaxSize()
@@ -549,6 +554,7 @@ private fun handleExtraKeysSpecialKey(
  * @param onEditFile Callback to open a file in a rootfs editor (file manager panes)
  * @param onNewFileManagerTab Callback to open an additional file manager tab (spec 008, RF-10)
  * @param onCreateFileManagerShortcut Callback to pin a launcher shortcut to a folder (RF-16)
+ * @param onCreateFileShortcut Callback to pin a launcher shortcut to a file (spec 009, RF-11)
  * @param onShowMoreMenu Callback to open the terminal "More" sheet (selection toolbar)
  * @param onFontSizeStep Callback with a font size in pixels (pinch-zoom target, already clamped)
  * @param modifier Modifier to apply to the pane
@@ -571,6 +577,7 @@ private fun SessionPane(
     onEditFile: (String) -> Unit,
     onNewFileManagerTab: () -> Unit,
     onCreateFileManagerShortcut: (File) -> Unit,
+    onCreateFileShortcut: (File) -> Unit,
     onShowMoreMenu: () -> Unit,
     onFontSizeStep: (Float) -> Unit,
     modifier: Modifier = Modifier
@@ -722,6 +729,7 @@ private fun SessionPane(
             onActivatePane = { onPaneFocused(model.id) },
             onNewFileManagerTab = onNewFileManagerTab,
             onCreateShortcut = onCreateFileManagerShortcut,
+            onCreateFileShortcut = onCreateFileShortcut,
             modifier = modifier
         )
     }
