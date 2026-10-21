@@ -60,7 +60,9 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
   bump minor: 2.0.0→2.1.0. `./gradlew test` verde a fecha de hoy. **Hecho:
   `versionCode 121` + `versionName 2.1.0` en app/build.gradle.kts y entrada
   `## [2.1.0] — 2026-10-21` en CHANGELOG.md** (`:app:versionName` imprime
-  2.1.0). Todavía sin commit. Pendiente para el release: commit, push de
+  2.1.0). Commits en `release/2.0` sin push: cierre «Pegar» por diseño
+  (`814a491f`), docs 2.1.0 (`e00ebef6`), bump+changelog (`3e945a5e`).
+  Pendiente para el release: push de
   `release/2.0` (34+ commits sin publicar), release build+tag en master,
   update-site.py. NOTA: la fecha del changelog es la del bump; si el corte
   tarda, ajustarla a la fecha real del tag.
