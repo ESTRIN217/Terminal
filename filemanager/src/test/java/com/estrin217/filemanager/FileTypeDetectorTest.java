@@ -302,6 +302,36 @@ public class FileTypeDetectorTest {
         Assert.assertEquals(FileTypeDetector.IconVariant.MARKDOWN, FileTypeDetector.iconVariantFor("audit.python.md"));
     }
 
+    // -- RF-18: Gradle elephant (rev 8) ------------------------------------------
+
+    @Test
+    public void testGradleExtensionIsGradleVariant() {
+        Assert.assertEquals(FileTypeDetector.IconVariant.GRADLE, FileTypeDetector.iconVariantFor("build.gradle"));
+        Assert.assertEquals(FileTypeDetector.IconVariant.GRADLE, FileTypeDetector.iconVariantFor("settings.GRADLE"));
+        Assert.assertEquals(FileTypeDetector.IconVariant.GRADLE, FileTypeDetector.iconVariantFor("my.project.gradle"));
+        // Kotlin DSL: the ".gradle.kts" name suffix wins over the plain kts variant.
+        Assert.assertEquals(FileTypeDetector.IconVariant.GRADLE, FileTypeDetector.iconVariantFor("build.gradle.kts"));
+        Assert.assertEquals(FileTypeDetector.IconVariant.GRADLE, FileTypeDetector.iconVariantFor("SETTINGS.GRADLE.KTS"));
+        // Build scripts have no family (like script.kts); the variant carries the icon alone.
+        Assert.assertNull(FileTypeDetector.familyFor("build.gradle"));
+        Assert.assertNull(FileTypeDetector.familyFor("build.gradle.kts"));
+    }
+
+    @Test
+    public void testGradleLookalikesStayNoneOrKts() {
+        // Lookalikes keep the generic icon (exact extensions only).
+        Assert.assertEquals(FileTypeDetector.IconVariant.NONE, FileTypeDetector.iconVariantFor("a.gradle.bak"));
+        Assert.assertEquals(FileTypeDetector.IconVariant.NONE, FileTypeDetector.iconVariantFor("plugin.gradlew"));
+        // Hidden file and dotless names never reach the variant.
+        Assert.assertEquals(FileTypeDetector.IconVariant.NONE, FileTypeDetector.iconVariantFor(".gradle"));
+        Assert.assertEquals(FileTypeDetector.IconVariant.NONE, FileTypeDetector.iconVariantFor("gradle"));
+        // Plain Kotlin DSL scripts stay the Kotlin variant; the suffix is exact.
+        Assert.assertEquals(FileTypeDetector.IconVariant.KT, FileTypeDetector.iconVariantFor("script.kts"));
+        Assert.assertEquals(FileTypeDetector.IconVariant.KT, FileTypeDetector.iconVariantFor("Util.KTS"));
+        // gradle.properties is a property file: it keeps its settings gear.
+        Assert.assertEquals(FileTypeDetector.IconVariant.SETTINGS, FileTypeDetector.iconVariantFor("gradle.properties"));
+    }
+
     @Test
     public void testNoVariantFallsBackToFamily() {
         Assert.assertEquals(FileTypeDetector.IconVariant.NONE, FileTypeDetector.iconVariantFor("app.ts"));

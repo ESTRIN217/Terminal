@@ -97,9 +97,11 @@ internal val FileType.tint: Color
 /**
  * UI-only mapping from an [IconVariant] (spec 006 rev 2) to the more specific
  * Material icon painted instead of the family icon. The color still comes
- * from the family ([FileType.tint], RF-12) except GIT (RF-13, brand tint);
- * README uses the outlined info so it does not look identical to the row's
- * filled info IconButton.
+ * from the family ([FileType.tint], RF-12) except GIT (RF-13), JSON (RF-14),
+ * KT (RF-15), JAVA (RF-16) and GRADLE (RF-18), which carry their own brand
+ * tint, and PYTHON (RF-17), which bakes its colors in the glyph; README uses
+ * the outlined info so it does not look identical to the row's filled info
+ * IconButton.
  *
  * @return the refined icon, or `null` when the family icon must be used
  */
@@ -116,6 +118,7 @@ internal val IconVariant.icon: ImageVector?
         IconVariant.KT -> KotlinGlyph
         IconVariant.JAVA -> JavaCoffeeGlyph
         IconVariant.PY -> PythonGlyph
+        IconVariant.GRADLE -> GradleGlyph
     }
 
 /** Official git brand color; printed as the GIT variant's own tint (RF-13). */
@@ -132,12 +135,18 @@ private val KotlinTint = Color(0xFF7F52FF)
 /** Java red: brand color of the classic Duke cup logo (`#EA2D2E`, RF-16, rev 6). */
 private val JavaTint = Color(0xFFEA2D2E)
 
+/** Gradle blue own tint (RF-18, rev 8): the provided elephant drawable came with
+ * a black fill and the user asked for blue, so Material Light Blue 800 is used:
+ * readable on both themes and clearly bluer than the family blues (ImageTint
+ * `#1565C0`, TextTint indigo `#3F51B5`). */
+private val GradleTint = Color(0xFF0288D1)
+
 /**
  * UI-only mapping from an [IconVariant] to its own tint, or `null` when the
  * tint must come from the family ([FileType.tint], RF-12). GIT and JSON and KT
- * and JAVA have an own brand color (RF-13 / RF-14 / RF-15 / RF-16); PYTHON
- * returns [Color.Unspecified] so the Icon paints its glyph without a
- * ColorFilter and its two baked brand colors survive (RF-17).
+ * and JAVA and GRADLE have an own brand color (RF-13 / RF-14 / RF-15 / RF-16 /
+ * RF-18); PYTHON returns [Color.Unspecified] so the Icon paints its glyph
+ * without a ColorFilter and its two baked brand colors survive (RF-17).
  *
  * @return the variant tint, `Unspecified` for multicolor glyphs or `null` to
  * fall back to the family tint
@@ -149,5 +158,6 @@ internal val IconVariant.tint: Color?
         IconVariant.KT -> KotlinTint
         IconVariant.JAVA -> JavaTint
         IconVariant.PY -> Color.Unspecified
+        IconVariant.GRADLE -> GradleTint
         else -> null
     }

@@ -131,13 +131,23 @@ public final class FileTypeDetector {
         JAVA,
         /** Python sources (rev 7, RF-17): the two-tone official Python glyph
          * (blue and yellow baked in; the variant kills the tint). */
-        PY
+        PY,
+        /** Gradle build scripts, Groovy or Kotlin DSL (rev 8, RF-18): the
+         * official gradle elephant glyph painted in brand blue. Like {@link #KT},
+         * the files carry no family; the variant is all they have. */
+        GRADLE
     }
 
     /**
      * Maps a file name to its icon variant, or {@code NONE} when the file just
      * uses its family icon (RF-12). Name-based variants win over
      * extension-based ones, and both are case-insensitive.
+     *
+     * <p>Precedence: {@code readme.md} &gt; {@code changelog.md} &gt; the
+     * {@code .gradle.kts} name suffix (rev 8, RF-18: a Kotlin DSL build script
+     * is a Gradle file before it is a Kotlin one) &gt; the extension variants
+     * ({@code md}, {@code json}, {@code properties}, {@code js}, {@code kt},
+     * {@code kts}, {@code java}, {@code py}, {@code gradle}).
      *
      * @param name file name (may be null)
      * @return the {@link IconVariant}, or {@link IconVariant#NONE}
@@ -159,6 +169,9 @@ public final class FileTypeDetector {
             if (lower.equals("changelog.md") || lower.equals("changelog.markdown")) {
                 return IconVariant.HISTORY;
             }
+            if (lower.endsWith(".gradle.kts")) {
+                return IconVariant.GRADLE;
+            }
         }
         switch (getFileExtension(name)) {
             case "md": case "markdown":
@@ -175,6 +188,8 @@ public final class FileTypeDetector {
                 return IconVariant.JAVA;
             case "py":
                 return IconVariant.PY;
+            case "gradle":
+                return IconVariant.GRADLE;
             default:
                 return IconVariant.NONE;
         }

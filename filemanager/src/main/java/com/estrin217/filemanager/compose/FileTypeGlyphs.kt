@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
+import androidx.compose.ui.graphics.vector.group
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
@@ -23,6 +24,13 @@ import androidx.compose.ui.unit.dp
  * Rev 3 (RF-13) adds the official git glyph, vendored from the vector drawable
  * provided by the user (viewport 78x78, single path, brand color #F03C2E is
  * applied by the caller as the variant tint instead of the path fill).
+ *
+ * Rev 8 (RF-18) adds the official gradle elephant glyph, also vendored from a
+ * user-provided drawable (viewport 341.71x250, single path). Its source fill
+ * was black and the user asked for blue, so the blue is applied by the caller
+ * as the variant tint (RF-13 pattern) instead of the path fill; the wide
+ * viewport is square-padded with a group translation so the mark is not
+ * stretched in the square icon boxes.
  *
  * Tinting works like any vector icon: the painted color comes from the
  * family tint (RF-12), so the SolidColor below is the icon's own black
@@ -282,6 +290,10 @@ private object GlyphCache {
     /** Cached two-tone Python glyph (rev 7). */
     @Volatile
     var python: ImageVector? = null
+
+    /** Cached gradle elephant glyph (rev 8). */
+    @Volatile
+    var gradle: ImageVector? = null
 }
 
 /** Official git logo path (the user-provided drawable, verbatim `pathData`). */
@@ -510,4 +522,53 @@ internal val KotlinGlyph: ImageVector
                 }
                 .build()
         return GlyphCache.kotlin!!
+    }
+
+/** Official gradle elephant path (the user-provided drawable rev 8, `pathData`
+ * verbatim from the attached XML). */
+private const val GRADLE_PATH_DATA =
+    "M322.77 15.82c-20.6-20.59-53.83-21.15-75.11-1.26-1.02 0.94-1.61 2.27-1.61 3.66-0.03 1.4 0.51 2.74 1.5 3.74l6.81 6.8c1.82 1.81 4.68 2.01 6.73 0.47 5.34-4.02 11.85-6.19 18.54-6.17 17.11 0 30.98 13.85 30.98 30.94 0 8.2-3.26 16.06-9.05 21.86-42.79 42.98-100.23-77.1-230.18-15.33-8.83 4.1-12.67 14.57-8.57 23.4 0.21 0.45 0.44 0.9 0.69 1.34l22.28 38.49c4.84 8.33 15.47 11.26 23.9 6.57l0.55-0.31-0.43 0.31 9.88-5.54c11.02-6.82 21.44-14.57 31.14-23.16 1.97-1.84 5-1.94 7.09-0.24 2.17 1.77 2.5 4.96 0.73 7.14-0.22 0.27-0.46 0.51-0.73 0.73-10.12 9.1-21.01 17.31-32.56 24.53l-0.35 0.2-9.88 5.5c-4.17 2.36-8.87 3.59-13.66 3.58-10.1 0.02-19.44-5.32-24.53-14.04L55.83 92.7C15.35 121.23-9.21 176.24 3.97 245.83c0.47 2.43 2.6 4.18 5.08 4.17h23.97c2.66 0.1 4.95-1.85 5.28-4.48 2.51-19.25 20.17-32.82 39.45-30.31 15.83 2.06 28.29 14.5 30.35 30.31 0.31 2.53 2.45 4.44 5 4.48h23.38c2.59 0 4.78-1.92 5.12-4.48 2.43-19.24 20.01-32.87 39.27-30.45 15.93 2 28.48 14.54 30.49 30.45 0.32 2.56 2.5 4.48 5.08 4.48h23.11c2.79 0 5.07-2.24 5.12-5.03 0.55-32.56 9.33-69.95 34.41-88.66 86.57-64.8 63.78-120.35 43.7-140.49Zm-88.45 98.02v-0.04l-16.54-8.3c-0.02-5.73 4.61-10.4 10.35-10.42 5.74-0.02 10.41 4.61 10.43 10.34 0.01 3.32-1.57 6.45-4.25 8.41Z"
+
+/**
+ * Official gradle elephant glyph, vendored from the drawable attached in rev 8
+ * (RF-18). The source viewport is 341.71x250; it is square-padded to
+ * 341.71x341.71 with a group translationY of (341.71 - 250) / 2 so the wide
+ * elephant is centered (not stretched) in the square icon boxes of the list
+ * rows (28.dp) and grid tiles (44.dp). The drawable's fill is black and the
+ * user asked for blue, so the painted color comes from the caller's brand
+ * tint (see GradleTint), like the git glyph.
+ *
+ * @return the shared cached vector (341.71x341.71 viewport)
+ */
+internal val GradleGlyph: ImageVector
+    get() {
+        if (GlyphCache.gradle != null) {
+            return GlyphCache.gradle!!
+        }
+        GlyphCache.gradle =
+            ImageVector.Builder(
+                name = "gradle",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 341.71f,
+                viewportHeight = 341.71f,
+            )
+                .apply {
+                    group(translationY = 45.855f) {
+                        addPath(
+                            pathData = addPathNodes(GRADLE_PATH_DATA),
+                            fill = SolidColor(Color.Black),
+                            fillAlpha = 1f,
+                            stroke = null,
+                            strokeAlpha = 1f,
+                            strokeLineWidth = 1f,
+                            strokeLineCap = StrokeCap.Butt,
+                            strokeLineJoin = StrokeJoin.Bevel,
+                            strokeLineMiter = 1f,
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }
+                }
+                .build()
+        return GlyphCache.gradle!!
     }
