@@ -1,7 +1,9 @@
 # Spec 010 — htop con estadísticas de CPU reales en `/proc/stat` bloqueado
 
-Estado: **aprobada** (2026-10-21; dudas cerradas: alcance genérico, per-core
-uniforme, cadencia 1 s — ver Decisiones cerradas)
+Estado: **cerrada** (2026-10-21; T1–T7 implementadas y validadas en
+dispositivo — htop arranca por la vía del overlay, snapshot con reparto
+uniforme verificado (`cat /proc/stat`), contadores cpu acumulativos tras el
+fix de la validación, `./gradlew test` completo verde)
 
 ## Contexto y objetivo
 

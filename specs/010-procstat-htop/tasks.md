@@ -22,7 +22,13 @@
     devuelve el snapshot («cpu 84 0 0 732 …»), y `htop` arranca sin errores
     — verificado por el mantenedor el 2026-10-21; no hizo falta reordenar.
 
-- [ ] **T6. Validación en dispositivo (mantenedor).** RF-5, RF-9, NFR-2.
+- [x] **T6. Validación en dispositivo (mantenedor).** RF-5, RF-9, NFR-2.
+  - Hecho cuando (2026-10-21, dispositivo stock `enforcing` sin root): htop
+    arranca y `cat /proc/stat` dentro del invitado devuelve el snapshot con
+    reparto uniforme cuadrado (`31 = 4×7+3`; idle `793 = 100+99×7`), suma
+    `cpuN == cpu`, `btime` coherente con la fecha; tras el fix de contadores
+    acumulativos (`d110f4d6`) htop ve lecturas monótonas y los medidores
+    responden; Mem y carga verificados por el mantenedor.
   - Hecho cuando: htop arranca sin errores; con carga (`while true; do :; done`) la CPU sube, tras Ctrl-C baja; `MemTotal` coherente (±0.5 GB); sin sesiones activas el fichero de snapshot queda congelado (mtime); con `/proc/stat` legible (root/permissive si disponible) usa la vía directa y no escribe snapshot actualizado.
 
 - [x] **T7. Documentación de la limitación resuelta.** RF-8.

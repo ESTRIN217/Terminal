@@ -2,22 +2,25 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-- **Rama `3.0` creada** (2026-10-21, desde master). **Spec 010 casi cerrada**:
-  htop/proc-stat — overlay en proot con snapshot vivo (carga propia
-  `/proc/<pid>/stat`, SystemClock→btime, MemoryInfo→RAM, loadavg si legible;
-  nada de muestras fijas tipo Termux; per-core reparto uniforme; cadencia 1 s).
-  `specs/010-procstat-htop/` T1–T5+T7 hechas (tests verdes, docs actualizadas);
-  **T5 en dispositivo: `head -c 32 /proc/stat` devuelve el snapshot y htop
-  arranca (2026-10-21)**; falta T6 (checklist completo de dispositivo: barra
-  CPU sube/baja, MemTotal ±0.5 GB, mtime congelado sin sesiones, vía directa).
-  Piezas: `ProcStatOverlayLibrary` (pura) + `ProcStatOverlaySampler`
-  (glue Android) + overload `buildProotCommand(overlayBinds)` + constantes
-  `DEBIAN_PROC_OVERLAY_*`. Fix en dispositivo: contadores de cpu del snapshot
-  DEBEN ser acumulativos/monótonos (htop difiere lecturas; los deltas
-  por-tick hacían negativos sus %) — corregido y testeado (`/proc/stat` no es
-  status por tick, es acumulado histórico). Al cerrar: estado del spec.md,
-  memoria, y pendiente de release 3.0: `public/index.html` aún describe
-  2.1.0 (ajustar junto al release).
+## Estado actual
+- **Rama `3.0` creada** (2026-10-21, desde master). **Spec 010 CERRADA**
+  (2026-10-21): htop/proc-stat resuelto sin root — overlay en proot (binds
+  `-b <snapshot>:<fichero>` tras `-b /proc`; el específico gana, verificado en
+  dispositivo) con snapshot vivo a 1 s (carga propia por deltas de
+  `/proc/<pid>/stat`; SystemClock→btime; MemoryInfo→RAM; loadavg real o
+  estados R/D propios sin datos, escritura atómica temp+rename; sin datos
+  fijos tipo Termux; per-core uniforme; vía directa intacta y sin snapshot
+  si nada está bloqueado; muestreo para al quedar 0 sesiones). Piezas:
+  `ProcStatOverlayLibrary` (pura) + `ProcStatOverlaySampler` (glue Android,
+  contador de sesiones en `TermuxService`) + overload
+  `buildProotCommand(overlayBinds)` + constantes `DEBIAN_PROC_OVERLAY_*`.
+  T1–T7 hechas; `./gradlew test` verde; docs RF-8 actualizadas (README, plan
+  §7, wiki/limitaciones, docs/en); T5/T6 en dispositivo (htop arranca,
+  reparto cuadrado verificado). **Learning clave: los contadores del
+  snapshot DEBEN ser acumulativos/monótonos (htop difiere lecturas
+  consecutivas; deltas por-tick → % negativos/parpadeo)**. Pendiente al
+  release 3.0: `public/index.html` aún describe 2.1.0 (texto estático de
+  límite /proc/stat a actualizar junto al release) y entrada en CHANGELOG.
 - **Terminal 2.1.0 PUBLICADA** (2026-10-21): tag `v2.1.0` en master
   (`e0eb3c30` merge de release/2.0 + `a1d5b574` sitio). APK universal firmado
   subido + sha256 (asset `terminal_2.1.0_sha256sums`, hash 1f15a173…); CI
