@@ -411,4 +411,32 @@
     <string name="log_level_debug">Debug</string>
     <string name="log_level_verbose">Verbose</string>
 
+    <!-- GPU status panel (Spec 011, RF-2/RF-3/RF-5/RF-6). The keys map the
+         GpuDetectionLibrary.STATE_KEY_* / REASON_* constants. -->
+    <string name="gpu_section_title">GPU status</string>
+    <string name="gpu_state_evaluating">Consulting the GPU state…</string>
+    <string name="gpu_state_adreno_kgsl">GPU acceleration available (via KGSL)</string>
+    <string name="gpu_state_adreno_kgsl_model">GPU acceleration available (via KGSL): %1$s</string>
+    <string name="gpu_state_adreno_other">Adreno GPU without a visible KGSL device: no GPU acceleration available without root; llvmpipe (CPU) will keep being used</string>
+    <string name="gpu_state_mali">Mali GPU: no GPU acceleration available without root; llvmpipe (CPU) will keep being used</string>
+    <string name="gpu_state_powervr">PowerVR GPU: no GPU acceleration available without root; llvmpipe (CPU) will keep being used</string>
+    <string name="gpu_state_unknown">GPU could not be identified: no GPU acceleration available without root; llvmpipe (CPU) will keep being used</string>
+    <string name="gpu_reason_rootfs_not_installed">The Debian rootfs is not installed</string>
+    <string name="gpu_reason_mesa_version_mismatch">The Mesa version of the guest does not match the expected one</string>
+    <string name="gpu_reason_family_unsupported">This GPU family does not support the KGSL route</string>
+    <string name="gpu_reason_no_gpu_data">No readable GPU information on this device</string>
+    <string name="gpu_reason_unrecognized_gpu">The reported GPU is not recognized</string>
+    <string name="gpu_solution_active">GPU acceleration is currently active</string>
+    <string name="gpu_action_running">GPU operation in progress…</string>
+    <string name="gpu_install_button">Install GPU acceleration</string>
+    <string name="gpu_uninstall_button">Uninstall GPU acceleration</string>
+
+    <!-- llvmpipe multithreading (Spec 012) -->
+    <string name="llvmpipe_threads_title">llvmpipe threads</string>
+    <string name="llvmpipe_threads_enabled_title">Enable multithreading</string>
+    <string name="llvmpipe_threads_subtitle">Applies to upcoming sessions</string>
+    <string name="llvmpipe_threads_adreno_active">Does not apply: GPU acceleration is active</string>
+    <string name="llvmpipe_threads_count_title">Thread count</string>
+    <string name="llvmpipe_threads_count_summary">%1$d threads (effective: %2$d on %3$d cores)</string>
+
 </resources>

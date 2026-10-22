@@ -98,6 +98,71 @@
                         <code>htop</code> arranca normal.
                     </p>
 
+                    <h2>Gráficos GPU: llvmpipe por defecto (y cuándo se acelera)</h2>
+                    <p>
+                        Dentro de la sesión Debian, <code>glxinfo</code> y <code>vulkaninfo</code>
+                        reportan por defecto el renderizador por CPU de Mesa:
+                        <strong>llvmpipe</strong> (y <strong>lavapipe</strong> para Vulkan). No es
+                        un bug: es el máximo alcanzable sin root en la mayoría de móviles. Debian
+                        compila sus drivers de mesa contra el kernel DRM (<code>/dev/dri</code>),
+                        que Android no expone a las apps.
+                    </p>
+                    <p>
+                        La sección <strong>«Estado GPU»</strong> de Ajustes dice qué situación
+                        tiene tu dispositivo:
+                    </p>
+                    <ul>
+                        <li>
+                            <strong>Adreno (Qualcomm):</strong> existe una vía real sin root — el
+                            backend <code>kgsl</code> de los drivers libres
+                            <code>freedreno/turnip</code> habla con el nodo
+                            <code>/dev/kgsl-3d0</code> (spec&nbsp;011). Cuando la versión de mesa del
+                            invitado coincide con la esperada, Ajustes ofrece «Instalar aceleración
+                            GPU»: seis <code>.deb</code> de mesa recompilados con KGSL, verificados
+                            por SHA-256, instalados con <code>apt install --reinstall</code> dentro
+                            del invitado, con holds y desinstalación limpia hacia el mirror Debian.
+                            Referencia externa:
+                            <a href="https://github.com/lfdevs/mesa-for-android-container">lfdevs/mesa-for-android-container</a>.
+                        </li>
+                        <li>
+                            <strong>Mali / PowerVR (MediaTek, Exynos…):</strong> sin vía real a la
+                            GPU sin root (los drivers libres necesitan módulos kernel DRM que el
+                            kernel Android no trae, y <code>libhybris</code> no está en Debian 13).
+                            El panel lo dice en claro: llvmpipe sigue en uso.
+                        </li>
+                    </ul>
+                    <p>
+                        Para los casos por CPU (spec&nbsp;012), el rasterizador de llvmpipe corre
+                        <strong>multihilo</strong> (<code>LP_NUM_THREADS</code>,
+                        <code>GALLIUM_NUM_THREADS</code>): usa los núcleos libres en vez de uno
+                        solo. En Ajustes → <strong>«Hilos de llvmpipe»</strong> viene activado
+                        por defecto con N=8; el slider permite elegir N entre 1 y 16. El valor
+                        efectivo en el invitado es <code>min(núcleos, N)</code> y ambas variables
+                        reciben ese mismo número.
+                    </p>
+                    <p>
+                        Para volver al entorno sin estas variables, desactiva
+                        <strong>«Activar multihilo»</strong> en ese panel. El cambio se aplica a
+                        las sesiones nuevas; las ya abiertas conservan el entorno con el que
+                        arrancaron. Si la aceleración Adreno/KGSL está activa, llvmpipe no usa
+                        estos ajustes.
+                    </p>
+                    <p>
+                        Validación en dispositivo (2026-10-22): Infinix X6525, Unisoc T606,
+                        Mali T606, 8 núcleos, Debian 13. En una sesión nueva con la opción activa,
+                        <code>echo</code> mostró <code>LP=8 GALLIUM=8 CORES=8</code>; al apagarla,
+                        mostró <code>LP= GALLIUM= CORES=8</code>. <code>htop 3.4.1</code> arrancó
+                        y mostró los 8 CPU; no se observó regresión del overlay de la spec&nbsp;010.
+                    </p>
+                    <p>
+                        Benchmark: se intentó <code>glmark2-es2 --off-screen</code>, pero el
+                        ejecutable no está instalado (<code>bash: glmark2-es2: orden no encontrada</code>).
+                        La caché local de paquetes Debian tampoco ofreció un proveedor instalable
+                        para <code>glmark2-es2</code>; no se obtuvo score y no se afirma una mejora
+                        de rendimiento. Por tanto, la validación medida disponible es la inyección
+                        de variables y la ejecución correcta de <code>htop</code>.
+                    </p>
+
                     <h2>Solo AArch64</h2>
                     <p>
                         El binario <code>proot</code> embebido está compilado y preparado para

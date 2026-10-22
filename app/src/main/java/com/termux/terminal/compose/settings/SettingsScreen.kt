@@ -2,6 +2,7 @@ package com.termux.terminal.compose.settings
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -26,9 +27,12 @@ import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -37,8 +41,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.termux.R
 import com.termux.shared.logger.Logger
+import com.termux.shared.termux.proot.GpuDetectionLibrary
+import com.termux.shared.termux.proot.LlvmpipeThreadsLibrary
 import com.termux.terminal.compose.SettingsCardGroup
 import com.termux.terminal.compose.SettingsDialogTile
 import com.termux.terminal.compose.SettingsListTile
@@ -309,6 +317,160 @@ fun SettingsScreen(
                     }
                 )
             }
+
+            // GPU status panel (spec 011): always visible, honest per family.
+            SettingsSectionTitle(title = stringResource(R.string.gpu_section_title))
+            SettingsCardGroup {
+                GpuStatusPanel(state = state, viewModel = viewModel)
+            }
+            SettingsSectionTitle(title = stringResource(R.string.llvmpipe_threads_title))
+            SettingsCardGroup {
+                SettingsSwitchTile(
+                    title = stringResource(R.string.llvmpipe_threads_enabled_title),
+                    subtitle = stringResource(R.string.llvmpipe_threads_subtitle),
+                    icon = Icons.Default.Tune,
+                    checked = state.llvmpipeThreadsEnabled,
+                    onCheckedChange = viewModel::setLlvmpipeThreadsEnabled
+                )
+                val configuredThreads = state.llvmpipeThreadsCount
+                    .coerceIn(1, LlvmpipeThreadsLibrary.MAX_THREADS)
+                val hostCores = state.hostCores.coerceIn(1, LlvmpipeThreadsLibrary.MAX_CORES)
+                val effectiveThreads = LlvmpipeSettingsPolicy.computeEffectiveThreads(
+                    hostCores,
+                    configuredThreads
+                )
+                SettingsSliderTile(
+                    title = stringResource(R.string.llvmpipe_threads_count_title),
+                    subtitle = stringResource(
+                        R.string.llvmpipe_threads_count_summary,
+                        configuredThreads,
+                        effectiveThreads,
+                        hostCores
+                    ),
+                    icon = Icons.Default.Tune,
+                    value = configuredThreads.toFloat(),
+                    valueRange = 1f..LlvmpipeThreadsLibrary.MAX_THREADS.toFloat(),
+                    steps = LlvmpipeThreadsLibrary.MAX_THREADS - 2,
+                    valueLabel = configuredThreads.toString(),
+                    onValueChangeFinished = {
+                        viewModel.setLlvmpipeThreadsCount(it.toInt())
+                    }
+                )
+                if (state.isGpuSolutionActive) {
+                    Text(
+                        text = stringResource(R.string.llvmpipe_threads_adreno_active),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                    )
+                }
+            }
         }
+    }
+}
+
+/**
+ * GPU status panel (spec 011, RF-2, RF-6): the honest state line of the
+ * detected family, the only-info motive when the panel is not actionable, the
+ * «currently active» marker when a revert (uninstall) is offered, the progress
+ * bar while the install/uninstall runs, and the Install/Uninstall buttons ONLY
+ * when the action gate offers exactly that action (the buttons are absent, not
+ * disabled, in only-information mode).
+ */
+@Composable
+private fun GpuStatusPanel(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
+        Text(
+            text = gpuStateText(stateKey = state.gpuStatusLine, model = state.gpuModel),
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        if (state.gpuReasonKey != null) {
+            Text(
+                text = gpuReasonText(state.gpuReasonKey),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+        if (state.gpuActionType == GpuPanelAction.UNINSTALL) {
+            Text(
+                text = stringResource(R.string.gpu_solution_active),
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+        if (state.gpuBusy) {
+            Text(
+                text = stringResource(R.string.gpu_action_running),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+            )
+        }
+        val buttonLabel = when (state.gpuActionType) {
+            GpuPanelAction.INSTALL -> stringResource(R.string.gpu_install_button)
+            GpuPanelAction.UNINSTALL -> stringResource(R.string.gpu_uninstall_button)
+            else -> null
+        }
+        if (buttonLabel != null) {
+            Button(
+                enabled = !state.gpuBusy,
+                onClick = {
+                    if (state.gpuActionType == GpuPanelAction.INSTALL)
+                        viewModel.onGpuInstallRequested()
+                    else
+                        viewModel.onGpuUninstallRequested()
+                },
+                modifier = Modifier.padding(top = 12.dp)
+            ) {
+                Text(text = buttonLabel)
+            }
+        }
+    }
+}
+
+/** Map a [GpuDetectionLibrary.STATE_KEY_*] onto the honest panel line (RF-2). */
+@Composable
+private fun gpuStateText(stateKey: String, model: String): String {
+    if (stateKey.isEmpty())
+        return stringResource(R.string.gpu_state_evaluating)
+    return when (stateKey) {
+        GpuDetectionLibrary.STATE_KEY_ADRENO_KGSL ->
+            if (model.isEmpty()) stringResource(R.string.gpu_state_adreno_kgsl)
+            else stringResource(R.string.gpu_state_adreno_kgsl_model, model)
+        GpuDetectionLibrary.STATE_KEY_ADRENO_OTHER ->
+            stringResource(R.string.gpu_state_adreno_other)
+        GpuDetectionLibrary.STATE_KEY_MALI -> stringResource(R.string.gpu_state_mali)
+        GpuDetectionLibrary.STATE_KEY_POWERVR -> stringResource(R.string.gpu_state_powervr)
+        else -> stringResource(R.string.gpu_state_unknown)
+    }
+}
+
+/** Map a [GpuDetectionLibrary.REASON_*] onto its motive line (RF-6). */
+@Composable
+private fun gpuReasonText(reasonKey: String?): String {
+    if (reasonKey == null)
+        return stringResource(R.string.gpu_reason_no_gpu_data)
+    return when (reasonKey) {
+        GpuDetectionLibrary.REASON_ROOTFS_NOT_INSTALLED ->
+            stringResource(R.string.gpu_reason_rootfs_not_installed)
+        GpuDetectionLibrary.REASON_MESA_VERSION_MISMATCH ->
+            stringResource(R.string.gpu_reason_mesa_version_mismatch)
+        GpuDetectionLibrary.REASON_FAMILY_UNSUPPORTED ->
+            stringResource(R.string.gpu_reason_family_unsupported)
+        GpuDetectionLibrary.REASON_UNRECOGNIZED_GPU ->
+            stringResource(R.string.gpu_reason_unrecognized_gpu)
+        else -> stringResource(R.string.gpu_reason_no_gpu_data)
     }
 }

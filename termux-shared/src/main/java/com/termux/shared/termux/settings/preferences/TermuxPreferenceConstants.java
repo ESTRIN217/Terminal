@@ -81,6 +81,7 @@ package com.termux.shared.termux.settings.preferences;
  */
 
 import com.termux.shared.shell.command.ExecutionCommand;
+import com.termux.shared.termux.TermuxConstants;
 
 /**
  * A class that defines shared constants of the SharedPreferences used by Termux app and its plugins.
@@ -226,6 +227,30 @@ public final class TermuxPreferenceConstants {
         public static final String KEY_SEEDED_TERMINAL_CURSOR_BLINK_RATE = "seeded_terminal_cursor_blink_rate";
         public static final int DEFAULT_VALUE_SEEDED_TERMINAL_CURSOR_BLINK_RATE = -1;
 
+
+        /**
+         * Defines the key for the persisted GPU acceleration pipeline solution (spec 011). The
+         * stored value is the name of a
+         * {@link com.termux.shared.termux.proot.GpuDetectionLibrary.Solution} constant;
+         * missing or unknown values are read as {@code NONE} by
+         * {@link TermuxAppSharedPreferences#getGpuSolution()}.
+         */
+        public static final String KEY_GPU_SOLUTION = "gpu_solution";
+        public static final String DEFAULT_VALUE_GPU_SOLUTION = "NONE"; // Default: "NONE"
+
+        /**
+         * Defines the key for the llvmpipe multithreading lever (spec 012).
+         * Stored as a boolean; missing is read as {@code true} (default on).
+         */
+        public static final String KEY_LLVMPIPE_THREADS_ENABLED = TermuxConstants.KEY_LLVMPIPE_THREADS_ENABLED;
+        public static final boolean DEFAULT_VALUE_LLVMPIPE_THREADS_ENABLED = true;
+
+        /**
+         * Defines the key for the llvmpipe thread count (spec 012).
+         * Stored as an integer; missing is read as {@code 8} (default 8).
+         */
+        public static final String KEY_LLVMPIPE_THREADS_COUNT = TermuxConstants.KEY_LLVMPIPE_THREADS_COUNT;
+        public static final int DEFAULT_VALUE_LLVMPIPE_THREADS_COUNT = 8;
 
         /**
          * Defines the key for last used notification id.

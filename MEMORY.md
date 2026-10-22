@@ -1,142 +1,50 @@
 # MEMORY.md — Terminal
-Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
-
 ## Estado actual
-- **Cero warnings en `:filemanager:compileDebugKotlin`** (2026-10-21): migrados los 4
-  iconos deprecados a sus versiones AutoMirrored (`List`, `TextSnippet`, `Article`;
-  imports `androidx.compose.material.icons.automirrored.filled.*` y usos
-  `Icons.AutoMirrored.Filled.*`) y `TabRow` → `PrimaryTabRow` (import material3 +
-  diálogo de propiedades de `FileManagerScreen.kt`). BUILD SUCCESSFUL sin líneas
-  `w:`. Verificado con grep que no queda ningún uso de los iconos viejos.
-- **Rama `3.0` creada** (2026-10-21, desde master). **Spec 010 CERRADA**
-  (2026-10-21): htop/proc-stat resuelto sin root — overlay en proot (binds
-  `-b <snapshot>:<fichero>` tras `-b /proc`; el específico gana, verificado en
-  dispositivo) con snapshot vivo a 1 s (carga propia por deltas de
-  `/proc/<pid>/stat`; SystemClock→btime; MemoryInfo→RAM; loadavg real o
-  estados R/D propios sin datos, escritura atómica temp+rename; sin datos
-  fijos tipo Termux; per-core uniforme; vía directa intacta y sin snapshot
-  si nada está bloqueado; muestreo para al quedar 0 sesiones). Piezas:
-  `ProcStatOverlayLibrary` (pura) + `ProcStatOverlaySampler` (glue Android,
-  contador de sesiones en `TermuxService`) + overload
-  `buildProotCommand(overlayBinds)` + constantes `DEBIAN_PROC_OVERLAY_*`.
-  T1–T7 hechas; `./gradlew test` verde; docs RF-8 actualizadas (README, plan
-  §7, wiki/limitaciones, docs/en); T5/T6 en dispositivo (htop arranca,
-  reparto cuadrado verificado). **Learning clave: los contadores del
-  snapshot DEBEN ser acumulativos/monótonos (htop difiere lecturas
-  consecutivas; deltas por-tick → % negativos/parpadeo)**. Pendiente al
-  release 3.0: `public/index.html` aún describe 2.1.0 (texto estático de
-  límite /proc/stat a actualizar junto al release) y entrada en CHANGELOG.
-- **Terminal 2.1.0 PUBLICADA** (2026-10-21): tag `v2.1.0` en master
-  (`e0eb3c30` merge de release/2.0 + `a1d5b574` sitio). APK universal firmado
-  subido + sha256 (asset `terminal_2.1.0_sha256sums`, hash 1f15a173…); CI
-  adjunta los `+github-debug`. Web y wiki redesplegadas (update-site.py +
-  `firebase deploy --only hosting:main,hosting:terminal-gnulinux-docs`).
-  Ambas ramas sincronizadas al mismo commit; se sigue en `master` por
-  petición del usuario. Firma local con `key.properties`.
-- **Web** <https://terminal-gnulinux.web.app> (`public/`, sin build; `scripts/update-site.py` pone lo que
-  caduca) y **wiki** (<https://terminal-gnulinux-docs.web.app>, `wiki/`); `firebase use` SIEMPRE con
-  `-P terminal-gnulinux`. `firebase.json` multitarget (`main` y docs).
-- `docs/constitution.md` (6 principios) + flujo SDD (`/sdd-spec → plan → tasks → implement → validate`).
-- **Specs 001-008 cerradas**, todas validadas en dispositivo. Detalle en `specs/NNN-*/`.
-  - 007: cursor de teclado/scroll del gestor (`FocusCursorPolicy` puro; cursor a -1 al cambiar de
-    directorio; scroll mínimo con `ensureItemVisible`, nunca `animateScrollToItem` al entrar).
-  - 008 (2026-10-20): topbar del gestor: título = carpeta + recuento (`ListingCounts`), breadcrumb
-    clicable (`BreadcrumbPolicy`), cajón de marcadores (favoritos = StringSet en prefs), menú
-    «Organizar» (lista/cuadrícula, orden, overrides por carpeta `folder:<path>:*` con
-    snapshot/restore) y More completo (RF-9; «Pegar» al final por diseño, decisión cerrada
-    2026-10-21). Atajo
-    del launcher: `ACTION_OPEN_FILE_MANAGER`(+`EXTRA_…_PATH`) en `TermuxConstants.TERMUX_ACTIVITY`,
-    `handleIntent` también en `onCreate` (arranque frío, action se consume), `ShortcutManagerCompat`
-    id `fm_<hash>` + `ic_folder`; MAX_SESSIONS respetado. `./gradlew test` verde, APK válido.
-- Spec 009 (More por ítem + propiedades en pestañas): implementada completa
-  (T1-T10), decidida: «Rootfs» reutiliza `onEditFile` de la app
-  (nano→vim con `DEBIAN_EDITOR_CANDIDATES`), compresión con commons-compress
-  en el propio módulo (`ArchiveCreator`), `PastePolicy` corrige el pegado
-  fallido que mostraba «0 pegados». La grid se queda con «Info»→propiedades.
-  Gotchas: commons-compress 7z usa `closeArchiveEntry()` (no `closeEntry()`).
-- **T9 cerrada**: `ACTION_OPEN_FILE` + `EXTRA_OPEN_FILE_PATH` en
-  `TermuxConstants.TERMUX_ACTIVITY`; rama en `handleIntent` (consume la
-  acción; si el archivo ya no existe → `addFileManagerSession(null)` sin
-  error, decisión del spec); `createFileLauncherShortcut` (id
-  `fmf_<hash>`, icono `ic_file`) y `openFileWithSystem` vía `FileProvider`
-  con falla → toast `error_file_open_failed` (nueva, ×3 locales). Rosca
-  `onCreateFileShortcut` (nullable, `((File) -> Unit)?`) en TermuxMainScreen →
-  SessionPane (3 sitios) → FileManagerSessionHost → FileManagerScreen;
-  `FileManagerComposeActivity` legacy no lo pasa (paridad con el de carpeta).
-  Aviso builds: dos builds Gradle a la vez envenenan el IC de Kotlin
-  (output sin clases, javac «cannot find symbol»); cura = `rm -rf app/build`
-  + recompilar `--no-build-cache`. No lanzar builds paralelos.
-- **T10 cerrada**: auditoría de locales del módulo por script (claves
-  referidas vs definidas en los 3 ficheros): cazó 28 claves pre-009 que
-  faltaban en `values-pt-rBR` (caían al EN en runtime) — rellenadas.
-  Literal grep limpio (solo `measureText("X")` y clip label "paths",
-  preexistentes y no visibles). `./gradlew test` completo: 638/0.
-  **Spec 009 CERRADA** (2026-10-21, Estado en spec.md). Commits
-  Conventional Commits de 008+009 y de la rev 8 de iconos Gradle
-  (elefante azul) confirmados en `release/2.0` (`093d6b6b`, `0d2c9459`;
-  locales-audit incluida en `29f50751`). Nada en push.
-  Aviso sesión: Kotlin no soporta literales `0o` octales (usar `0x` o decimal).
-- **Spec 006 rev 8 (2026-10-21)**: variante `GRADLE` en el gestor: extensión `gradle`
-  (Groovy DSL) y sufijo de nombre exacto `.gradle.kts` (precede a `kts`→KT en
-  `iconVariantFor`; el `.kts` suelto sigue Kotlin, `gradle.properties` sigue SETTINGS,
-  `gradlew` queda genérico). Glifo del elefante vendido en `FileTypeGlyphs.kt` (pathData
-  verbatim del drawable del usuario; viewport 341.71×250 cuadrado-centrado a 341.71×341.71
-  con `group(translationY = 45.855)`) y tinte propio azul `#0288D1` (venía en negro, el
-  usuario pidió azul). Sin familia (como `kts`); RF-18. Tests rojo→verde; `./gradlew test`
-  global verde. **Validada en dispositivo el 2026-10-21 (rev 8); spec 006 cerrada.**
-- **Candidatura 2.1.0 auditada (2026-10-21)**: 41 commits desde `v2.0.0`
-  (specs 002-009 + tangente selección), todo aditivo, sin rupturas de API →
-  bump minor: 2.0.0→2.1.0. `./gradlew test` verde a fecha de hoy. **Hecho:
-  `versionCode 121` + `versionName 2.1.0` en app/build.gradle.kts y entrada
-  `## [2.1.0] — 2026-10-21` en CHANGELOG.md** (`:app:versionName` imprime
-  2.1.0). Commits en `release/2.0` sin push: cierre «Pegar» por diseño
-  (`814a491f`), docs 2.1.0 (`e00ebef6`), bump+changelog (`3e945a5e`).
-  Pendiente para el release: push de
-  `release/2.0` (34+ commits sin publicar), release build+tag en master,
-  update-site.py. NOTA: la fecha del changelog es la del bump; si el corte
-  tarda, ajustarla a la fecha real del tag.
-- **Docs actualizados para 2.1.0 (2026-10-21)**: README (características URL
-  impresas + gestor ampliado), `docs/hipervinculos-y-seleccionar-url.md`
-  (sección nueva «URLs impresas tocables (spec 003)» + relación actualizada),
-  wiki `hipervinculos.html` (sección nueva + tabla «¿Cuál usar?»),
-  `wiki/uso-terminal.html` (bullet gestor), `docs/proot-debian-arm64-plan.md`
-  (estado actual 2.1.0), `docs/en/index.md` (wiki apunta al hosting, no al
-  GitHub wiki). Sin tocar `docs/roadmap-2.0.md` (histórico completo) ni
-  `public/` (lo escribe update-site.py).
-- Selección del gestor = segundo estado de la topbar (2026-10-21): título «n seleccionados»,
-  nav-icon «Cerrar»→`clearSelection()` (el cajón no abre durante la selección), acciones
-  copiar/cortar/copiar ruta/compartir/editar/borrar en la propia topbar; `BottomAppBar`
-  retirada del Scaffold. Sin strings nuevos. **Validada en dispositivo (2026-10-21);
-  commit `e118ca78` en `release/2.0`, sin push. Fuera de spec (tangent de la 008).**
+- Rama `3.0`; había cambios sin confirmar en 011/012 antes de esta tarea.
+  Preservarlos; no limpiar ni revertir cambios ajenos.
+- **Spec 011 en curso:** T1–T3 hechas; catálogo Mesa, seis paquetes con SHA-256
+  fijados y preferencia `gpu_solution`. T4–T9 pendientes según el plan.
+- **Spec 012 en curso:** T1 (lógica pura) y T2 (constantes/prefs con defaults
+  on/8, round-trip y claves preservadas) hechas el 2026-10-22;
+  T3 cablea env con gate GPU; T4 añade Switch/slider 1..16, resumen efectivo,
+  nota de sesiones, estado Adreno y strings EN/ES/PT. T5 validada en Infinix
+  Mali T606 (8 núcleos): env on/off correcto, htop 3.4.1 arranca; glmark2 no
+  disponible en caché apt, sin score. README/wiki detallan el default y apagado;
+  `./gradlew test` verde. Spec 012 cerrada.
+- Spec 010 cerrada: overlay `/proc` vivo para htop/btop vía binds proot,
+  muestreo ligado a sesiones y validación previa en dispositivo. Contadores
+  deben ser acumulativos/monótonos para evitar porcentajes negativos.
+- Specs 001–009 cerradas; 2.1.0 publicada; `release/2.0` tiene commits sin push.
+- Sitio estático en `public/`; tras una release los datos caducables los
+  actualiza `scripts/update-site.py`. Wiki estática en `wiki/`.
 
-## Learnings vigentes (por qué)
-- **Glifos multicolor en Compose**: los rellenos por-path de un `ImageVector` solo sobreviven con
-  `tint = Color.Unspecified` (el ColorFilter los aplasta); la fila propaga `variant?.tint`.
-- **Glifos con viewport no cuadrado**: cuadrar el viewport y centrar con `group(translationY)` —
-  `VectorPainter` escala ejes por separado y en la caja cuadrada de la fila (28/44dp) el arte
-  ancho distorce. Delta exacto: `(viewport - arte)/2` (bbox muestreado).
-- **Endpoint gstatic `.../Material+Symbols/24dp/<glifo>.kt`** devuelve GZ con código Kotlin del
-  `ImageVector` (no SVG; con POST dio 405, usar GET). `markdown`/`file_json` NO están en el AAR
-  `material-icons-extended`: verificar clases grep-eando el AAR descomprimido.
-- **Semánticas de extensión que difieren NO se unifican sin spec**: `FileSortOption.getExtension`
-  (sort) ≠ `FileTypeDetector` (iconos, oculto → genérico); la delegación cambió el orden y el test
-  lo cazó (rev de la 006 revertida).
-- **Lecturas por fila externa de `TerminalBuffer` no lanzan** (devuelven «nada»); `externalToInternalRow`
-  SÍ lanza: validar contra `emulator.mRows` antes de tocar.
-- **Un solo dueño de la geometría: la `TerminalView` oculta**; el split sigue con el renderer legado
-  (`useNativeRenderer && !isSplitActive`): con canvas nativo queda un pane sin pintar (sin resolver).
-- **Nunca escribir estado desde el measure de Compose**; pintar el fondo del pane en cada frame.
-- **Dos renderers que repiten un algoritmo: comparar TAMBIÉN los centinelas de estado** (specs 002/003).
-- **`BUILD SUCCESSFUL` ≠ APK válido** (agp 9.4.1): `android.enableResourceOptimizations=false` + `unzip -l`.
-- **Tests de extra keys = JUnit plano, no Robolectric** (no existe su native runtime en Linux aarch64).
-- **Detección de terminal por apps CLI** (`fastfetch`/`neofetch`): por `/proc/<pid>/comm`, truncado a 15
-  chars por el FINAL (`rin217.terminal`); fijado con `prctl(PR_SET_NAME)` JNI en
-  `TerminalProcessName.applyProcessIdentity()`. (`Os.prctl` no sirve: args sin `char*`.)
-- **Quirks del reconocedor de URLs son PARIDAD con el diálogo** (sin `mailto:`, ancho de glifos):
-  no arreglar sin spec.
-- **Ruido inofensivo de logcat, NO parchear/abrir spec**: aviso Bionic `__bionic_open_tzdata` del ROM;
-  `proot warning: can't set tracee registers…` (carrera ESRCH, decidido 2026-10-20).
-- **`docs/` y `AGENTS.md` se corrigen contra la fuente** (`gradle/wrapper/`, `libs.versions.toml`…).
+## Arquitectura y reglas prácticas
+- `terminal-emulator` → `terminal-view` → `termux-shared` → `app`;
+  `filemanager` → `termux-shared`. No invertir dependencias.
+- Librerías `terminal-emulator`, `terminal-view`, `termux-shared`: Java puro.
+  Kotlin Compose solo en `app` y `filemanager`.
+- Lógica determinista en funciones puras con tests JUnit sin Android; UI
+  Compose despacha y presenta. Variables/datos cambiantes entran por parámetros.
+- Preferencias persistidas: añadir claves, no reescribir ni perder las existentes
+  (en filemanager: `sort_option`, `sort_ascending`, `show_hidden`,
+  `folders_first`, `view_mode`, `favorites`, `folder:<path>:*`).
+- Error convencional del proyecto: devolver `Error`/`null` éxito; capturas
+  específicas, logging con `Logger`; no ocultar fallos.
+- Strings visibles en `values/`, `values-es-rVE/`, `values-pt-rBR/`; sin literales
+  Compose. Docs y memoria en español, identificadores/comentarios técnicos en inglés.
+- Constantes compartidas en `TermuxConstants`; Java/Kotlin usan prefijo `m` para
+  miembros según el estilo existente. No agregar dependencias sin justificar en plan.
+- `targetSdk 28` y `minSdk 24` son intencionales; proot soportado en arm64-v8a.
+- Build Java 17/NDK 30.0.14904198/CMake 3.31.6; tests `./gradlew test`; evitar builds Gradle paralelos por riesgo al incremental Kotlin.
 
-## Próximos pasos
-- Opcionales: auto-desactivar sticky modifiers, lock por long-press, altura de barra configurable.
+## Learnings vigentes
+- Glifos multicolor Compose requieren `tint = Color.Unspecified`; viewport no
+  cuadrado: centrar el arte en viewport cuadrado para que no se distorsione.
+- Semánticas similares pero distintas (p. ej. extensión para orden vs icono) no
+  se unifican sin spec; comparar centinelas de estado en algoritmos duplicados.
+- Lecturas externas de `TerminalBuffer` pueden devolver vacío; validar filas
+  antes de conversiones que lanzan. No escribir estado desde measure de Compose.
+- `BUILD SUCCESSFUL` no garantiza APK utilizable: inspeccionar el APK con unzip.
+- `docs/` y `AGENTS.md` se corrigen contrastando las fuentes del repositorio.
+- Conventional Commits con tipos capitalizados: `Added`, `Changed`, `Fixed`,
+  `Security`, etc.; versiones semver.

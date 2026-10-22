@@ -28,7 +28,6 @@ public class ProotShellEnvironmentTest {
         };
         Assert.assertArrayEquals(expected, command);
     }
-
     @Test
     public void testBuildProotCommand_sharedMemoryBindWithAndWithoutLinkfix() {
         for (boolean withLinkfix : new boolean[]{false, true}) {
@@ -337,10 +336,122 @@ public class ProotShellEnvironmentTest {
         Assert.assertEquals(TermuxConstants.TERMUX_HOME_DIR_PATH, env.get("PWD"));
     }
 
+    // ---- spec 011: GPU acceleration guest environment (RF-4, NFR-3) ----
+
+    @Test
+    public void testApplyGpuEnv_active_addsKgslOverride() {
+        HashMap<String, String> map = new HashMap<>();
+        map.put("HOME", "/root");
+        map.put("PATH", ProotShellEnvironment.GUEST_PATH);
+
+        ProotShellEnvironment.applyGpuEnv(map, true);
+
+        Assert.assertEquals("kgsl", map.get("MESA_LOADER_DRIVER_OVERRIDE"));
+        // Pre-existing entries are untouched, nothing else is added.
+        Assert.assertEquals(3, map.size());
+        Assert.assertEquals("/root", map.get("HOME"));
+        Assert.assertEquals(ProotShellEnvironment.GUEST_PATH, map.get("PATH"));
+    }
+
+    @Test
+    public void testApplyGpuEnv_inactive_mapIdentical() {
+        HashMap<String, String> map = new HashMap<>();
+        map.put("HOME", "/root");
+        map.put("PATH", ProotShellEnvironment.GUEST_PATH);
+        map.put("TZ", "Europe/Madrid");
+        HashMap<String, String> before = new HashMap<>(map);
+
+        ProotShellEnvironment.applyGpuEnv(map, false);
+
+        // Byte-to-byte identical to the pre-spec map: no key added or removed.
+        Assert.assertEquals(before, map);
+        Assert.assertEquals(before.size(), map.size());
+        Assert.assertFalse(map.containsKey("MESA_LOADER_DRIVER_OVERRIDE"));
+    }
+
+    @Test
+    public void testApplyGpuEnv_activeOnMapWithExistingValue_overwritesAndKeysStable() {
+        HashMap<String, String> map = new HashMap<>();
+        map.put("MESA_LOADER_DRIVER_OVERRIDE", "llvmpipe");
+
+        ProotShellEnvironment.applyGpuEnv(map, true);
+
+        Assert.assertEquals("kgsl", map.get("MESA_LOADER_DRIVER_OVERRIDE"));
+        Assert.assertEquals(1, map.size());
+    }
+
+    @Test
+    public void testGetEnvironment_noGpuOverrideWithoutContext() {
+        // No pref context available (unit-test host): solution is inert and the
+        // guest env stays identical to the pre-spec baseline (NFR-3).
+        HashMap<String, String> env = new ProotShellEnvironment().getEnvironment(null, false);
+        Assert.assertFalse(env.containsKey("MESA_LOADER_DRIVER_OVERRIDE"));
+    }
+
     @Test
     public void testGetEnvironment_kittyBrandingForKgp() {
         HashMap<String, String> env = new ProotShellEnvironment().getEnvironment(null, false);
         Assert.assertEquals("1", env.get("KITTY_WINDOW_ID"));
         Assert.assertEquals("kitty", env.get("TERM_PROGRAM"));
+    }
+
+    // ---- spec 012: llvmpipe multithread guest environment (RF-1, RF-2, RF-4) ----
+
+    @Test
+    public void testApplyLlvmpipeEnv_onNoGpu_addsBothVarsWithMinCoresAndPref() {
+        HashMap<String, String> map = new HashMap<>();
+        map.put("HOME", "/root");
+
+        ProotShellEnvironment.applyLlvmpipeEnv(map, true, false, 8, 8);
+
+        Assert.assertEquals("8", map.get("LP_NUM_THREADS"));
+        Assert.assertEquals("8", map.get("GALLIUM_NUM_THREADS"));
+        Assert.assertEquals(3, map.size());
+        Assert.assertEquals("/root", map.get("HOME"));
+    }
+
+    @Test
+    public void testApplyLlvmpipeEnv_prefN4_gives4() {
+        HashMap<String, String> map = new HashMap<>();
+        ProotShellEnvironment.applyLlvmpipeEnv(map, true, false, 8, 4);
+
+        Assert.assertEquals("4", map.get("LP_NUM_THREADS"));
+        Assert.assertEquals("4", map.get("GALLIUM_NUM_THREADS"));
+        Assert.assertEquals(2, map.size());
+    }
+
+    @Test
+    public void testApplyLlvmpipeEnv_off_mapIdentical() {
+        HashMap<String, String> map = new HashMap<>();
+        map.put("HOME", "/root");
+        map.put("PATH", ProotShellEnvironment.GUEST_PATH);
+        HashMap<String, String> before = new HashMap<>(map);
+
+        ProotShellEnvironment.applyLlvmpipeEnv(map, false, false, 8, 8);
+
+        Assert.assertEquals(before, map);
+        Assert.assertFalse(map.containsKey("LP_NUM_THREADS"));
+        Assert.assertFalse(map.containsKey("GALLIUM_NUM_THREADS"));
+    }
+
+    @Test
+    public void testApplyLlvmpipeEnv_gpuAccelerated_noVars() {
+        HashMap<String, String> map = new HashMap<>();
+        map.put("HOME", "/root");
+        HashMap<String, String> before = new HashMap<>(map);
+
+        ProotShellEnvironment.applyLlvmpipeEnv(map, true, true, 8, 8);
+
+        Assert.assertEquals(before, map);
+        Assert.assertFalse(map.containsKey("LP_NUM_THREADS"));
+        Assert.assertFalse(map.containsKey("GALLIUM_NUM_THREADS"));
+    }
+
+    @Test
+    public void testGetEnvironment_noLlvmpipeWithoutContext() {
+        // Without an Android context, preference stays inert (RF-2 regression zero).
+        HashMap<String, String> env = new ProotShellEnvironment().getEnvironment(null, false);
+        Assert.assertFalse(env.containsKey("LP_NUM_THREADS"));
+        Assert.assertFalse(env.containsKey("GALLIUM_NUM_THREADS"));
     }
 }

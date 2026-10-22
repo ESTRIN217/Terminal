@@ -402,4 +402,32 @@
     <string name="log_level_debug">Depurar</string>
     <string name="log_level_verbose">Detallado</string>
 
+    <!-- GPU status panel (Spec 011, RF-2/RF-3/RF-5/RF-6). The keys map the
+         GpuDetectionLibrary.STATE_KEY_* / REASON_* constants. -->
+    <string name="gpu_section_title">Estado GPU</string>
+    <string name="gpu_state_evaluating">Consultando el estado de la GPU…</string>
+    <string name="gpu_state_adreno_kgsl">Aceleración GPU disponible (vía KGSL)</string>
+    <string name="gpu_state_adreno_kgsl_model">Aceleración GPU disponible (vía KGSL): %1$s</string>
+    <string name="gpu_state_adreno_other">GPU Adreno sin dispositivo KGSL visible: sin aceleración GPU disponible sin root; llvmpipe (CPU) seguirá en uso</string>
+    <string name="gpu_state_mali">GPU Mali: sin aceleración GPU disponible sin root; llvmpipe (CPU) seguirá en uso</string>
+    <string name="gpu_state_powervr">GPU PowerVR: sin aceleración GPU disponible sin root; llvmpipe (CPU) seguirá en uso</string>
+    <string name="gpu_state_unknown">GPU no identificada: sin aceleración GPU disponible sin root; llvmpipe (CPU) seguirá en uso</string>
+    <string name="gpu_reason_rootfs_not_installed">El rootfs de Debian no está instalado</string>
+    <string name="gpu_reason_mesa_version_mismatch">La versión de Mesa del invitado no coincide con la esperada</string>
+    <string name="gpu_reason_family_unsupported">Esta familia de GPU no admite la vía KGSL</string>
+    <string name="gpu_reason_no_gpu_data">No se pudo leer información de la GPU en este dispositivo</string>
+    <string name="gpu_reason_unrecognized_gpu">La GPU reportada no se reconoce</string>
+    <string name="gpu_solution_active">La aceleración GPU está activa</string>
+    <string name="gpu_action_running">Operación GPU en curso…</string>
+    <string name="gpu_install_button">Instalar aceleración GPU</string>
+    <string name="gpu_uninstall_button">Desinstalar aceleración GPU</string>
+
+    <!-- Multihilo de llvmpipe (Spec 012) -->
+    <string name="llvmpipe_threads_title">Hilos de llvmpipe</string>
+    <string name="llvmpipe_threads_enabled_title">Activar multihilo</string>
+    <string name="llvmpipe_threads_subtitle">Se aplica a las próximas sesiones</string>
+    <string name="llvmpipe_threads_adreno_active">No aplica: la aceleración GPU está activa</string>
+    <string name="llvmpipe_threads_count_title">Cantidad de hilos</string>
+    <string name="llvmpipe_threads_count_summary">%1$d hilos (efectivos: %2$d en %3$d núcleos)</string>
+
 </resources>

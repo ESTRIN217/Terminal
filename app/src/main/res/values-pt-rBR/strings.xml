@@ -313,4 +313,32 @@
     <string name="terminal_hyperlinks">Hiperlinks de terminal [Experimental]</string>
     <string name="terminal_hyperlinks_desc">Sublinhe os links OSC 8 e as URLs impressas e abra-os ao tocar</string>
 
+    <!-- GPU status panel (Spec 011, RF-2/RF-3/RF-5/RF-6). The keys map the
+         GpuDetectionLibrary.STATE_KEY_* / REASON_* constants. -->
+    <string name="gpu_section_title">Estado da GPU</string>
+    <string name="gpu_state_evaluating">Consultando o estado da GPU…</string>
+    <string name="gpu_state_adreno_kgsl">Aceleração de GPU disponível (via KGSL)</string>
+    <string name="gpu_state_adreno_kgsl_model">Aceleração de GPU disponível (via KGSL): %1$s</string>
+    <string name="gpu_state_adreno_other">GPU Adreno sem dispositivo KGSL visível: sem aceleração de GPU disponível sem root; llvmpipe (CPU) continuará em uso</string>
+    <string name="gpu_state_mali">GPU Mali: sem aceleração de GPU disponível sem root; llvmpipe (CPU) continuará em uso</string>
+    <string name="gpu_state_powervr">GPU PowerVR: sem aceleração de GPU disponível sem root; llvmpipe (CPU) continuará em uso</string>
+    <string name="gpu_state_unknown">GPU não identificada: sem aceleração de GPU disponível sem root; llvmpipe (CPU) continuará em uso</string>
+    <string name="gpu_reason_rootfs_not_installed">O rootfs do Debian não está instalado</string>
+    <string name="gpu_reason_mesa_version_mismatch">A versão do Mesa do convidado não corresponde à esperada</string>
+    <string name="gpu_reason_family_unsupported">Esta família de GPU não suporta a via KGSL</string>
+    <string name="gpu_reason_no_gpu_data">Não foi possível ler informações de GPU neste dispositivo</string>
+    <string name="gpu_reason_unrecognized_gpu">A GPU reportada não é reconhecida</string>
+    <string name="gpu_solution_active">A aceleração de GPU está ativa</string>
+    <string name="gpu_action_running">Operação de GPU em andamento…</string>
+    <string name="gpu_install_button">Instalar aceleração de GPU</string>
+    <string name="gpu_uninstall_button">Desinstalar aceleração de GPU</string>
+
+    <!-- Multithreading do llvmpipe (Spec 012) -->
+    <string name="llvmpipe_threads_title">Threads do llvmpipe</string>
+    <string name="llvmpipe_threads_enabled_title">Ativar multithreading</string>
+    <string name="llvmpipe_threads_subtitle">Aplica-se às próximas sessões</string>
+    <string name="llvmpipe_threads_adreno_active">Não se aplica: a aceleração de GPU está ativa</string>
+    <string name="llvmpipe_threads_count_title">Quantidade de threads</string>
+    <string name="llvmpipe_threads_count_summary">%1$d threads (efetivas: %2$d em %3$d núcleos)</string>
+
 </resources>

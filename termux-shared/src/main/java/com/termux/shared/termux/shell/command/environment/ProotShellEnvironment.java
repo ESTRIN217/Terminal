@@ -12,6 +12,9 @@ import com.termux.shared.shell.command.ExecutionCommand;
 import com.termux.shared.shell.command.environment.AndroidShellEnvironment;
 import com.termux.shared.shell.command.environment.ShellEnvironmentUtils;
 import com.termux.shared.termux.TermuxConstants;
+import com.termux.shared.termux.proot.GpuDetectionLibrary;
+import com.termux.shared.termux.proot.LlvmpipeThreadsLibrary;
+import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 
 import java.nio.charset.Charset;
 import java.io.File;
@@ -19,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 
 /**
@@ -47,6 +51,18 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
     public static final String ENV_LD_PRELOAD = "LD_PRELOAD";
     /** Guest IANA timezone (from the host device settings). */
     public static final String ENV_TZ = "TZ";
+
+    /**
+     * Mesa loader driver override (spec 011, RF-4). While {@code gpu_solution=ADRENO_KGSL}
+     * is persisted, this variable forces Mesa's KGSL gallium driver inside the guest so
+     * the Adreno GPU is used instead of llvmpipe. It only ever reaches proot guest
+     * processes (see {@link ProotShellEnvironment#getEnvironment}); the Termux
+     * ({@code $PREFIX}) environment is untouched (NFR-3).
+     */
+    public static final String ENV_MESA_LOADER_DRIVER_OVERRIDE = "MESA_LOADER_DRIVER_OVERRIDE";
+
+    /** Value for {@link #ENV_MESA_LOADER_DRIVER_OVERRIDE}: Mesa's KGSL gallium driver. */
+    public static final String GUEST_MESA_KGSL_DRIVER = "kgsl";
 
     /** Guest user and home (proot {@code -0} maps to root). */
     public static final String GUEST_USER = "root";
@@ -133,6 +149,113 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
     @NonNull
     public static String getNativeWorkingDirectoryPath() {
         return TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH;
+    }
+
+    /**
+     * Testable core of the guest GPU environment injection (spec 011, RF-4/NFR-3).
+     *
+     * <p>Pure: while {@code gpuSolutionActive}, stores {@code MESA_LOADER_DRIVER_OVERRIDE=kgsl}
+     * in {@code map} (overwriting any stale value); otherwise {@code map} is left
+     * byte-for-byte identical to the pre-spec guest environment.</p>
+     *
+     * @param map               The guest environment map being built, modified in place.
+     * @param gpuSolutionActive Whether the persisted {@code gpu_solution} pref is {@code ADRENO_KGSL}.
+     * @return Returns the same {@code map} for convenience.
+     */
+    static Map<String, String> applyGpuEnv(@NonNull Map<String, String> map, boolean gpuSolutionActive) {
+        if (gpuSolutionActive)
+            map.put(ENV_MESA_LOADER_DRIVER_OVERRIDE, GUEST_MESA_KGSL_DRIVER);
+        return map;
+    }
+
+    /**
+     * Whether the persisted {@code gpu_solution} app preference is {@code ADRENO_KGSL}
+     * (spec 011, RF-4). Any failure to read the preference keeps the environment inert
+     * (identical to the pre-spec guest env, NFR-3).
+     *
+     * @param currentPackageContext The {@link Context} for reading the app preferences; may be {@code null}.
+     * @return Returns {@code true} only when {@code gpu_solution=ADRENO_KGSL} is readable.
+     */
+    static boolean isGpuSolutionActive(@Nullable Context currentPackageContext) {
+        if (currentPackageContext == null)
+            return false;
+        try {
+            TermuxAppSharedPreferences preferences =
+                TermuxAppSharedPreferences.build(currentPackageContext);
+            return preferences != null
+                && preferences.getGpuSolution() == GpuDetectionLibrary.Solution.ADRENO_KGSL;
+        } catch (Exception e) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to read gpu_solution preference (env stays inert)\n" + e.toString());
+            return false;
+        }
+    }
+
+    /**
+     * Apply the llvmpipe multithreading environment variables (spec 012, RF-1, RF-2, RF-4).
+     *
+     * <p>When {@code enabled} is {@code true} and {@code gpuSolutionActive} is {@code false},
+     * {@link LlvmpipeThreadsLibrary#computeThreads(int, int)} is used to compute the clamped
+     * thread count and {@link LlvmpipeThreadsLibrary#llvmpipeEnvEntries(int)} adds
+     * {@code LP_NUM_THREADS} and {@code GALLIUM_NUM_THREADS} to the map.
+     * When disabled or when GPU is accelerated, the map is left untouched.</p>
+     *
+     * @param map               The guest environment map being built, modified in place.
+     * @param enabled           Whether the llvmpipe multithreading preference is enabled.
+     * @param gpuSolutionActive Whether the GPU is accelerated (spec 011).
+     * @param coresRaw          Host core count from {@code Runtime.availableProcessors()}.
+     * @param prefThreadsCount  Configured thread count preference N.
+     * @return Returns the same {@code map} for convenience.
+     */
+    static Map<String, String> applyLlvmpipeEnv(@NonNull Map<String, String> map,
+                                                boolean enabled,
+                                                boolean gpuSolutionActive,
+                                                int coresRaw,
+                                                int prefThreadsCount) {
+        if (!LlvmpipeThreadsLibrary.shouldInject(enabled, gpuSolutionActive))
+            return map;
+
+        int threads = LlvmpipeThreadsLibrary.computeThreads(coresRaw, prefThreadsCount);
+        map.putAll(LlvmpipeThreadsLibrary.llvmpipeEnvEntries(threads));
+        return map;
+    }
+
+    /**
+     * Whether the llvmpipe multithreading lever is enabled in app preferences (spec 012, RF-1, RF-2).
+     * Missing preference defaults to {@code true}; null context or error keeps the env inert (false).
+     *
+     * @param currentPackageContext The {@link Context} for reading preferences; may be {@code null}.
+     * @return Returns {@code true} if llvmpipe multithreading should be active.
+     */
+    static boolean isLlvmpipeThreadsEnabled(@Nullable Context currentPackageContext) {
+        if (currentPackageContext == null)
+            return false;
+        try {
+            TermuxAppSharedPreferences preferences =
+                TermuxAppSharedPreferences.build(currentPackageContext);
+            return preferences != null && preferences.isLlvmpipeThreadsEnabled();
+        } catch (Exception e) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to read llvmpipe_threads_enabled preference (env stays inert)\n" + e.toString());
+            return false;
+        }
+    }
+
+    /**
+     * Get the configured llvmpipe thread count from app preferences (spec 012, RF-1).
+     *
+     * @param currentPackageContext The {@link Context} for reading preferences; may be {@code null}.
+     * @return Returns the configured count N (default 8).
+     */
+    static int getLlvmpipeThreadsCount(@Nullable Context currentPackageContext) {
+        if (currentPackageContext == null)
+            return LlvmpipeThreadsLibrary.DEFAULT_THREADS;
+        try {
+            TermuxAppSharedPreferences preferences =
+                TermuxAppSharedPreferences.build(currentPackageContext);
+            return preferences != null ? preferences.getLlvmpipeThreadsCount() : LlvmpipeThreadsLibrary.DEFAULT_THREADS;
+        } catch (Exception e) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to read llvmpipe_threads_count preference\n" + e.toString());
+            return LlvmpipeThreadsLibrary.DEFAULT_THREADS;
+        }
     }
 
     public ProotShellEnvironment() {
@@ -365,6 +488,25 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
         // Kitty Graphics Protocol image adapter without requiring manual env setup.
         environment.put(ENV_KITTY_WINDOW_ID, "1");
         environment.put(ENV_TERM_PROGRAM, "kitty");
+
+        // Spec 011 (RF-4): while gpu_solution=ADRENO_KGSL is persisted, the guest Mesa
+        // loader is forced to the KGSL gallium driver (Adreno acceleration). The pref is
+        // read here from the caller-supplied context (TermuxService passes itself to the
+        // session), so every proot guest command picks it up and nothing else does.
+        // Inactive → the map is identical to the pre-spec guest environment (NFR-3).
+        boolean gpuActive = isGpuSolutionActive(currentPackageContext);
+        applyGpuEnv(environment, gpuActive);
+
+        // Spec 012 (RF-1, RF-2, RF-4): multithreaded llvmpipe rasterizer. Injected
+        // into the guest environment when enabled and GPU acceleration is inactive.
+        boolean llvmpipeThreadsEnabled = isLlvmpipeThreadsEnabled(currentPackageContext);
+        if (LlvmpipeThreadsLibrary.shouldInject(llvmpipeThreadsEnabled, gpuActive)) {
+            applyLlvmpipeEnv(environment,
+                true,
+                false,
+                Runtime.getRuntime().availableProcessors(),
+                getLlvmpipeThreadsCount(currentPackageContext));
+        }
 
         // termux-exec conflicts with proot: never propagate these. LD_PRELOAD
         // must also stay out of the host proot process environment (the host

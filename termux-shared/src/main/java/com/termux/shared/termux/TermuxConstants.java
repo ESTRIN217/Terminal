@@ -561,6 +561,93 @@ public final class TermuxConstants {
     /** Host path of the synthetic {@code /proc/loadavg} snapshot bound as {@code /proc/loadavg} (spec 010). */
     public static final String DEBIAN_PROC_OVERLAY_LOADAVG_FILE_PATH = DEBIAN_PROC_OVERLAY_DIR_PATH + "/loadavg";
 
+    /** Directory under the app files directory where the Mesa {@code .deb} packages downloaded for the GPU acceleration pipeline are staged before installation (spec 011). */
+    public static final String DEBIAN_GPU_DEBS_DIR_PATH = TERMUX_FILES_DIR_PATH + "/debian/gpu-debs";
+    /** Staging directory for the Mesa {@code .deb} packages (spec 011). */
+    public static final File DEBIAN_GPU_DEBS_DIR = new File(DEBIAN_GPU_DEBS_DIR_PATH);
+
+    /**
+     * Log file under the app files directory where the GPU acceleration pipeline
+     * records each one-shot guest apt run (timestamp, resolved exit code, session
+     * transcript) for debugging (spec 011 T6). Written best-effort; it sits OUTSIDE
+     * {@link #DEBIAN_ROOTFS_DIR_PATH} so it never shows up inside the guest.
+     */
+    public static final String DEBIAN_GPU_LOG_FILE_PATH = TERMUX_FILES_DIR_PATH + "/gpu-install.log"; // Default: "/data/data/com.estrin217.terminal/files/gpu-install.log"
+
+    /** Base release URL of the {@code lfdevs/mesa-for-android-container} {@code debian/25.0.7-2-adreno} GitHub release (Adreno/KGSL Mesa rebuilds); includes the trailing slash. */
+    public static final String DEBIAN_MESA_RELEASE_BASE_URL = "https://github.com/lfdevs/mesa-for-android-container/releases/download/debian/25.0.7-2-adreno/";
+
+    /** Expected dpkg version of the Mesa packages inside the Debian guest for the GPU pipeline to be offered (divergence disables the offer, spec 011). */
+    public static final String DEBIAN_MESA_EXPECTED_VERSION = "25.0.7-2+deb13u1";
+
+    /*
+     * Debian Mesa .deb catalog (spec 011): one quadruplet per package (package name, download
+     * file name, release download URL and SHA-256), listed in the documented apt install order.
+     * SHA-256 values were computed with sha256sum on 2026-10-21 against the exact files
+     * downloaded from the release above; {@code +} is percent-encoded as {@code %2B} inside
+     * download URLs (required by the GitHub release asset route).
+     */
+
+    /** Package name of the {@code libegl-mesa0} .deb. */
+    public static final String DEBIAN_MESA_LIBEGL_MESA0_DEB_PACKAGE = "libegl-mesa0"; // Default: "libegl-mesa0"
+    /** Download file name of the {@code libegl-mesa0} .deb. */
+    public static final String DEBIAN_MESA_LIBEGL_MESA0_DEB_FILE_NAME = "libegl-mesa0_25.0.7-2+deb13u1_arm64.deb"; // Default: "libegl-mesa0_25.0.7-2+deb13u1_arm64.deb"
+    /** Download URL of the {@code libegl-mesa0} .deb. */
+    public static final String DEBIAN_MESA_LIBEGL_MESA0_DEB_URL = DEBIAN_MESA_RELEASE_BASE_URL + "libegl-mesa0_25.0.7-2%2Bdeb13u1_arm64.deb"; // Default: "https://github.com/lfdevs/mesa-for-android-container/releases/download/debian/25.0.7-2-adreno/libegl-mesa0_25.0.7-2%2Bdeb13u1_arm64.deb"
+    /** SHA-256 of the {@code libegl-mesa0} .deb (verified 2026-10-21). */
+    public static final String DEBIAN_MESA_LIBEGL_MESA0_DEB_SHA256 = "1233334672d064b902a96fd8033d703c4617c927961a602c7156026184eb5ae4"; // Default: "1233334672d064b902a96fd8033d703c4617c927961a602c7156026184eb5ae4"
+
+    /** Package name of the {@code libgbm1} .deb. */
+    public static final String DEBIAN_MESA_LIBGBM1_DEB_PACKAGE = "libgbm1"; // Default: "libgbm1"
+    /** Download file name of the {@code libgbm1} .deb. */
+    public static final String DEBIAN_MESA_LIBGBM1_DEB_FILE_NAME = "libgbm1_25.0.7-2+deb13u1_arm64.deb"; // Default: "libgbm1_25.0.7-2+deb13u1_arm64.deb"
+    /** Download URL of the {@code libgbm1} .deb. */
+    public static final String DEBIAN_MESA_LIBGBM1_DEB_URL = DEBIAN_MESA_RELEASE_BASE_URL + "libgbm1_25.0.7-2%2Bdeb13u1_arm64.deb"; // Default: "https://github.com/lfdevs/mesa-for-android-container/releases/download/debian/25.0.7-2-adreno/libgbm1_25.0.7-2%2Bdeb13u1_arm64.deb"
+    /** SHA-256 of the {@code libgbm1} .deb (verified 2026-10-21). */
+    public static final String DEBIAN_MESA_LIBGBM1_DEB_SHA256 = "619deb3938e89224fcde48eebcc8f08c0076708535871c7d2b1cea4c061bb45b"; // Default: "619deb3938e89224fcde48eebcc8f08c0076708535871c7d2b1cea4c061bb45b"
+
+    /** Package name of the {@code libgl1-mesa-dri} .deb. */
+    public static final String DEBIAN_MESA_LIBGL1_MESA_DRI_DEB_PACKAGE = "libgl1-mesa-dri"; // Default: "libgl1-mesa-dri"
+    /** Download file name of the {@code libgl1-mesa-dri} .deb. */
+    public static final String DEBIAN_MESA_LIBGL1_MESA_DRI_DEB_FILE_NAME = "libgl1-mesa-dri_25.0.7-2+deb13u1_arm64.deb"; // Default: "libgl1-mesa-dri_25.0.7-2+deb13u1_arm64.deb"
+    /** Download URL of the {@code libgl1-mesa-dri} .deb. */
+    public static final String DEBIAN_MESA_LIBGL1_MESA_DRI_DEB_URL = DEBIAN_MESA_RELEASE_BASE_URL + "libgl1-mesa-dri_25.0.7-2%2Bdeb13u1_arm64.deb"; // Default: "https://github.com/lfdevs/mesa-for-android-container/releases/download/debian/25.0.7-2-adreno/libgl1-mesa-dri_25.0.7-2%2Bdeb13u1_arm64.deb"
+    /** SHA-256 of the {@code libgl1-mesa-dri} .deb (verified 2026-10-21). */
+    public static final String DEBIAN_MESA_LIBGL1_MESA_DRI_DEB_SHA256 = "8fcff5c23d35147dd46fbde0868d2a9450d30e2bc13e8a1986e527fda217d850"; // Default: "8fcff5c23d35147dd46fbde0868d2a9450d30e2bc13e8a1986e527fda217d850"
+
+    /** Package name of the {@code libglx-mesa0} .deb. */
+    public static final String DEBIAN_MESA_LIBGLX_MESA0_DEB_PACKAGE = "libglx-mesa0"; // Default: "libglx-mesa0"
+    /** Download file name of the {@code libglx-mesa0} .deb. */
+    public static final String DEBIAN_MESA_LIBGLX_MESA0_DEB_FILE_NAME = "libglx-mesa0_25.0.7-2+deb13u1_arm64.deb"; // Default: "libglx-mesa0_25.0.7-2+deb13u1_arm64.deb"
+    /** Download URL of the {@code libglx-mesa0} .deb. */
+    public static final String DEBIAN_MESA_LIBGLX_MESA0_DEB_URL = DEBIAN_MESA_RELEASE_BASE_URL + "libglx-mesa0_25.0.7-2%2Bdeb13u1_arm64.deb"; // Default: "https://github.com/lfdevs/mesa-for-android-container/releases/download/debian/25.0.7-2-adreno/libglx-mesa0_25.0.7-2%2Bdeb13u1_arm64.deb"
+    /** SHA-256 of the {@code libglx-mesa0} .deb (verified 2026-10-21). */
+    public static final String DEBIAN_MESA_LIBGLX_MESA0_DEB_SHA256 = "7e07f9bcd625c3da6fd41eeed4dbb2449aef3fffb60a9585f9c625aaabdcee76"; // Default: "7e07f9bcd625c3da6fd41eeed4dbb2449aef3fffb60a9585f9c625aaabdcee76"
+
+    /** Package name of the {@code mesa-libgallium} .deb. */
+    public static final String DEBIAN_MESA_MESA_LIBGALLIUM_DEB_PACKAGE = "mesa-libgallium"; // Default: "mesa-libgallium"
+    /** Download file name of the {@code mesa-libgallium} .deb. */
+    public static final String DEBIAN_MESA_MESA_LIBGALLIUM_DEB_FILE_NAME = "mesa-libgallium_25.0.7-2+deb13u1_arm64.deb"; // Default: "mesa-libgallium_25.0.7-2+deb13u1_arm64.deb"
+    /** Download URL of the {@code mesa-libgallium} .deb. */
+    public static final String DEBIAN_MESA_MESA_LIBGALLIUM_DEB_URL = DEBIAN_MESA_RELEASE_BASE_URL + "mesa-libgallium_25.0.7-2%2Bdeb13u1_arm64.deb"; // Default: "https://github.com/lfdevs/mesa-for-android-container/releases/download/debian/25.0.7-2-adreno/mesa-libgallium_25.0.7-2%2Bdeb13u1_arm64.deb"
+    /** SHA-256 of the {@code mesa-libgallium} .deb (verified 2026-10-21 with sha256sum on the downloaded file; the value published in the release notes carries a typo). */
+    public static final String DEBIAN_MESA_MESA_LIBGALLIUM_DEB_SHA256 = "9b618c92c8975050db98aac89d9c91619d66cda9e1b9075d2b66ba4f1f6b01b3"; // Default: "9b618c92c8975050db98aac89d9c91619d66cda9e1b9075d2b66ba4f1f6b01b3"
+
+    /** Package name of the {@code mesa-vulkan-drivers} .deb. */
+    public static final String DEBIAN_MESA_MESA_VULKAN_DRIVERS_DEB_PACKAGE = "mesa-vulkan-drivers"; // Default: "mesa-vulkan-drivers"
+    /** Download file name of the {@code mesa-vulkan-drivers} .deb. */
+    public static final String DEBIAN_MESA_MESA_VULKAN_DRIVERS_DEB_FILE_NAME = "mesa-vulkan-drivers_25.0.7-2+deb13u1_arm64.deb"; // Default: "mesa-vulkan-drivers_25.0.7-2+deb13u1_arm64.deb"
+    /** Download URL of the {@code mesa-vulkan-drivers} .deb. */
+    public static final String DEBIAN_MESA_MESA_VULKAN_DRIVERS_DEB_URL = DEBIAN_MESA_RELEASE_BASE_URL + "mesa-vulkan-drivers_25.0.7-2%2Bdeb13u1_arm64.deb"; // Default: "https://github.com/lfdevs/mesa-for-android-container/releases/download/debian/25.0.7-2-adreno/mesa-vulkan-drivers_25.0.7-2%2Bdeb13u1_arm64.deb"
+    /** SHA-256 of the {@code mesa-vulkan-drivers} .deb (verified 2026-10-21). */
+    public static final String DEBIAN_MESA_MESA_VULKAN_DRIVERS_DEB_SHA256 = "a3677b306710f9ae20a122ad6b41fd43e2f47d3c10ba3b480ce12a83ab758d8c"; // Default: "a3677b306710f9ae20a122ad6b41fd43e2f47d3c10ba3b480ce12a83ab758d8c"
+
+    /** Key for the llvmpipe multithreading enabled preference (spec 012, RF-1, RF-2). */
+    public static final String KEY_LLVMPIPE_THREADS_ENABLED = "llvmpipe_threads_enabled"; // Default: "llvmpipe_threads_enabled"
+    /** Key for the llvmpipe multithreading thread count preference (spec 012, RF-1). */
+    public static final String KEY_LLVMPIPE_THREADS_COUNT = "llvmpipe_threads_count"; // Default: "llvmpipe_threads_count"
+
+
     /** Debian rootfs staging directory path */
     public static final String DEBIAN_STAGING_ROOTFS_DIR_PATH = TERMUX_FILES_DIR_PATH + "/debian-staging";
     /** Debian rootfs staging directory */

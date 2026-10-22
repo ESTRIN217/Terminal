@@ -2,16 +2,26 @@ package com.termux.terminal.compose.settings
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.termux.app.GpuAccelerationInstaller
+import com.termux.shared.errors.Error
 import com.termux.shared.logger.Logger
+import com.termux.shared.termux.TermuxConstants
+import com.termux.shared.termux.proot.GpuDetectionLibrary
+import com.termux.shared.termux.proot.GpuDeviceReader
 import com.termux.shared.termux.settings.preferences.TermuxAPIAppSharedPreferences
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences
 import com.termux.shared.termux.settings.preferences.TermuxFloatAppSharedPreferences
 import com.termux.shared.termux.settings.preferences.TermuxTaskerAppSharedPreferences
 import com.termux.shared.termux.settings.preferences.TermuxWidgetAppSharedPreferences
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * ViewModel backing the Compose settings screen.
@@ -26,6 +36,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val prefs: TermuxAppSharedPreferences? =
         TermuxAppSharedPreferences.build(application, false)
+
+    /** In-flight GPU evaluation job; one evaluation per panel entry at a time. */
+    private var mGpuLoadJob: Job? = null
 
     init {
         reload()
@@ -68,9 +81,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     ?: 1,
                 widgetInstalled = TermuxWidgetAppSharedPreferences.build(context, false) != null,
                 widgetLogLevel = TermuxWidgetAppSharedPreferences.build(context, false)?.getLogLevel(false)
-                    ?: 1
+                    ?: 1,
+                llvmpipeThreadsEnabled = p.isLlvmpipeThreadsEnabled,
+                llvmpipeThreadsCount = p.llvmpipeThreadsCount,
+                hostCores = Runtime.getRuntime().availableProcessors(),
+                isGpuSolutionActive = p.gpuSolution == GpuDetectionLibrary.Solution.ADRENO_KGSL
             )
         }
+        // The GPU panel is not a plain preference row: it re-detects per entry.
+        reloadGpu()
     }
 
     fun setShowTerminalToolbar(value: Boolean) {
@@ -184,5 +203,140 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         private const val LOG_TAG = "SettingsViewModel"
+    }
+
+    /**
+     * Evaluate the GPU panel state (spec 011, RF-1, RF-2, RF-6): detect the GPU
+     * family on the IO dispatcher, read the guest mesa version through the
+     * one-shot dpkg-query runner (only when rootfs + family make it decisive
+     * for the gate) and evaluate the action gate against the persisted
+     * solution. While evaluating, the state shows the honest «consulting»
+     * placeholder; every failure degrades to a stale/honest display via
+     * [Logger], never a guessed family or a guessed action.
+     *
+     * Invoked on every panel entry ([reload]) and after each GPU operation.
+     */
+    fun reloadGpu() {
+        if (mGpuLoadJob?.isActive == true) return
+        _uiState.update {
+            it.copy(gpuStatusLine = "", gpuActionType = GpuPanelAction.NONE, gpuReasonKey = null)
+        }
+        mGpuLoadJob = viewModelScope.launch {
+            try {
+                evaluateGpu()
+            } catch (e: Exception) {
+                // RF-2 honesty: a failed evaluation reopens the «consulting»
+                // placeholder instead of showing a guessed state.
+                Logger.logErrorExtended(LOG_TAG, "GPU panel evaluation failed\n" + e)
+                _uiState.update {
+                    it.copy(
+                        gpuStatusLine = GpuDetectionLibrary.STATE_KEY_UNKNOWN,
+                        gpuActionType = GpuPanelAction.INFO,
+                        gpuReasonKey = GpuDetectionLibrary.REASON_NO_GPU_DATA
+                    )
+                }
+            }
+        }
+    }
+
+    /** The blocking body of [reloadGpu]; must run off the main thread. */
+    private suspend fun evaluateGpu() {
+        val context = getApplication<Application>()
+        withContext(Dispatchers.IO) {
+            val familyResult = GpuDetectionLibrary.detectFamily(GpuDeviceReader.read())
+            val rootfsInstalled = GpuAccelerationInstaller.isRootfsInstalled()
+
+            // A dpkg-query costs a guest session: ask only when the version can
+            // be decisive for the gate (family passes and rootfs exists).
+            val needsVersion = familyResult.family == GpuDetectionLibrary.GpuFamily.ADRENO_CON_KGSL
+                && rootfsInstalled
+            val guestVersion = if (needsVersion)
+                GpuAccelerationInstaller.queryGuestMesaVersionBlocking(context)
+            else
+                null
+
+            val gate = GpuDetectionLibrary.evaluateAction(
+                familyResult.family,
+                rootfsInstalled,
+                guestVersion,
+                TermuxConstants.DEBIAN_MESA_EXPECTED_VERSION,
+                prefs?.getGpuSolution()
+            )
+            val keys = GpuDetectionLibrary.toUiKeys(familyResult, gate)
+            _uiState.update {
+                it.copy(
+                    gpuFamily = familyResult.family.name,
+                    gpuModel = familyResult.model ?: "",
+                    gpuStatusLine = keys.stateKey,
+                    gpuActionType = when (keys.action) {
+                        GpuDetectionLibrary.Action.INSTALL_OFFERED -> GpuPanelAction.INSTALL
+                        GpuDetectionLibrary.Action.UNINSTALL_OFFERED -> GpuPanelAction.UNINSTALL
+                        else -> GpuPanelAction.INFO
+                    },
+                    gpuReasonKey = keys.reasonKey,
+                    isGpuSolutionActive = prefs?.gpuSolution == GpuDetectionLibrary.Solution.ADRENO_KGSL
+                )
+            }
+        }
+    }
+
+    fun setLlvmpipeThreadsEnabled(value: Boolean) {
+        prefs?.isLlvmpipeThreadsEnabled = value
+        _uiState.update { it.copy(llvmpipeThreadsEnabled = value) }
+    }
+
+    fun setLlvmpipeThreadsCount(value: Int) {
+        prefs?.llvmpipeThreadsCount = value
+        _uiState.update { it.copy(llvmpipeThreadsCount = value) }
+    }
+
+    /** «Instalar aceleración GPU» button; only fires when the gate offers INSTALL (RF-6). */
+    fun onGpuInstallRequested() {
+        dispatchGpuOperation(false)
+    }
+
+    /** «Desinstalar aceleración GPU» button; only fires when the gate offers UNINSTALL (RF-6). */
+    fun onGpuUninstallRequested() {
+        dispatchGpuOperation(true)
+    }
+
+    /**
+     * Launch the install/uninstall operation through the T6 executor and drive
+     * the panel progress ([SettingsUiState.gpuBusy]). The executor already
+     * composes [Error]+[Logger]+toast on any failure (T6 contract) and
+     * persists the preference on success only — the panel just reflects the
+     * result by re-evaluating. RF-6: the dispatch is refused unless the gate
+     * is currently offering exactly this action.
+     *
+     * @param uninstall {@code true} for the uninstall operation.
+     */
+    private fun dispatchGpuOperation(uninstall: Boolean) {
+        val state = _uiState.value
+        val offered = state.gpuActionType == (if (uninstall) GpuPanelAction.UNINSTALL else GpuPanelAction.INSTALL)
+        if (!offered || state.gpuBusy)
+            return
+
+        _uiState.update { it.copy(gpuBusy = true) }
+        val context = getApplication<Application>()
+        val callback = object : GpuAccelerationInstaller.GpuAccelerationCallback {
+            override fun onProgress(message: String?) {
+                Logger.logInfo(LOG_TAG, "GPU progress: " + message)
+            }
+
+            override fun onSuccess(newSolution: GpuDetectionLibrary.Solution?) {
+                _uiState.update { it.copy(gpuBusy = false) }
+                reloadGpu()
+            }
+
+            override fun onError(error: Error?) {
+                // Already logged and toasted by the executor; the preference
+                // did NOT change (RF-3/RF-5) — refresh the panel anyway.
+                _uiState.update { it.copy(gpuBusy = false) }
+            }
+        }
+        if (uninstall)
+            GpuAccelerationInstaller.uninstallAcceleration(context, callback)
+        else
+            GpuAccelerationInstaller.installAcceleration(context, callback)
     }
 }

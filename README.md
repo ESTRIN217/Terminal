@@ -144,6 +144,32 @@ escribe ningún snapshot y se usa la vía nativa. Sin sesiones activas, el muest
 se para. Detalles de datos en [`docs/proot-debian-arm64-plan.md`](docs/proot-debian-arm64-plan.md)
 (sección 7) y [`specs/010-procstat-htop/`](specs/010-procstat-htop/).
 
+## Gráficos y GPU (specs 011/012)
+
+Sin root, lo que ve `glxinfo`/`vulkaninfo` dentro de la sesión Debian es el
+renderizador por CPU de Mesa (**llvmpipe**, con la lavapipe de Vulkan): no es un
+bug, es lo máximo posible en la mayoría de móviles. La sección «Estado GPU» de
+Ajustes dice qué situación tiene tu dispositivo:
+
+- **Adreno (Qualcomm):** el backend KGSL de los drivers libres freedreno/turnip
+  habla directamente con el GPU (nodo `/dev/kgsl-3d0`) sin root ni DRM. Si la
+  detección lo confirma y la versión de mesa del invitado coincide
+  (`25.0.7-2+deb13u1`), la app ofrece «Instalar aceleración GPU»: descarga los
+  seis `.deb` de mesa recompilados con KGSL, verificando el SHA-256 de cada uno,
+  los instala con `apt install --reinstall` dentro del invitado, marca holds y a
+  partir de entonces inyecta `MESA_LOADER_DRIVER_OVERRIDE=kgsl`. Desinstalar
+  devuelve el invitado al estado del mirror Debian. Referencia externa:
+  [`lfdevs/mesa-for-android-container`](https://github.com/lfdevs/mesa-for-android-container).
+- **Mali / PowerVR (MediaTek, Exynos...):** sin vía real a la GPU sin root
+  (habría que portar módulos kernel DRM). El panel lo dice en claro y
+  llvmpipe sigue en uso. La spec 012 saca partido a la CPU: el rasterizador
+  por software corre multihilo. En Ajustes → «Hilos de llvmpipe» viene
+  activado con N=8; puedes configurar N entre 1 y 16. Se inyecta
+  `LP_NUM_THREADS` y `GALLIUM_NUM_THREADS` con `min(núcleos, N)`. Apaga
+  «Activar multihilo» para no inyectar ninguna de las dos variables. Los cambios
+  se aplican a las sesiones nuevas; las que ya están abiertas conservan su entorno.
+  En Adreno con aceleración KGSL activa, estos ajustes no aplican.
+
 ## Mantenimiento y contribuciones
 
 - Java 17 requerido. NDK `30.0.14904198`, CMake `3.31.6`.

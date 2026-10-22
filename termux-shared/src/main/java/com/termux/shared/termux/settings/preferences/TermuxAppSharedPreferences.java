@@ -1,15 +1,18 @@
 package com.termux.shared.termux.settings.preferences;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.util.TypedValue;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 
 import com.termux.shared.android.PackageUtils;
 import com.termux.shared.settings.preferences.AppSharedPreferences;
 import com.termux.shared.settings.preferences.SharedPreferenceUtils;
 import com.termux.shared.termux.TermuxConstants;
+import com.termux.shared.termux.proot.GpuDetectionLibrary;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.data.DataUtils;
 import com.termux.shared.termux.TermuxUtils;
@@ -31,6 +34,11 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
                 TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION));
 
         setFontVariables(context);
+    }
+
+    @VisibleForTesting
+    TermuxAppSharedPreferences(@Nullable SharedPreferences sharedPreferences) {
+        super(null, sharedPreferences, null);
     }
 
     /**
@@ -380,6 +388,83 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
      */
     public void setSeededTerminalCursorBlinkRate(int value) {
         SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_SEEDED_TERMINAL_CURSOR_BLINK_RATE, value, false);
+    }
+
+
+
+    /**
+     * Get the persisted GPU acceleration pipeline solution (spec 011). The value is stored as
+     * the name of a {@link GpuDetectionLibrary.Solution}; a missing or unknown stored value is
+     * read as {@link GpuDetectionLibrary.Solution#NONE}.
+     *
+     * @return The persisted solution, never {@code null}.
+     */
+    @NonNull
+    public GpuDetectionLibrary.Solution getGpuSolution() {
+        String value = SharedPreferenceUtils.getString(mSharedPreferences, TERMUX_APP.KEY_GPU_SOLUTION, TERMUX_APP.DEFAULT_VALUE_GPU_SOLUTION, false);
+        try {
+            return GpuDetectionLibrary.Solution.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            return GpuDetectionLibrary.Solution.NONE;
+        }
+    }
+
+    /**
+     * Set the GPU acceleration pipeline solution (spec 011). Only the standalone
+     * {@link TermuxPreferenceConstants.TERMUX_APP#KEY_GPU_SOLUTION} key is written;
+     * no other persisted preference is touched.
+     *
+     * @param solution The solution to persist; {@code null} is persisted as {@link GpuDetectionLibrary.Solution#NONE}.
+     */
+    public void setGpuSolution(@Nullable GpuDetectionLibrary.Solution solution) {
+        SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_GPU_SOLUTION,
+            solution != null ? solution.name() : TERMUX_APP.DEFAULT_VALUE_GPU_SOLUTION, false);
+    }
+
+
+
+    /**
+     * Whether the llvmpipe multithreading lever is enabled (spec 012, RF-1, RF-2).
+     * Missing value returns {@code true} (default on).
+     *
+     * @return {@code true} if llvmpipe should run multithreaded.
+     */
+    public boolean isLlvmpipeThreadsEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_LLVMPIPE_THREADS_ENABLED,
+            TERMUX_APP.DEFAULT_VALUE_LLVMPIPE_THREADS_ENABLED);
+    }
+
+    /**
+     * Set whether the llvmpipe multithreading lever is enabled (spec 012).
+     *
+     * @param value The value to persist.
+     */
+    public void setLlvmpipeThreadsEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_LLVMPIPE_THREADS_ENABLED, value, false);
+    }
+
+    /**
+     * Get the configured llvmpipe thread count (spec 012, RF-1). Missing value
+     * returns 8 (default 8).
+     *
+     * @return The thread count preference (N).
+     */
+    public int getLlvmpipeThreadsCount() {
+        return SharedPreferenceUtils.getInt(mSharedPreferences,
+            TERMUX_APP.KEY_LLVMPIPE_THREADS_COUNT,
+            TERMUX_APP.DEFAULT_VALUE_LLVMPIPE_THREADS_COUNT);
+    }
+
+    /**
+     * Set the configured llvmpipe thread count (spec 012).
+     *
+     * @param value The thread count to persist.
+     */
+    public void setLlvmpipeThreadsCount(int value) {
+        SharedPreferenceUtils.setInt(mSharedPreferences,
+            TERMUX_APP.KEY_LLVMPIPE_THREADS_COUNT, value, false);
     }
 
 
