@@ -162,6 +162,53 @@
                         de rendimiento. Por tanto, la validación medida disponible es la inyección
                         de variables y la ejecución correcta de <code>htop</code>.
                     </p>
+                    <h2>Estado de la validación de la vía Adreno/KGSL (spec&nbsp;011)</h2>
+                    <p>
+                        La parte no dependiente del hardware se implementó íntegra y quedó en
+                        verde (<code>./gradlew test</code>): detección de familia GPU,
+                        panel «Estado GPU», comandos apt de instalación/desinstalación,
+                        verificación SHA-256 en streaming y la inyección de
+                        <code>MESA_LOADER_DRIVER_OVERRIDE=kgsl</code>. Lo que sigue pendiente es
+                        <strong>ejercitar el pipeline en un Adreno real</strong>; el dispositivo de
+                        trabajo habitual es Mali (Unisoc T606), donde la vía KGSL no existe por
+                        diseño y el pipeline no se ofrece.
+                    </p>
+                    <p>
+                        Proceso de validación documentado, para cuando se disponga de un
+                        dispositivo con <strong>Adreno 6xx o 7xx</strong> que exponga
+                        <code>/dev/kgsl-3d0</code> (sin root, Android stock, <code>enforcing</code>):
+                    </p>
+                    <ol>
+                        <li>Ajustes → «Estado GPU» debe reportar la familia
+                            <em>Adreno con KGSL</em> (no la vía CPU ni «desconocida»).</li>
+                        <li>Instalar la aceleración desde el panel: las seis descargas deben
+                            verificar su SHA-256 y el <code>apt install --reinstall</code> del
+                            invitado debe terminar en exit&nbsp;0 con los holds aplicados.</li>
+                        <li>En una sesión nueva del invitado,
+                            <code>env | grep MESA_LOADER_DRIVER_OVERRIDE</code> debe mostrar
+                            <code>MESA_LOADER_DRIVER_OVERRIDE=kgsl</code>, y el comando proot
+                            (fuera del env del invitado) no debe cambiar respecto a la versión
+                            base del fork.</li>
+                        <li>Con un medidor de renderer disponible
+                            (<code>glxinfo</code>/<code>eglinfo</code>/<code>vulkaninfo</code>),
+                            el reporte del proveedor debe ser el de freedreno/turnip por KGSL, no
+                            <code>llvmpipe</code>/<code>lavapipe</code>.</li>
+                        <li>Instalar un benchmark (p.&nbsp;ej. <code>glmark2</code>) y anotar el
+                            score frente a la misma versión con la aceleración desinstalada
+                            (referencia llvmpipe multihilo).</li>
+                        <li>Desinstalar desde el panel: <code>apt-mark unhold</code> + reinstall
+                            desde el mirror Debian debe devolver el invitado a los paquetes de
+                            distro y el renderer debe volver a llvmpipe.</li>
+                        <li>Caso anti-confusión: reinstalar el rootfs con la preferencia aún
+                            activa; el panel debe degradar el estado con el motivo concreto
+                            («versión de mesa diverge») sin ofrecer la acción Y manteniendo la
+                            posibilidad de desinstalar.</li>
+                    </ol>
+                    <p>
+                        Mientras ese proceso no se ejecute en hardware Adreno, la página y el
+                        README señalan el pipeline como <em>implementado y documentado</em>, no
+                        como validado; el resultado real de cada paso se anotará aquí.
+                    </p>
 
                     <h2>Solo AArch64</h2>
                     <p>

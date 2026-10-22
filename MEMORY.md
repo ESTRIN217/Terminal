@@ -1,22 +1,20 @@
 # MEMORY.md — Terminal
 ## Estado actual
-- Rama `3.0`; había cambios sin confirmar en 011/012 antes de esta tarea.
-  Preservarlos; no limpiar ni revertir cambios ajenos.
-- **Spec 011 en curso:** T1–T3 hechas; catálogo Mesa, seis paquetes con SHA-256
-  fijados y preferencia `gpu_solution`. T4–T9 pendientes según el plan.
-- **Spec 012 en curso:** T1 (lógica pura) y T2 (constantes/prefs con defaults
-  on/8, round-trip y claves preservadas) hechas el 2026-10-22;
-  T3 cablea env con gate GPU; T4 añade Switch/slider 1..16, resumen efectivo,
-  nota de sesiones, estado Adreno y strings EN/ES/PT. T5 validada en Infinix
-  Mali T606 (8 núcleos): env on/off correcto, htop 3.4.1 arranca; glmark2 no
-  disponible en caché apt, sin score. README/wiki detallan el default y apagado;
-  `./gradlew test` verde. Spec 012 cerrada.
-- Spec 010 cerrada: overlay `/proc` vivo para htop/btop vía binds proot,
-  muestreo ligado a sesiones y validación previa en dispositivo. Contadores
-  deben ser acumulativos/monótonos para evitar porcentajes negativos.
-- Specs 001–009 cerradas; 2.1.0 publicada; `release/2.0` tiene commits sin push.
-- Sitio estático en `public/`; tras una release los datos caducables los
-  actualiza `scripts/update-site.py`. Wiki estática en `wiki/`.
+- Rama `3.0`; árbol limpio salvo trabajo de esta sesión (doc T9 + spec 013 borrador).
+- **Spec 011:** T1–T8 hechas y committeadas (`Added GPU acceleration and llvmpipe
+  controls`). **T9 a medias (2026-10-22):** la doc de validación del pipeline Adreno
+  (hardware requerido + pasos 1–7) quedó en `wiki/limitaciones.html`; la parte en
+  dispositivo Mali pendiente del mantenedor.
+- **Spec 012 cerrada** (llvmpipe multihilo, validada en Infinix Mali T606: env
+  on/off correcto, htop 3.4.1 ok). Espec 010 cerrada (overlay /proc); specs 001–009
+  cerradas; 2.1.0 publicada.
+- **Spec 013 (VirGL) borrador en `specs/013-virgl-aceleracion-gpu/`:** solo VirGL
+  (única vía sin root para Mali), binario del servidor compilado por NDK/CMake como
+  proot (embebido, sin descargas), display mínimo = VNC dentro del invitado +
+  visor externo (documentado), `gpu_solution` se extiende a
+  NONE|ADRENO_KGSL|VIRGL mutuamente excluyentes. Pendiente: aprobación del
+  borrador → plan → tareas. Dudas clave pinned: tag/commit de virglrenderer,
+  path del socket (`VIRGL_TEST_SERVER_URI` vs /tmp vtest) con mesa 25.0.7.
 
 ## Arquitectura y reglas prácticas
 - `terminal-emulator` → `terminal-view` → `termux-shared` → `app`;

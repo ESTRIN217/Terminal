@@ -49,13 +49,19 @@
     (strings en `values/`, `values-es-rVE`, `values-pt-rBR`); `./gradlew test` verde.
 
 - [ ] **T9. Validación en dispositivo (Mali) + documentación.** RF-2, RF-4, RF-6.
-  - Hecho cuando (dispositivo Mali stock): el panel dice la verdad y no ofrece la acción;
-    nueva sesión proot no lleva `MESA_LOADER_DRIVER_OVERRIDE` (verificado dentro del
-    guest) y el comando proot es el mismo que antes del cambio; el guest sigue en
-    llvmpipe; cero regresiones en sesiones/htop (spec 010 intacta).
-  - Hecho cuando: wiki (GPU/limitaciones) y README describen las tres situaciones y la
-    vía KGSL con su origen; el proceso de validación del pipeline Adreno (hardware
-    requerido) queda documentado en la wiki.
+  - [x] Documentación (esta parte, hecha 2026-10-22, sin hardware delante): wiki
+    (`limitaciones.html`) describe las tres situaciones, la vía KGSL con su origen
+    (`lfdevs/mesa-for-android-container`) y el **proceso de validación del pipeline
+    Adreno** (hardware requerido, pasos 1–7, marcado como implementado-y-documentado,
+    no validado). README ya cubría el mismo estado desde el commit de la spec 011.
+  - [ ] Pendiente (dispositivo Mali stock para la parte de detección): el panel dice
+    la verdad y no ofrece la acción; nueva sesión proot no lleva
+    `MESA_LOADER_DRIVER_OVERRIDE` (verificado dentro del guest) y el comando proot es
+    el mismo que antes del cambio; el guest sigue en llvmpipe; cero regresiones en
+    sesiones/htop (spec 010 intacta).
+  - Hecho cuando: los dos apartados anteriores marcados con su evidencia; la wiki
+    registra el resultado real de los pasos 1–7 del proceso Adreno cuando exista
+    hardware.
 
 ## Notas
 
