@@ -36,10 +36,13 @@
   JNI abort = crash al abrir pestaña. Fix: hooks vía `LorieView.Client`;
   regla: al quitar símbolos Java de lorie, grep del espejo en `cpp/`.
 - En el proot guest `/system` no visible y PATH sin `pm`: bind `-b /system`,
-  `-b /apex`, `-b /data/app` en `buildProotCommand` + rutas absolutas.
+  `-b /apex`, `-b /linkerconfig`, `-b /data/app` en `buildProotCommand` +
+  rutas absolutas.
   `/apex` imprescindible: intérprete ELF de `app_process64` en Android 11+
   (`/apex/com.android.runtime/bin/linker64`); sin bind el exec da ENOENT
-  («required file not found»). `/data/app` imprescindible: proot traduce lo
+  («required file not found»). `/linkerconfig` imprescindible para el linker
+  de APEX (namespaces; sin ella CANNOT LINK por libnativeloader.so).
+  `/data/app` imprescindible: proot traduce lo
   no enlazado al rootfs y el `CLASSPATH=/data/app/…` no resolvería.
 - Loader guest (enmienda A RF-8, replicando el deb upstream): env
   `TERMUX_X11_APK` (sourceDir per-sesión) + wrapper idempotente

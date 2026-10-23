@@ -85,7 +85,9 @@
                         <code>CLASSPATH=${TERMUX_X11_APK:?}</code> y lanza el companion con
                         <code>app_process</code>. Las sesiones enlazan también <code>/apex</code>
                         (el intérprete ELF de <code>app_process</code> en Android 11+ vive ahí);
-                        sin ese enlace el exec falla con «required file not found». Nadie tiene
+                        sin ese enlace el exec falla con «required file not found»), y <code>/linkerconfig</code> (la configuración de
+                        namespaces del linker generada en el arranque; sin ella el exec muere con
+                        <em>CANNOT LINK EXECUTABLE</em> por <code>libnativeloader.so</code>). Nadie tiene
                         que buscar el APK a mano y, si el
                         fork se actualiza, la ruta nueva vale en la siguiente sesión sin ningún
                         paso extra.
