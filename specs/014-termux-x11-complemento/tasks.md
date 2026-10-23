@@ -80,3 +80,14 @@ la configuración del grafo, y el build completo con `libXlorie.so` se hace en T
   `X11CompanionCommandTest` en rojo → verde. Wiki `x11.html` actualizada
   (primario `termux-x11`, one-liner como avanzado).
   - Hecho cuando: `./gradlew test` verde, `assembleDebug` OK y wiki revisada.
+- [ ] **T13. Spawn lado app del companion (enmienda B, RF-8).**
+  `X11CompanionCommand.buildSpawnArgs(display, tag)` (puro, argv para
+  `app_process`, tests primero); `X11CompanionSpawner.spawn(context, display,
+  tag)` (ProcessBuilder con `CLASSPATH = sourceDir`, argumentos igual al
+  one-liner, salida descartada en hilo daemon, `Error` con fallo);
+  `X11TabController.startCompanion()` y botón primario en el overlay
+  `NoServerOverlay` (en fallo, toast con error y el comando pegable queda
+  como fallback). Strings ×3. Wiki actualizada (spawn en el dispositivo,
+  pegar solo como avanzado).
+  - Hecho cuando: tests de spawn args en verde, `./gradlew test` pasa,
+    `assembleDebug` OK y el botón arranca el companion en dispositivo.

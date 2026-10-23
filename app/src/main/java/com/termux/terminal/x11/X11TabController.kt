@@ -9,6 +9,7 @@ import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.os.RemoteException
 import android.view.KeyEvent
+import com.termux.shared.errors.Error
 import com.termux.shared.logger.Logger
 import com.termux.shared.termux.TermuxConstants
 import com.termux.x11.ICmdEntryInterface
@@ -107,6 +108,18 @@ class X11TabController(
     /** Host check for the idempotent guest wrapper written on app start. */
     private fun guestWrapperExists(): Boolean =
         java.io.File(TermuxConstants.TERMUX_X11.X11_GUEST_WRAPPER_HOST_PATH).isFile()
+
+    /**
+     * Start the companion X server from the app itself (spec 014, enmienda B).
+     * Fire-and-forget: when the server comes up it announces the display via
+     * broadcast and the tab flips out of the NO_SERVER state. Safe to tap again:
+     * a live server gets re-announced instead of racing for the socket.
+     *
+     * @param displayArg display argument; defaults to the current tag-less display
+     * @return null on spawn, otherwise the [Error] to show
+     */
+    fun startCompanion(displayArg: String = ":0"): Error? =
+        X11CompanionSpawner.spawn(context, displayArg, tag.ifEmpty { null })
 
     override fun onServerBinder(tag: String, binder: IBinder): Boolean {
         val current = service

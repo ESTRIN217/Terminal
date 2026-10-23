@@ -152,6 +152,18 @@ private fun NoServerOverlay(state: X11ConnectionState, controller: X11TabControl
                 )
             }
             Button(onClick = {
+                val error = controller.startCompanion()
+                if (error == null) {
+                    Toast.makeText(context, context.getString(R.string.x11_start_server_sent), Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context,
+                        context.getString(R.string.x11_start_server_failed, error.getMessage()),
+                        Toast.LENGTH_LONG).show()
+                }
+            }) {
+                Text(stringResource(R.string.x11_start_server))
+            }
+            Button(onClick = {
                 copyToClipboard(context, command)
                 Toast.makeText(context, context.getString(R.string.x11_command_copied), Toast.LENGTH_SHORT).show()
             }) {

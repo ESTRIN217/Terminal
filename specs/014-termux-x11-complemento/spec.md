@@ -91,6 +91,17 @@ con entrada en el drawer.
     `termux-x11 :0 [-tag t]`; SI NO, se conserva el one-liner con rutas
     absolutas `/system/bin/*` como fallback. La escritura del wrapper es barata
     (comparación de contenido) y se ejecuta en el arranque de sesión.
+  - **Enmienda B (spawn lado app, T13):** verificado en dispositivo (Unisoc,
+    Android 12, app uid): el guest proot no puede leer `/linkerconfig` ni
+    `/apex` en claro (`can't sanitize binding: Permission denied`), así que el
+    exec de `app_process` dentro del guest no consigue namespaces y muere con
+    CANNOT LINK. EL SISTEMA respeta la vía upstream Termux: la pestaña ofrece
+    un botón que **inicia el companion desde la propia app** (exec directo de
+    `/system/bin/app_process` con `CLASSPATH = applicationInfo.sourceDir`,
+    argv idéntico al one-liner, salida descartada, sin proot). EL SI el spawn
+    falla (p. ej. SELinux) ENTONCES el overlay muestra el error y conserva el
+    comando pegable como fallback. El botón es re-disparable: `CmdEntryPoint`
+    re-anuncia un servidor vivo.
 
 ## Requisitos no funcionales
 

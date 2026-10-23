@@ -108,8 +108,11 @@
     <string name="action_open_x11">X11</string>
     <string name="x11_session_default_name">X11</string>
     <string name="x11_no_server_title">No X server is running</string>
-    <string name="x11_no_server_body">Start the companion server by pasting this command in a terminal session, then reconnect:</string>
+    <string name="x11_no_server_body">Tap “Start the X server” to launch the companion from the app, or paste the command below in a terminal session:</string>
     <string name="x11_no_server_hint">Services started this way live in their own process; close this tab any time without stopping them.</string>
+    <string name="x11_start_server">Start the X server</string>
+    <string name="x11_start_server_failed">Could not start the X server: %1$s</string>
+    <string name="x11_start_server_sent">Companion started; waiting for the display…</string>
     <string name="x11_copy_command">Copy command</string>
     <string name="x11_command_copied">Command copied to clipboard</string>
     <string name="x11_waiting_for_server">Waiting for the X server…</string>

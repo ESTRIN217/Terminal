@@ -23,8 +23,34 @@ object X11CompanionCommand {
     /** Entry-point class shipped by the lorie library (independent of the app id). */
     private const val CMD_ENTRY_POINT_CLASS = "com.termux.x11.CmdEntryPoint"
 
+    /** Absolute path of the Android app_process binary. */
+    private const val APP_PROCESS_BINARY = "/system/bin/app_process"
+
     /** Fixed prefix of the launcher command. */
-    private const val APP_PROCESS = "/system/bin/app_process /"
+    private const val APP_PROCESS = "$APP_PROCESS_BINARY /"
+
+    /**
+     * Builds the argv list to spawn the companion X server directly from the
+     * app process (spec 014, enmienda B): same tokens as the paste-ready
+     * one-liner, without any shell. The spawning caller must set the
+     * `CLASSPATH` env var to the app's own APK path.
+     *
+     * @param displayArg X display like ":0", "1" (colon is added) or ":1.5"
+     * @param tag optional document tag; "" or blank means no `-tag` flag
+     * @return spawn argv, or null when any input is invalid
+     */
+    fun buildSpawnArgs(displayArg: String, tag: String?): List<String>? {
+        val display = normalizeDisplay(displayArg) ?: return null
+        val trimmedTag = tag?.trim().orEmpty()
+        if (trimmedTag.isNotEmpty() && (trimmedTag.startsWith("-") || !TAG_REGEX.matches(trimmedTag))) return null
+        val args = mutableListOf(
+            APP_PROCESS_BINARY, "/",
+            "--nice-name=${TermuxConstants.TERMUX_X11.X11_COMPANION_PROCESS_NAME}",
+            CMD_ENTRY_POINT_CLASS, display
+        )
+        if (trimmedTag.isNotEmpty()) args += listOf("-tag", trimmedTag)
+        return args
+    }
 
     /**
      * Builds the guest-loader command for the wrapper script installed in the

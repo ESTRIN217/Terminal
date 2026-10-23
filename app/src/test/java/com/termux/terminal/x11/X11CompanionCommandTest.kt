@@ -52,6 +52,37 @@ class X11CompanionCommandTest {
         )
     }
 
+    // ---- app-side spawn (enmienda B) ----
+
+    @Test
+    fun buildsSpawnArgsForDefaultDisplay() {
+        assertEquals(
+            listOf(
+                "/system/bin/app_process", "/",
+                "--nice-name=termux-x11", "com.termux.x11.CmdEntryPoint", ":0"
+            ),
+            X11CompanionCommand.buildSpawnArgs(":0", null)
+        )
+    }
+
+    @Test
+    fun buildsSpawnArgsWithTag() {
+        assertEquals(
+            listOf(
+                "/system/bin/app_process", "/",
+                "--nice-name=termux-x11", "com.termux.x11.CmdEntryPoint", ":1", "-tag", "main"
+            ),
+            X11CompanionCommand.buildSpawnArgs(":1", "main")
+        )
+    }
+
+    @Test
+    fun spawnArgsRejectInvalidInput() {
+        assertNull(X11CompanionCommand.buildSpawnArgs("bad", null))
+        assertNull(X11CompanionCommand.buildSpawnArgs(":0", "with spaces"))
+        assertNull(X11CompanionCommand.buildSpawnArgs(":0", "-flag"))
+    }
+
     @Test
     fun guestSelectionIgnoresApplicationId() {
         assertEquals(
