@@ -1,9 +1,9 @@
 # MEMORY.md — Terminal
 ## Estado actual
-- Rama `3.0`. **Spec 014 (termux-x11 complemento): T1–T10 + enmienda A (loader
-  guest T11/T12) hechas.** Pendiente: probar en dispositivo real (wrapper
-  guest, companion, touch, HW keys) y cerrar la spec. Cerradas antes: 010–012,
-  001–009; 2.1.0 publicada.
+- Rama `3.0`. **Spec 014 (termux-x11 complemento): T1–T12 + enmienda B
+  (T13 spawn lado app) implementadas.** Pendiente: probar en dispositivo el
+  botón «Iniciar servidor» y cerrar la spec. Cerradas antes: 010–012, 001–009;
+  2.1.0 publicada.
 - **Spec 013 (VirGL) borrador en `specs/013-virgl-aceleracion-gpu/`:** pendiente
   aprobación → plan → tareas.
 
@@ -35,15 +35,14 @@
 - lorie/`activity.cpp` referenciaba símbolos Java retirados (`MainActivity`) →
   JNI abort = crash al abrir pestaña. Fix: hooks vía `LorieView.Client`;
   regla: al quitar símbolos Java de lorie, grep del espejo en `cpp/`.
-- En el proot guest `/system` no visible y PATH sin `pm`: bind `-b /system`,
-  `-b /apex`, `-b /linkerconfig`, `-b /data/app` en `buildProotCommand` +
-  rutas absolutas.
-  `/apex` imprescindible: intérprete ELF de `app_process64` en Android 11+
-  (`/apex/com.android.runtime/bin/linker64`); sin bind el exec da ENOENT
-  («required file not found»). `/linkerconfig` imprescindible para el linker
-  de APEX (namespaces; sin ella CANNOT LINK por libnativeloader.so).
-  `/data/app` imprescindible: proot traduce lo
-  no enlazado al rootfs y el `CLASSPATH=/data/app/…` no resolvería.
+- Ejecutar `app_process` DENTRO del proot guest no funciona (probado en
+  dispositivo, Unisoc/A12): 1) sin `/system` y `/apex` → exec ENOENT;
+  2) con ellos, el linker APEX exige `/linkerconfig/ld.config.txt`, pero el
+  uid de app no puede ni leerlo ni enlazarlo (proot: can't sanitize
+  binding; Permission denied) → CANNOT LINK (libnativeloader). Conclusión:
+  companion se inicia desde la app (ProceBuilder + CLASSPATH sourceDir,
+  `X11CompanionSpawner`, botón primario en overlay; guest wrapper/one-liner
+  quedan como avanzado).
 - Loader guest (enmienda A RF-8, replicando el deb upstream): env
   `TERMUX_X11_APK` (sourceDir per-sesión) + wrapper idempotente
   `files/debian/usr/bin/termux-x11` escrito en `TermuxService.onStartCommand`;

@@ -74,36 +74,26 @@
 
                     <h2>Arrancar el companion</h2>
                     <p>
-                        En una sesión de terminal normal de la app (la sesión Debian) basta con:
-                    </p>
-                    <pre><code>termux-x11 :0</code></pre>
-                    <p>
-                        ¿Por qué es tan corto? Al abrirse la app, el servicio inyecta en el
-                        entorno del guest la variable <code>TERMUX_X11_APK</code> con la ruta del
-                        APK instalado y mantiene un script <code>/usr/bin/termux-x11</code> en el
-                        rootfs equivalente al del paquete deb upstream: pone
-                        <code>CLASSPATH=${TERMUX_X11_APK:?}</code> y lanza el companion con
-                        <code>app_process</code>. Las sesiones enlazan también <code>/apex</code>
-                        (el intérprete ELF de <code>app_process</code> en Android 11+ vive ahí);
-                        sin ese enlace el exec falla con «required file not found»), y <code>/linkerconfig</code> (la configuración de
-                        namespaces del linker generada en el arranque; sin ella el exec muere con
-                        <em>CANNOT LINK EXECUTABLE</em> por <code>libnativeloader.so</code>). Nadie tiene
-                        que buscar el APK a mano y, si el
-                        fork se actualiza, la ruta nueva vale en la siguiente sesión sin ningún
-                        paso extra.
+                        La forma principal es <strong>el botón «Iniciar el servidor X»</strong>
+                        que muestra la pestaña X11 cuando no hay servidor: la app ejecuta el
+                        companion por su cuenta (exec directo de <code>app_process</code> con el
+                        APK en el <code>CLASSPATH</code>, como hace el ecosistema Termux) y el
+                        servidor se anuncia a la app por broadcast. Se puede pulsar de nuevo
+                        sin miedo: un servidor vivo se re-anuncia, no se pelea por el socket.
                     </p>
                     <ul>
                         <li><code>:0</code> es el número de display. Puedes poner otro (<code>:1</code>); la pestaña se reconecta sola al servidor que aparece.</li>
-                        <li>El script acepta los mismos argumentos que <code>CmdEntryPoint</code>; p. ej. <code>termux-x11 :0 -tag main</code>.</li>
                         <li>Los keymaps XKB salen de <code>xkb-data</code> del propio rootfs (la app detecta <code>/usr/share/X11/xkb</code>); si no está instalado: <code>apt install xkb-data</code>.</li>
                     </ul>
-                    <h3>Comando avanzado (sin el script, solo de emergencia)</h3>
+                    <h3>Vía avanzada</h3>
                     <p>
-                        Si el rootfs no tuviera aún el script <code>termux-x11</code> (p. ej. una
-                        imagen antigua), la pestaña muestra automáticamente el fallback con rutas
-                        absolutas — las sesiones enlazan <code>/system</code> y
-                        <code>/data/app</code> de Android en lectura, así que este one-liner
-                        funciona igual dentro del guest que en un shell Android externo:
+                        El botón usa el mismo mecanismo que los comandos de abajo; están para
+                        casos especiales (arrancar a mano, diagnóstico, otro display con la app
+                        cerrada). Nota probada en dispositivo: ejecutar <code>app_process</code>
+                        <em>dentro</em> del guest proot no sirve — el uid de la app no llega a
+                        leer <code>/linkerconfig</code> (<em>can't sanitize binding:
+                        Permission denied</em>) y el exec muere con <em>CANNOT LINK
+                        EXECUTABLE</em>. Ejecútalos siempre fuera del contenedor.
                     </p>
                     <pre><code>CLASSPATH=$(/system/bin/pm path --user 0 com.estrin217.terminal | head -1 | cut -d: -f2) \
   /system/bin/app_process / --nice-name=termux-x11 com.termux.x11.CmdEntryPoint :0</code></pre>
