@@ -105,6 +105,18 @@
     <string name="action_more_menu">Más</string>
         <string name="action_open_file_manager">Archivos</string>
         <string name="title_activity_file_manager">Gestor de archivos</string>
+        <!-- Spec 014: pestañas de sesión X11 -->
+        <string name="action_open_x11">X11</string>
+        <string name="x11_session_default_name">X11</string>
+        <string name="x11_no_server_title">No hay servidor X en ejecución</string>
+        <string name="x11_no_server_body">Arranca el servidor acompañante pegando este comando en una sesión de terminal, y luego reconecta:</string>
+        <string name="x11_no_server_hint">El servicio arrancado así vive en su propio proceso; puedes cerrar esta pestaña cuando quieras sin detenerlo.</string>
+        <string name="x11_copy_command">Copiar comando</string>
+        <string name="x11_command_copied">Comando copiado al portapapeles</string>
+        <string name="x11_waiting_for_server">Esperando el servidor X…</string>
+        <string name="x11_library_missing_title">El soporte X11 no está disponible en esta versión</string>
+        <string name="x11_library_missing_body">Este APK no incluye la librería nativa del servidor X (libXlorie) para este dispositivo. Instala una build de Terminal para arm64-v8a.</string>
+        <string name="x11_disconnect_summary">Desconectado del servidor X</string>
     <string name="action_report_issue">Reportar problema</string>
     <string name="msg_generating_report">Generando reporte</string>
     <string name="msg_add_termux_debug_info">¿Agregar información de depuración de &TERMUX_APP_NAME; al reporte?</string>

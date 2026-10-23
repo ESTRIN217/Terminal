@@ -104,6 +104,18 @@
     <string name="action_more_menu">More</string>
     <string name="action_open_file_manager">Files</string>
     <string name="title_activity_file_manager">File Manager</string>
+    <!-- Spec 014: X11 session tabs -->
+    <string name="action_open_x11">X11</string>
+    <string name="x11_session_default_name">X11</string>
+    <string name="x11_no_server_title">No X server is running</string>
+    <string name="x11_no_server_body">Start the companion server by pasting this command in a terminal session, then reconnect:</string>
+    <string name="x11_no_server_hint">Services started this way live in their own process; close this tab any time without stopping them.</string>
+    <string name="x11_copy_command">Copy command</string>
+    <string name="x11_command_copied">Command copied to clipboard</string>
+    <string name="x11_waiting_for_server">Waiting for the X server…</string>
+    <string name="x11_library_missing_title">X11 support is not available in this build</string>
+    <string name="x11_library_missing_body">This APK does not ship the native X server library (libXlorie) for this device. Install an arm64-v8a build of Terminal.</string>
+    <string name="x11_disconnect_summary">Disconnected from the X server</string>
     <string name="action_open_file">Open with</string>
 
     <!-- File Manager Actions -->

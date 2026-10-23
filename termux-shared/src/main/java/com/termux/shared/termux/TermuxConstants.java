@@ -1458,4 +1458,33 @@ public final class TermuxConstants {
 
     }
 
+    /**
+     * Termux:X11 complement (spec 014) constants. Actions forwarded from the lorie
+     * library and the companion server started from the shell.
+     */
+    public static final class TERMUX_X11 {
+
+        /** Intent action sent by the companion X server process to offer its binder (ICmdEntryInterface) through a null-keyed bundle. */
+        public static final String ACTION_X11_START = "com.termux.x11.CmdEntryPoint.ACTION_START"; // Default: "com.termux.x11.CmdEntryPoint.ACTION_START"
+
+        /** Intent action broadcast when a Termux:X11 client wants to stop. */
+        public static final String ACTION_X11_STOP = "com.termux.x11.ACTION_STOP"; // Default: "com.termux.x11.ACTION_STOP"
+
+        /** Intent action for custom user actions coming from lorie's notification or helpers. */
+        public static final String ACTION_X11_CUSTOM = "com.termux.x11.ACTION_CUSTOM"; // Default: "com.termux.x11.ACTION_CUSTOM"
+
+        /** Intent action broadcast when an X11 preference changed. */
+        public static final String ACTION_X11_PREFERENCES_CHANGED = "com.termux.x11.ACTION_PREFERENCES_CHANGED"; // Default: "com.termux.x11.ACTION_PREFERENCES_CHANGED"
+
+        /** Intent {@code String} extra for the document tag of an X11 display window ("-tag"). */
+        public static final String EXTRA_X11_DOCUMENT_TAG = "document_tag"; // Default: "document_tag"
+
+        /** Nice name given to the companion X server process launched via app_process. */
+        public static final String X11_COMPANION_PROCESS_NAME = "termux-x11"; // Default: "termux-x11"
+
+        /** Fallback display name used by the companion command when none is passed. */
+        public static final String X11_DEFAULT_DISPLAY = ":0"; // Default: ":0"
+
+    }
+
 }
