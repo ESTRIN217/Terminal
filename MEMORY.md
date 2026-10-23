@@ -1,69 +1,55 @@
 # MEMORY.md — Terminal
 ## Estado actual
-- Rama `3.0`; árbol limpio salvo trabajo de esta sesión (doc T9 + spec 013 borrador).
-- **Spec 011:** T1–T8 hechas y committeadas (`Added GPU acceleration and llvmpipe
-  controls`). **T9 a medias (2026-10-22):** la doc de validación del pipeline Adreno
-  (hardware requerido + pasos 1–7) quedó en `wiki/limitaciones.html`; la parte en
-  dispositivo Mali pendiente del mantenedor.
-- **Spec 012 cerrada** (llvmpipe multihilo, validada en Infinix Mali T606: env
-  on/off correcto, htop 3.4.1 ok). Espec 010 cerrada (overlay /proc); specs 001–009
-  cerradas; 2.1.0 publicada.
-- **Spec 013 (VirGL) borrador en `specs/013-virgl-aceleracion-gpu/`:** solo VirGL
-  (única vía sin root para Mali), binario del servidor compilado por NDK/CMake como
-  proot (embebido, sin descargas), display mínimo = VNC dentro del invitado +
-  visor externo (documentado), `gpu_solution` se extiende a
-  NONE|ADRENO_KGSL|VIRGL mutuamente excluyentes. Pendiente: aprobación del
-  borrador → plan → tareas. Dudas clave pinned: tag/commit de virglrenderer,
-  path del socket (`VIRGL_TEST_SERVER_URI` vs /tmp vtest) con mesa 25.0.7.
-- **Spec 014 (termux-x11 complemento) borrador en
-  `specs/014-termux-x11-complemento/`:** integrar el módulo `lorie` del fork
-  ESTRIN217 de termux-x11 (clonado en `/root/Terminal-external/termux-x11`, con
-  submódulos; ya está reorganizado como librería `lorie` + host `lorie-app`, y su
-  build.gradle resuelve APPLICATION_ID desde la app host). Objetivo: lib en el
-  proyecto + pestañas X11 polimórficas con acceso desde el drawer (patrón
-  filemanager). **APROBADA (2026-10-22):** submódulo git (`termux-x11/` en la raíz,
-  `:termux-x11:lorie` + alias `:shell-loader:stub`), pestaña que embebe `LorieView`
-  con client surrogate (`LorieView.Client` nuevo, `MainActivity` lo implementa),
-  companion arrancado con comando copy-paste (`app_process` + CLASSPATH del APK),
-  sin icono LAUNCHER standalone, `LoriePreferences` fuera de alcance. Plan y 10
-  tareas escritos y aprobados. **T1 hecha (commit T1):** submódulo pin
-  `1c721a9` (gradle adapts), includes planos `:termux-x11-lorie`/`:termux-x11-stub`,
-  catalog alias, `preBuild` de lorie verde con configuration-cache (providers.exec).
-  Pendiente: T3→T10. Hecho T2 (submódulo pin `65a9a06`): interface `LorieView.Client`,
-  `MainActivity` la implementa, manifest de lorie en base (sin LAUNCHER/Application/
-  Receiver) y `lorie-app` los re-declara para standalone.
+- Rama `3.0`. **Spec 014 (termux-x11 complemento): T1–T9 hechas y committeadas;**
+  T10 doc+memoria al día. Pendiente mantenedor: probar en dispositivo real
+  (conexión companion, touch, hardware keys) y cerrar la spec.
+- Cerradas antes: 010 (overlay /proc), 011/012 (GPU llvmpipe; doc Mali pendiente),
+  001–009; 2.1.0 publicada.
+- **Spec 013 (VirGL) borrador en `specs/013-virgl-aceleracion-gpu/`:** solo VirGL,
+  binario NDK/CMake como proot, VNC dentro del invitado, `gpu_solution` =
+  NONE|ADRENO_KGSL|VIRGL. Pendiente aprobación → plan → tareas. Dudas pinned: tag
+  de virglrenderer, path del socket con mesa 25.0.7.
+
+## Spec 014 — decisiones y estado
+- Submódulo `termux-x11/` (pin `65a9a06`→bump cmake-fix). Pins internos lorie
+  (xserver, xorgproto…) ahora inicializados (`--init --recursive`). El fork envía
+  ~17 parches de xserver **sin commit** (working tree del submódulo anidado);
+  conservar, no limpiar.
+- Cadena pura→UI: `X11CompanionCommand` (comando copy-paste) → `X11Sessions` →
+  `X11SessionBus` (tag→binder, untagged a primera pestaña sin tag) →
+  `X11TabController` (surrogate `LorieView.Client`, reconnector 250 ms,
+  `bindView()` para rebind tras rotación) → `X11SessionRegistry` (controller por
+  sessionId, vive rotaciones) → `X11SessionHost` (Compose). El cierre de pestaña
+  libera en `removeSession` de la Activity; no toca TermuxService.
+- Touch embebido: forwarder propio en el host (`sendTouchEvent` 18/19/20 XI);
+  gestos completos quedan en la app standalone. HW keys vía `handleKey` →
+  `view.sendKeyEvent` (down solo con repeatCount 0).
+- `TermuxConstants.TERMUX_X11`, strings ×3 (`x11_*`, `action_open_x11`). Overlay
+  "no server" con comando + copiar; estados NO_SERVER/CONNECTED/DISCONNECTED.
 
 ## Arquitectura y reglas prácticas
 - `terminal-emulator` → `terminal-view` → `termux-shared` → `app`;
   `filemanager` → `termux-shared`. No invertir dependencias.
-- Librerías `terminal-emulator`, `terminal-view`, `termux-shared`: Java puro.
-  Kotlin Compose solo en `app` y `filemanager`.
-- Lógica determinista en funciones puras con tests JUnit sin Android; UI
-  Compose despacha y presenta. Variables/datos cambiantes entran por parámetros.
-- Preferencias persistidas: añadir claves, no reescribir ni perder las existentes
-  (en filemanager: `sort_option`, `sort_ascending`, `show_hidden`,
-  `folders_first`, `view_mode`, `favorites`, `folder:<path>:*`).
-- Error convencional del proyecto: devolver `Error`/`null` éxito; capturas
-  específicas, logging con `Logger`; no ocultar fallos.
-- Strings visibles en `values/`, `values-es-rVE/`, `values-pt-rBR/`; sin literales
-  Compose. Docs y memoria en español, identificadores/comentarios técnicos en inglés.
-- Constantes compartidas en `TermuxConstants`; Java/Kotlin usan prefijo `m` para
-  miembros según el estilo existente. No agregar dependencias sin justificar en plan.
-- `targetSdk 28` y `minSdk 24` son intencionales; proot soportado en arm64-v8a.
-- Build Java 17/NDK 30.0.14904198/CMake 3.31.6; tests `./gradlew test`; evitar builds Gradle paralelos por riesgo al incremental Kotlin.
+- Librerías Java puro; Kotlin Compose solo en `app` y `filemanager`.
+- Lógica determinista en puros con tests JUnit; UI despacha y presenta.
+- Prefs persistidas: añadir claves, no perder las existentes (filemanager ver AGENTS).
+- `Error`/`null` como éxito, `Logger`, capturas específicas.
+- Strings ×3 locales; sin literales Compose; docs/memoria en español.
+- Constantes en `TermuxConstants`; Hungarian `m` en ambos lenguajes.
+- `targetSdk 28`, `minSdk 24`, arm64-v8a. Java 17/NDK 30/CMake 3.31.6.
+  Tests `./gradlew test`; ahí: `--tests 'com.termux.terminal.x11.*'`.
 
 ## Learnings vigentes
-- Host de build aarch64: los binarios x86_64 del SDK (aidl, aapt, bcc) no corren;
-  aapt2 sí (binario aarch64). Solución aplicada: `apt-get install aidl` y wrapper
-  en `build-tools/36.0.0/` y `36.1.0/` (`#!/bin/sh exec /usr/bin/aidl "$@"`,
-  binario original en `aidl.x86_64.bak`).
-- Glifos multicolor Compose requieren `tint = Color.Unspecified`; viewport no
-  cuadrado: centrar el arte en viewport cuadrado para que no se distorsione.
-- Semánticas similares pero distintas (p. ej. extensión para orden vs icono) no
-  se unifican sin spec; comparar centinelas de estado en algoritmos duplicados.
-- Lecturas externas de `TerminalBuffer` pueden devolver vacío; validar filas
-  antes de conversiones que lanzan. No escribir estado desde measure de Compose.
-- `BUILD SUCCESSFUL` no garantiza APK utilizable: inspeccionar el APK con unzip.
-- `docs/` y `AGENTS.md` se corrigen contrastando las fuentes del repositorio.
-- Conventional Commits con tipos capitalizados: `Added`, `Changed`, `Fixed`,
-  `Security`, etc.; versiones semver.
+- Host build aarch64: binarios x86_64 del SDK rotos: aidl (wrapper a /usr/bin/aidl),
+  aapt2, **cmake/3.22.1 (usar 3.31.6, pin en lorie/build.gradle)**. BISON y FLEX
+  necesarios para el build nativo de lorie (apt-get). Pull/push del submódulo:
+  inicializar submódulos anidados antes de compilar nativo.
+- NDK 30 + API<29 con `__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__`: malloc.h inyecta
+  `reallocarray` static inline → el fallback de xserver choca. Fix aplicado:
+  `#include <malloc.h>` antes del `#define reallocarray xreallocarray` en
+  `xserver/include/os.h` (working tree anidado; `libfontenc.a` aporta el símbolo).
+- `BUILD SUCCESSFUL` no garantiza APK utilizable: inspeccionar con unzip
+  (libXlorie.so, manifests fusionados en intermediates — aapt2 no corre en aarch64).
+- Glifos multicolor Compose requieren `tint = Color.Unspecified`.
+- Semánticas parecidas no se unifican sin spec; cuido tests en rojo primero.
+- Conventional Commits capitalizados (`Added`, `Changed`, `Fixed`…); semver.
