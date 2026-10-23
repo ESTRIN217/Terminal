@@ -1,9 +1,10 @@
 package com.termux.terminal.x11
 
 import android.content.Context
-import com.termux.shared.errors.Error
 import com.termux.shared.errors.Errno
+import com.termux.shared.errors.Error
 import com.termux.shared.logger.Logger
+import com.termux.shared.termux.x11.TermuxX11GuestLoaderLibrary
 
 /**
  * Starts the companion X server as a direct child of the app process
@@ -44,6 +45,11 @@ object X11CompanionSpawner {
             val process = ProcessBuilder(args)
                 .apply {
                     environment()["CLASSPATH"] = classpath
+                    // Legacy packaging extracts the .so to nativeLibraryDir on
+                    // install; the child (whose createContext() is the system
+                    // context) must load it from there, not from the APK.
+                    environment()[TermuxX11GuestLoaderLibrary.ENV_X11_LIBDIR] =
+                        context.applicationInfo.nativeLibraryDir ?: ""
                     redirectErrorStream(true)
                 }
                 .start()

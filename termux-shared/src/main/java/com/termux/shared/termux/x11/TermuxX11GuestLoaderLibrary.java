@@ -34,8 +34,11 @@ public final class TermuxX11GuestLoaderLibrary {
 
     private static final String LOG_TAG = "TermuxX11GuestLoaderLibrary";
 
-    /** Guest environment variable holding the host APK path to use as companion classpath. */
+    /** Companion environment variable holding the host APK path to use as companion classpath. */
     public static final String ENV_X11_APK = "TERMUX_X11_APK"; // Default: "TERMUX_X11_APK"
+
+    /** Spawner environment variable holding the app's extracted native library dir (legacy packaging). */
+    public static final String ENV_X11_LIBDIR = "TERMUX_X11_LIBDIR"; // Default: "TERMUX_X11_LIBDIR"
 
     private TermuxX11GuestLoaderLibrary() {
     }
