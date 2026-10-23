@@ -27,6 +27,42 @@ object X11CompanionCommand {
     private const val APP_PROCESS = "/system/bin/app_process /"
 
     /**
+     * Builds the guest-loader command for the wrapper script installed in the
+     * Debian rootfs (spec 014, enmienda A): the user just runs
+     * `termux-x11 <display> [-tag <tag>]`.
+     *
+     * @param displayArg X display like ":0", "1" (colon is added) or ":1.5"
+     * @param tag optional document tag; "" or blank means no `-tag` flag
+     * @return paste-ready guest command, or null when any input is invalid
+     */
+    fun buildGuestCommand(displayArg: String, tag: String?): String? {
+        val display = normalizeDisplay(displayArg) ?: return null
+        val trimmedTag = tag?.trim().orEmpty()
+        if (trimmedTag.isNotEmpty() && (trimmedTag.startsWith("-") || !TAG_REGEX.matches(trimmedTag))) return null
+        val tagPart = if (trimmedTag.isEmpty()) "" else " -tag $trimmedTag"
+        val wrapper = java.io.File(TermuxConstants.TERMUX_X11.X11_GUEST_WRAPPER_GUEST_PATH).name
+        return "$wrapper $display$tagPart"
+    }
+
+    /**
+     * Chooses the command shown by the X11 tab overlay (spec 014, enmienda A, RF-8):
+     * the short guest loader command when the wrapper script exists on the host
+     * (rootfs ready), otherwise the absolute-path app_process one-liner.
+     *
+     * @param hasGuestWrapper whether {@link TermuxConstants.TERMUX_X11#X11_GUEST_WRAPPER_HOST_PATH} exists
+     * @param applicationId installed package id (only used by the fallback)
+     * @param displayArg X display
+     * @param tag optional document tag
+     * @return paste-ready command, or null when any input is invalid
+     */
+    fun chooseLaunchCommand(hasGuestWrapper: Boolean, applicationId: String, displayArg: String, tag: String?): String? {
+        return if (hasGuestWrapper)
+            buildGuestCommand(displayArg, tag)
+        else
+            buildLaunchCommand(applicationId, displayArg, tag)
+    }
+
+    /**
      * Builds the shell command that starts the companion X server.
      *
      * @param applicationId installed package id (resolved by the caller)

@@ -39,6 +39,7 @@ import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY;
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_SERVICE;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.termux.x11.TermuxX11GuestLoaderLibrary;
 import com.termux.shared.termux.shell.TermuxShellManager;
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
 import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
@@ -151,6 +152,13 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         // Run again in case service is already started and onCreate() is not called
         runStartForeground();
+
+        // Spec 014 (enmienda A): keep the guest termux-x11 wrapper script in the
+        // Debian rootfs current (idempotent, content-compared). The companion
+        // guest command then only needs the injected TERMUX_X11_APK env var.
+        Error wrapperError = TermuxX11GuestLoaderLibrary.ensureWrapperScript(this);
+        if (wrapperError != null)
+            Logger.logErrorExtended(LOG_TAG, "Failed to ensure termux-x11 guest wrapper\n" + wrapperError);
 
         String action = null;
         if (intent != null) {

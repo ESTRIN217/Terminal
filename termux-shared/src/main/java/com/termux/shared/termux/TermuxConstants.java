@@ -1485,6 +1485,12 @@ public final class TermuxConstants {
         /** Absolute path of the Android {@code pm} tool used to resolve the companion classpath; absolute so the paste command also works inside the proot guest with {@code /system} bound (spec 014, RF-8). */
         public static final String X11_COMPANION_PM_PATH = "/system/bin/pm"; // Default: "/system/bin/pm"
 
+        /** Host path of the idempotent guest wrapper script written into the Debian rootfs (spec 014, enmienda A). */
+        public static final String X11_GUEST_WRAPPER_HOST_PATH = DEBIAN_ROOTFS_DIR_PATH + "/usr/bin/termux-x11"; // Default: "$PREFIX/debian/usr/bin/termux-x11"
+
+        /** Path of the wrapper script as seen from inside the guest (spec 014, enmienda A). */
+        public static final String X11_GUEST_WRAPPER_GUEST_PATH = "/usr/bin/termux-x11"; // Default: "/usr/bin/termux-x11"
+
         /** Fallback display name used by the companion command when none is passed. */
         public static final String X11_DEFAULT_DISPLAY = ":0"; // Default: ":0"
 

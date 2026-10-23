@@ -76,6 +76,16 @@ con entrada en el drawer.
   ENTONCES EL SISTEMA ofrece el comando de arranque del companion listo para
   copiar al portapapeles (derivado del APPLICATION_ID instalado) y una
   instrucción visible con los pasos resumidos.
+  - **Enmienda A (loader guest, T11/T12):** la app inyecta en el env del guest
+    proot `TERMUX_X11_APK = applicationInfo.sourceDir` y escribe de forma
+    idempotente un wrapper en el rootfs (`/usr/bin/termux-x11`, shebang bash,
+    `exec /system/bin/app_process / --nice-name=termux-x11
+    com.termux.x11.CmdEntryPoint "$@"` con `CLASSPATH=${TERMUX_X11_APK:?}`),
+    replicando el mecanismo del paquete deb upstream sin deb ni loader aparte.
+    EL SI el wrapper existe ENTONCES el comando primario del overlay es
+    `termux-x11 :0 [-tag t]`; SI NO, se conserva el one-liner con rutas
+    absolutas `/system/bin/*` como fallback. La escritura del wrapper es barata
+    (comparación de contenido) y se ejecuta en el arranque de sesión.
 
 ## Requisitos no funcionales
 

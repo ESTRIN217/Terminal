@@ -74,23 +74,37 @@
 
                     <h2>Arrancar el companion</h2>
                     <p>
-                        Pega el comando en una sesión de terminal normal de la app (la sesión
-                        Debian). Las sesiones enlazan <code>/system</code> de Android en
-                        lectura, así que <code>pm</code> y <code>app_process</code> son visibles
-                        desde el guest por rutas absolutas. El comando mostrado por la pestaña
-                        siempre refleja el id de paquete instalado; para este fork es:
+                        En una sesión de terminal normal de la app (la sesión Debian) basta con:
+                    </p>
+                    <pre><code>termux-x11 :0</code></pre>
+                    <p>
+                        ¿Por qué es tan corto? Al abrirse la app, el servicio inyecta en el
+                        entorno del guest la variable <code>TERMUX_X11_APK</code> con la ruta del
+                        APK instalado y mantiene un script <code>/usr/bin/termux-x11</code> en el
+                        rootfs equivalente al del paquete deb upstream: pone
+                        <code>CLASSPATH=${TERMUX_X11_APK:?}</code> y lanza el companion con
+                        <code>app_process</code>. Nadie tiene que buscar el APK a mano y, si el
+                        fork se actualiza, la ruta nueva vale en la siguiente sesión sin ningún
+                        paso extra.
+                    </p>
+                    <ul>
+                        <li><code>:0</code> es el número de display. Puedes poner otro (<code>:1</code>); la pestaña se reconecta sola al servidor que aparece.</li>
+                        <li>El script acepta los mismos argumentos que <code>CmdEntryPoint</code>; p. ej. <code>termux-x11 :0 -tag main</code>.</li>
+                        <li>Los keymaps XKB salen de <code>xkb-data</code> del propio rootfs (la app detecta <code>/usr/share/X11/xkb</code>); si no está instalado: <code>apt install xkb-data</code>.</li>
+                    </ul>
+                    <h3>Comando avanzado (sin el script, solo de emergencia)</h3>
+                    <p>
+                        Si el rootfs no tuviera aún el script <code>termux-x11</code> (p. ej. una
+                        imagen antigua), la pestaña muestra automáticamente el fallback con rutas
+                        absolutas — las sesiones enlazan <code>/system</code> y
+                        <code>/data/app</code> de Android en lectura, así que este one-liner
+                        funciona igual dentro del guest que en un shell Android externo:
                     </p>
                     <pre><code>CLASSPATH=$(/system/bin/pm path --user 0 com.estrin217.terminal | head -1 | cut -d: -f2) \
   /system/bin/app_process / --nice-name=termux-x11 com.termux.x11.CmdEntryPoint :0</code></pre>
-                    <p>
-                        Notas del caso proot:
-                    </p>
                     <ul>
-                        <li>Las rutas son absolutas a propósito: dentro del guest el PATH es Debian puro y <code>pm</code> no alcanza por caminos relativos.</li>
-                        <li>Si lo ejecutas en un shell Android de otro entorno (Termux clásico, adb shell), el mismo comando también vale: las rutas absolutas no cambian nada.</li>
                         <li><code>pm path</code> calcula la ruta del APK <strong>instalado</strong> (no rompe ninguna actualización del fork).</li>
                         <li><code>app_process</code> lanza <code>com.termux.x11.CmdEntryPoint</code> como proceso con el mismo UID que la app.</li>
-                        <li><code>:0</code> es el número de display. Puedes poner otro (<code>:1</code>); la pestaña se reconecta sola al servidor que aparece.</li>
                     </ul>
                     <p>
                         Cuando el comando arranca, el proceso anuncia el display a la app por

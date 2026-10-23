@@ -10,6 +10,7 @@ import android.os.ParcelFileDescriptor
 import android.os.RemoteException
 import android.view.KeyEvent
 import com.termux.shared.logger.Logger
+import com.termux.shared.termux.TermuxConstants
 import com.termux.x11.ICmdEntryInterface
 import com.termux.x11.LorieView
 import com.termux.x11.Prefs
@@ -89,15 +90,23 @@ class X11TabController(
     }
 
     /**
-     * Paste-ready companion launch command for the "no server" banner.
-     * @see X11CompanionCommand.buildLaunchCommand
+     * Paste-ready companion launch command for the "no server" banner
+     * (spec 014, enmienda A): prefers the guest loader command (`termux-x11 ...`)
+     * when the wrapper script exists in the rootfs, and falls back to the
+     * absolute-path app_process one-liner.
+     * @see X11CompanionCommand.chooseLaunchCommand
      */
     fun companionCommand(display: String = ":0"): String? =
-        X11CompanionCommand.buildLaunchCommand(
+        X11CompanionCommand.chooseLaunchCommand(
+            guestWrapperExists(),
             resolveApplicationId(context),
             display,
             tag.ifEmpty { null }
         )
+
+    /** Host check for the idempotent guest wrapper written on app start. */
+    private fun guestWrapperExists(): Boolean =
+        java.io.File(TermuxConstants.TERMUX_X11.X11_GUEST_WRAPPER_HOST_PATH).isFile()
 
     override fun onServerBinder(tag: String, binder: IBinder): Boolean {
         val current = service

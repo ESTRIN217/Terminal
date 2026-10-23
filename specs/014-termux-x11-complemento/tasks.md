@@ -59,7 +59,24 @@ la configuración del grafo, y el build completo con `libXlorie.so` se hace en T
   `./gradlew assembleDebug` con build nativo de lorie (`libXlorie.so`) arm64-v8a;
   inspección `unzip -l` (so, receiver, manifest, sin icono duplicado).
   - Hecho cuando: `lib/arm64-v8a/libXlorie.so` aparece en APK y tests siguen verde.
-- [ ] **T10. Documento y memoria.**
+- [x] **T10. Documento y memoria.**
   Página wiki con instrucciones del companion (comando real y casos proot),
   `MEMORY.md` actualizado con estado de la spec y aprendizajes (build nativo largo).
   - Hecho cuando: página wiki enlazada y memoria ≤ ~50 líneas.
+- [ ] **T11. Loader guest (enmienda A, RF-8).**
+  `ProotShellEnvironment` inyecta `TERMUX_X11_APK` (sourceDir de la app, null-safe);
+  `TermuxX11GuestLoaderLibrary` (Java, `com.termux.shared.termux.x11`) con partes
+  puras (`buildWrapperScript`, `applyApkPathEnv`) y `ensureWrapperScript(context)`
+  idempotente escribe `<rootfs>/usr/bin/termux-x11` (chmod +x); constantes
+  `X11_GUEST_WRAPPER_HOST_PATH` en `TermuxConstants.TERMUX_X11`; gancho de
+  escritura en `TermuxService.onStartCommand`. Tests JUnit en termux-shared
+  en rojo → verde.
+  - Hecho cuando: tests de librería en verde y el script existe tras abrir la app.
+- [ ] **T12. Comando primario del overlay (enmienda A, RF-8).**
+  `X11CompanionCommand.guestCommand(display, tag)` → `termux-x11 :0 [-tag t]`;
+  `chooseCommand` decide primario (wrapper presente) vs one-liner fallback
+  (rutas absolutas); `X11TabController.companionCommand` usa
+  `File(X11_GUEST_WRAPPER_HOST_PATH).isFile()`; tests en
+  `X11CompanionCommandTest` en rojo → verde. Wiki `x11.html` actualizada
+  (primario `termux-x11`, one-liner como avanzado).
+  - Hecho cuando: `./gradlew test` verde, `assembleDebug` OK y wiki revisada.

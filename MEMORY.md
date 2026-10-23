@@ -1,8 +1,9 @@
 # MEMORY.md — Terminal
 ## Estado actual
-- Rama `3.0`. **Spec 014 (termux-x11 complemento): T1–T9 hechas y committeadas;**
-  T10 doc+memoria al día. Pendiente mantenedor: probar en dispositivo real
-  (conexión companion, touch, hardware keys) y cerrar la spec.
+- Rama `3.0`. **Spec 014 (termux-x11 complemento): T1–T10 hechas; enmienda A
+  (loader guest T11/T12) implementada.** Pendiente mantenedor: probar en
+  dispositivo real (wrapper guest, conexión companion, touch, hardware keys)
+  y cerrar la spec.
 - Cerradas antes: 010 (overlay /proc), 011/012 (GPU llvmpipe; doc Mali pendiente),
   001–009; 2.1.0 publicada.
 - **Spec 013 (VirGL) borrador en `specs/013-virgl-aceleracion-gpu/`:** solo VirGL,
@@ -40,27 +41,23 @@
   Tests `./gradlew test`; ahí: `--tests 'com.termux.terminal.x11.*'`.
 
 ## Learnings vigentes
-- El native de lorie (`lorie/src/main/cpp/lorie/activity.cpp`) referenciaba el
-  campo `activity` (tipo MainActivity) que la T2 retiró de `LorieView`:
-  `GetFieldID` falla y el JNI aborta = crash nativo al abrir pestaña X11 (y
-  rompía también la standalone). Fix: hooks vía `LorieView.Client` (defaults
-  `clientConnectedStateChanged`/`onServerHeartbeat`), lookup lazy del campo
-  `client`. Regla: al quitar símbolos Java de lorie, grep del espejo en `cpp/`.
-- El comando companion corrió dentro del Debian proot, donde `/system` no existía
-  y el PATH no tiene `pm`: "orden no encontrada"+"No existe el fichero". Fix:
-  bind `-b /system` en `ProotShellEnvironment.buildProotCommand` (lectura, sin
-  saltar SELinux) y comando generado con rutas absolutas
-  `/system/bin/pm` (`TermuxConstants.TERMUX_X11.X11_COMPANION_PM_PATH`) +
-  `/system/bin/app_process`. Rutas absolutas valen igual en un shell Android
-  externo. La pestaña generaba el comando viejo → APK re-instalar para verlo.
-- Host build aarch64: binarios x86_64 del SDK rotos: aidl (wrapper a /usr/bin/aidl),
-  aapt2, **cmake/3.22.1 (usar 3.31.6, pin en lorie/build.gradle)**. BISON y FLEX
-  necesarios para el build nativo de lorie (apt-get). Pull/push del submódulo:
-  inicializar submódulos anidados antes de compilar nativo.
-- NDK 30 + API<29 con `__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__`: malloc.h inyecta
-  `reallocarray` static inline → el fallback de xserver choca. Fix aplicado:
-  `#include <malloc.h>` antes del `#define reallocarray xreallocarray` en
-  `xserver/include/os.h` (working tree anidado; `libfontenc.a` aporta el símbolo).
+- lorie/`activity.cpp` referenciaba símbolos Java retirados (`MainActivity`) →
+  JNI abort = crash al abrir pestaña. Fix: hooks vía `LorieView.Client`;
+  regla: al quitar símbolos Java de lorie, grep del espejo en `cpp/`.
+- En el proot guest `/system` no visible y PATH sin `pm`: bind `-b /system`
+  y `-b /data/app` en `buildProotCommand` + rutas absolutas `/system/bin/*`.
+  `/data/app` imprescindible: proot traduce lo no enlazado al rootfs y el
+  `CLASSPATH=/data/app/…` no resolvería.
+- Loader guest (enmienda A RF-8, replicando el deb upstream): env
+  `TERMUX_X11_APK` (sourceDir per-sesión) + wrapper idempotente
+  `files/debian/usr/bin/termux-x11` escrito en `TermuxService.onStartCommand`;
+  overlay elige primario `termux-x11 :0` vs one-liner por `File.isFile`.
+  Upstream resuelve por `Loader.java` (PathClassLoader + firma) sin `pm`.
+- Host build aarch64: aidl/aapt2 x86_64 rotos; cmake 3.31.6 (pin en
+  lorie/build.gradle); BISON/FLEX vía apt. Submódulos anidados inicializados
+  antes de compilar nativo; parches xserver sin commit, no limpiar.
+- NDK 30 + API<29 con `__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__`: fix en
+  `xserver/include/os.h` (`#include <malloc.h>` antes del rename reallocarray).
 - `BUILD SUCCESSFUL` no garantiza APK utilizable: inspeccionar con unzip
   (libXlorie.so, manifests fusionados en intermediates — aapt2 no corre en aarch64).
 - Glifos multicolor Compose requieren `tint = Color.Unspecified`.

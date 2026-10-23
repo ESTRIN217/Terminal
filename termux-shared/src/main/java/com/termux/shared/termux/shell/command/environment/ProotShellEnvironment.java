@@ -15,6 +15,7 @@ import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.proot.GpuDetectionLibrary;
 import com.termux.shared.termux.proot.LlvmpipeThreadsLibrary;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.termux.x11.TermuxX11GuestLoaderLibrary;
 
 import java.nio.charset.Charset;
 import java.io.File;
@@ -324,7 +325,7 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
 
     /**
      * Build the default proot guest command: {@code proot -r <rootfs> -0 -w /root
-     * -b /dev -b <app-shm>:/dev/shm -b /dev/pts -b /proc -b /sys -b /system -b /sdcard:/root/sdcard
+     * -b /dev -b <app-shm>:/dev/shm -b /dev/pts -b /proc -b /sys -b /system -b /data/app -b /sdcard:/root/sdcard
      * -b /storage:/root/storage /bin/bash --login [extraArgs...]}.
      *
      * <p>When the linkfix shim is installed, the guest program is wrapped as
@@ -445,6 +446,12 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
         // hidden without it). Kernel permissions and SELinux are unchanged.
         command.add("-b");
         command.add("/system");
+        // APK install tree (spec 014, enmienda A): `pm path` output and the
+        // TERMUX_X11_APK classpath must be resolvable inside the guest, otherwise
+        // proot would translate /data/app/* into the rootfs and the companion
+        // could not load its APK dex.
+        command.add("-b");
+        command.add("/data/app");
         command.add("-b");
         command.add("/sdcard:" + GUEST_HOME + "/sdcard");
         command.add("-b");
@@ -511,6 +518,18 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
                 false,
                 Runtime.getRuntime().availableProcessors(),
                 getLlvmpipeThreadsCount(currentPackageContext));
+        }
+
+        // Spec 014 (enmienda A): host APK path for the guest termux-x11 companion
+        // wrapper (its CLASSPATH). Computed per command so app updates are picked
+        // up automatically; skipped when the path cannot be resolved (never
+        // breaks existing sessions).
+        try {
+            TermuxX11GuestLoaderLibrary.applyApkPathEnv(environment,
+                currentPackageContext.getApplicationInfo().sourceDir);
+        } catch (Exception e) {
+            Logger.logErrorExtended(LOG_TAG,
+                "Failed to resolve application APK path for " + TermuxX11GuestLoaderLibrary.ENV_X11_APK + "\n" + e.toString());
         }
 
         // termux-exec conflicts with proot: never propagate these. LD_PRELOAD
