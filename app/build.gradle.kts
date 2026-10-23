@@ -41,6 +41,8 @@ android {
         implementation(project(":terminal-view"))
         implementation(project(":termux-shared"))
         implementation(project(":filemanager"))
+        // Spec 014: servidor X11 (verificación + cliente LorieView en pestañas).
+        implementation(project(":termux-x11-lorie"))
     }
 
     defaultConfig {
