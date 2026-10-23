@@ -15,8 +15,9 @@ import com.termux.shared.termux.shell.am.TermuxAmSocketServer;
 import com.termux.shared.termux.shell.TermuxShellManager;
 import com.termux.shared.termux.theme.TermuxThemeUtils;
 import com.termux.terminal.TerminalProcessName;
+import com.termux.x11.LorieApp;
 
-public class TermuxApplication extends Application {
+public class TermuxApplication extends LorieApp {
 
     private static final String LOG_TAG = "TermuxApplication";
 
