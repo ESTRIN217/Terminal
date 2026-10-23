@@ -50,7 +50,11 @@
   vía: `createContext()` es el SYSTEM context (ApplicationInfo del framework)
   → el hijo no ve su propio nativeLibraryDir; la app inyecta
   `TERMUX_X11_LIBDIR` (env, código `TermuxX11GuestLoaderLibrary.ENV_X11_LIBDIR`)
-  y el hijo lo lee primero.
+  y el hijo lo lee primero. Tercera vía: el native exige `TMPDIR` (aborta
+  sin él) y crea el socket X en `$TMPDIR/.X11-unix/X*`; el guest proot
+  conecta por `<rootfs>/tmp` → el spawner inyecta `TMPDIR=<rootfs>/tmp`
+  (fallback files/tmp), que además activa la heurística chroot de
+  `XKB_CONFIG_ROOT` (dirname(TMPDIR)/usr/share/X11/xkb).
 - Loader guest (enmienda A RF-8, replicando el deb upstream): env
   `TERMUX_X11_APK` (sourceDir per-sesión) + wrapper idempotente
   `files/debian/usr/bin/termux-x11` escrito en `TermuxService.onStartCommand`;
