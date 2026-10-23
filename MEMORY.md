@@ -42,7 +42,11 @@
   binding; Permission denied) → CANNOT LINK (libnativeloader). Conclusión:
   companion se inicia desde la app (ProceBuilder + CLASSPATH sourceDir,
   `X11CompanionSpawner`, botón primario en overlay; guest wrapper/one-liner
-  quedan como avanzado).
+  quedan como avanzado). Spawn probado: ART arranca; el crash posterior era
+  dlopen de `base.apk!/lib/…` — con packaging legacy (`useLegacyPackaging
+  true`, extractNativeLibs por F-Droid upstream) la lib va comprimida en el
+  APK. Fix en submódulo `CmdEntryPoint.initEntryPoint`: probar
+  `nativeLibraryDir/libXlorie.so` (extraída) antes de la ruta APK.
 - Loader guest (enmienda A RF-8, replicando el deb upstream): env
   `TERMUX_X11_APK` (sourceDir per-sesión) + wrapper idempotente
   `files/debian/usr/bin/termux-x11` escrito en `TermuxService.onStartCommand`;
