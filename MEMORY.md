@@ -46,6 +46,13 @@
   rompía también la standalone). Fix: hooks vía `LorieView.Client` (defaults
   `clientConnectedStateChanged`/`onServerHeartbeat`), lookup lazy del campo
   `client`. Regla: al quitar símbolos Java de lorie, grep del espejo en `cpp/`.
+- El comando companion corrió dentro del Debian proot, donde `/system` no existía
+  y el PATH no tiene `pm`: "orden no encontrada"+"No existe el fichero". Fix:
+  bind `-b /system` en `ProotShellEnvironment.buildProotCommand` (lectura, sin
+  saltar SELinux) y comando generado con rutas absolutas
+  `/system/bin/pm` (`TermuxConstants.TERMUX_X11.X11_COMPANION_PM_PATH`) +
+  `/system/bin/app_process`. Rutas absolutas valen igual en un shell Android
+  externo. La pestaña generaba el comando viejo → APK re-instalar para verlo.
 - Host build aarch64: binarios x86_64 del SDK rotos: aidl (wrapper a /usr/bin/aidl),
   aapt2, **cmake/3.22.1 (usar 3.31.6, pin en lorie/build.gradle)**. BISON y FLEX
   necesarios para el build nativo de lorie (apt-get). Pull/push del submódulo:
