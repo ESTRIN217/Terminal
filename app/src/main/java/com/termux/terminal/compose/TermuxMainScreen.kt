@@ -437,6 +437,9 @@ fun TermuxMainScreen(
                         is TermuxSessionUiModel.FileManager -> {
                             FileManagerKeyHandlerHolder.active?.invoke(key, isMacro)
                         }
+                        // X11 tabs route their own extra keys via the LorieView
+                        // extra keys bar; the Compose bar does nothing here yet.
+                        is TermuxSessionUiModel.X11 -> {}
                     }
                 }
             }
@@ -732,6 +735,8 @@ private fun SessionPane(
             onCreateFileShortcut = onCreateFileShortcut,
             modifier = modifier
         )
+        // placeholder: the real X11 tab host lands with spec 014 T8
+        is TermuxSessionUiModel.X11 -> {}
     }
 }
 

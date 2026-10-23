@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.termux.terminal.TerminalSession
+import com.termux.terminal.x11.X11Sessions
+import com.termux.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,6 +58,29 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
                 val fmCount = state.sessions.count { it is TermuxSessionUiModel.FileManager }
                 val name = if (fmCount == 0) baseName else "$baseName ${fmCount + 1}"
                 val newModel = TermuxSessionUiModel.FileManager(id = id, name = name, initialPath = initialPath)
+                val newSessions = state.sessions + newModel
+                sanitizeSplit(activateSession(state.copy(
+                    sessions = newSessions
+                ), newSessions.lastIndex))
+            }
+        }
+        return id
+    }
+
+    /**
+     * Create an X11 session tab (spec 014, RF-2). Purely UI backed: closing it later
+     * never touches [TermuxService].
+     *
+     * @param tag Document tag the tab binds to ("" for the first untagged server)
+     * @return The stable id of the new session
+     */
+    fun createX11Session(tag: String = ""): String {
+        val id = UUID.randomUUID().toString()
+        viewModelScope.launch {
+            _uiState.update { state ->
+                val x11Count = state.sessions.count { it is TermuxSessionUiModel.X11 }
+                val name = X11Sessions.nextSessionName(x11Count, getApplication<Application>().getString(R.string.x11_session_default_name))
+                val newModel = TermuxSessionUiModel.X11(id = id, name = name, tag = tag)
                 val newSessions = state.sessions + newModel
                 sanitizeSplit(activateSession(state.copy(
                     sessions = newSessions

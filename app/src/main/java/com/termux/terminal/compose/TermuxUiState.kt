@@ -165,6 +165,21 @@ sealed class TermuxSessionUiModel {
     ) : TermuxSessionUiModel() {
         override val title: String = ""
     }
+
+    /**
+     * An X11 display tab, purely UI backed (spec 014).
+     *
+     * @param id Stable id for the tab
+     * @param name Display name for the session
+     * @param tag Document tag of the display the tab binds to ("" = first untagged server)
+     */
+    data class X11(
+        override val id: String,
+        override val name: String,
+        val tag: String = ""
+    ) : TermuxSessionUiModel() {
+        override val title: String = ""
+    }
 }
 
 /**
