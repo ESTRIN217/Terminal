@@ -11,7 +11,7 @@
   de virglrenderer, path del socket con mesa 25.0.7.
 
 ## Spec 014 — decisiones y estado
-- Submódulo `termux-x11/` (pin `65a9a06`→bump cmake-fix). Pins internos lorie
+- Submódulo `termux-x11/` (pin `c82664b0` = `65a9a06` + fix CMake). Pins internos lorie
   (xserver, xorgproto…) ahora inicializados (`--init --recursive`). El fork envía
   ~17 parches de xserver **sin commit** (working tree del submódulo anidado);
   conservar, no limpiar.
