@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Settings
@@ -37,6 +38,7 @@ import com.termux.R
  * @param isOpen Whether the drawer is open
  * @param onOpenChange Callback when the drawer open state changes
  * @param onFileManagerClick Callback when the file manager button is clicked
+ * @param onX11Click Callback when the X11 button is clicked (spec 014)
  * @param onSettingsClick Callback when the settings button is clicked
  * @param onToggleKeyboardClick Callback when the toggle keyboard button is clicked
  * @param modifier Modifier to apply
@@ -47,6 +49,7 @@ fun TermuxNavigationDrawer(
     isOpen: Boolean,
     onOpenChange: (Boolean) -> Unit,
     onFileManagerClick: () -> Unit,
+    onX11Click: () -> Unit,
     onSettingsClick: () -> Unit,
     onToggleKeyboardClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -101,6 +104,19 @@ fun TermuxNavigationDrawer(
                             Icon(
                                 imageVector = Icons.Default.Folder,
                                 contentDescription = stringResource(R.string.title_activity_file_manager)
+                            )
+                        },
+                        modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                    )
+
+                    NavigationDrawerItem(
+                        label = { Text(stringResource(R.string.action_open_x11)) },
+                        selected = false,
+                        onClick = onX11Click,
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Default.DesktopWindows,
+                                contentDescription = stringResource(R.string.action_open_x11)
                             )
                         },
                         modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)

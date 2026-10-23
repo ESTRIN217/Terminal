@@ -295,6 +295,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                         onToggleKeyboard = { toggleKeyboard() },
                         onPasteFromClipboard = { pasteFromClipboard() },
                         onOpenFileManager = { addFileManagerSession(null) },
+                        onOpenX11 = { addX11Session() },
                         onNewFileManagerTab = { addFileManagerSession(null) },
                         onCreateFileManagerShortcut = { createFileManagerLauncherShortcut(it) },
                         onCreateFileShortcut = { createFileLauncherShortcut(it) },
@@ -420,6 +421,18 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             mViewModel.createFileManagerSession(
                 getString(R.string.title_activity_file_manager), initialPath
             )
+        }
+    }
+
+    /**
+     * Opens a new X11 session tab, honoring the sessions cap (spec 014, RF-2).
+     * The tab is purely UI backed: closing it later never touches TermuxService.
+     */
+    private fun addX11Session() {
+        if (mViewModel.uiState.value.sessions.size >= MAX_SESSIONS) {
+            Toast.makeText(this, R.string.title_max_terminals_reached, Toast.LENGTH_SHORT).show()
+        } else {
+            mViewModel.createX11Session()
         }
     }
 
@@ -998,6 +1011,11 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         }
 
         mViewModel.removeSession(model)
+
+        // Spec 014: X11 tabs are UI-only; dispose their controller (bus leave) here.
+        if (model is TermuxSessionUiModel.X11) {
+            com.termux.terminal.x11.X11SessionRegistry.release(model.id)
+        }
 
         if (mViewModel.uiState.value.sessions.isEmpty()) {
             finish()

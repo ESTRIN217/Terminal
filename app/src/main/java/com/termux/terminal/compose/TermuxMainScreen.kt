@@ -83,6 +83,7 @@ private const val LOG_TAG = "TermuxMainScreen"
  * @param onToggleKeyboard Callback to toggle the soft keyboard
  * @param onPasteFromClipboard Callback to paste the clipboard into the active terminal session
  * @param onOpenFileManager Callback to open the file manager
+ * @param onOpenX11 Callback to open an X11 session tab (spec 014)
  * @param onNewFileManagerTab Callback to open an additional file manager tab (spec 008, RF-10)
  * @param onCreateFileManagerShortcut Callback to pin a launcher shortcut to a folder (RF-16)
  * @param onCreateFileShortcut Callback to pin a launcher shortcut to a file (spec 009, RF-11)
@@ -111,6 +112,7 @@ fun TermuxMainScreen(
     onToggleKeyboard: () -> Unit,
     onPasteFromClipboard: () -> Unit,
     onOpenFileManager: () -> Unit,
+    onOpenX11: () -> Unit,
     onNewFileManagerTab: () -> Unit,
     onCreateFileManagerShortcut: (File) -> Unit,
     onCreateFileShortcut: (File) -> Unit,
@@ -167,6 +169,10 @@ fun TermuxMainScreen(
             onFileManagerClick = {
                 viewModel.setDrawerOpen(false)
                 onOpenFileManager()
+            },
+            onX11Click = {
+                viewModel.setDrawerOpen(false)
+                onOpenX11()
             },
             onSettingsClick = {
                 viewModel.setDrawerOpen(false)
@@ -735,8 +741,14 @@ private fun SessionPane(
             onCreateFileShortcut = onCreateFileShortcut,
             modifier = modifier
         )
-        // placeholder: the real X11 tab host lands with spec 014 T8
-        is TermuxSessionUiModel.X11 -> {}
+        is TermuxSessionUiModel.X11 -> X11SessionHost(
+            sessionId = model.id,
+            tag = model.tag,
+            onCloseSession = { onRemoveSession(model) },
+            isActivePane = isActivePane,
+            onActivatePane = { onPaneFocused(model.id) },
+            modifier = modifier
+        )
     }
 }
 

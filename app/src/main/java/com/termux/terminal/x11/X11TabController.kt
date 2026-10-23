@@ -38,7 +38,6 @@ enum class X11ConnectionState {
  * server answers getXConnection()).
  */
 class X11TabController(
-    private val view: LorieView,
     val tag: String,
     private val context: Context,
     private val prefsSettings: Prefs,
@@ -49,26 +48,44 @@ class X11TabController(
     private val mainHandler = Handler(Looper.getMainLooper())
     private var service: ICmdEntryInterface? = null
     private val retryRunnable = Runnable { tryConnect() }
+    private var view: LorieView? = null
 
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-        mainHandler.post { view.reloadPreferences(prefsSettings) }
+        runWithView { it.reloadPreferences(prefsSettings) }
     }
 
     val connectionState = MutableStateFlow(X11ConnectionState.NO_SERVER)
 
-    /** Attach: set the view client and join the bus. Call from the Compose host. */
+    /** Attach: join the bus and listen for preference changes (view comes via [bindView]). */
     fun attach() {
-        view.setClient(this)
         prefsSettings.get().registerOnSharedPreferenceChangeListener(prefsListener)
         X11SessionBus.registerHandler(this)
     }
 
-    /** Detach: leave the bus and stop retrying. Call on tab disposal. */
+    /** Detach: leave the bus and stop retrying. Call when the tab closes. */
     fun detach() {
         X11SessionBus.unregisterHandler(this)
         prefsSettings.get().unregisterOnSharedPreferenceChangeListener(prefsListener)
         mainHandler.removeCallbacks(retryRunnable)
-        disconnect()
+        view = null
+        service = null
+        setConnectionState(X11ConnectionState.DISCONNECTED)
+    }
+
+    /**
+     * Binds the view being composed for this tab (a fresh [LorieView] after every
+     * rotation) and starts/restarts the connection flow, mirroring MainActivity's
+     * activity recreation behavior.
+     */
+    fun bindView(newView: LorieView) {
+        view = newView
+        newView.setClient(this)
+        startConnecting()
+    }
+
+    private fun runWithView(block: (LorieView) -> Unit) {
+        val v = view ?: return
+        if (Looper.myLooper() == Looper.getMainLooper()) block(v) else mainHandler.post { block(v) }
     }
 
     /**
@@ -110,7 +127,7 @@ class X11TabController(
 
     override fun onPreferencesChanged(tag: String, key: String?) {
         if (!matches(tag)) return
-        onMainThreadSave { view.reloadPreferences(prefsSettings) }
+        runWithView { it.reloadPreferences(prefsSettings) }
     }
 
     override fun onCustomAction(tag: String, what: String?) {
@@ -131,9 +148,25 @@ class X11TabController(
     override fun useTermuxEKBarBehaviour(): Boolean = false
 
     override fun handleKey(event: KeyEvent): Boolean {
-        // The Compose host forwards hardware keys itself; LorieView events fall
-        // through to native when no host handler is interested.
-        return false
+        // Forward hardware keyboard state straight to the X server (no soft-key
+        // interception here; text input arrives through the IME connection).
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                if (event.repeatCount == 0) {
+                    runWithView { view ->
+                        view.sendKeyEvent(event.scanCode, event.keyCode, true)
+                    }
+                }
+                return true
+            }
+            KeyEvent.ACTION_UP -> {
+                runWithView { view ->
+                    view.sendKeyEvent(event.scanCode, event.keyCode, false)
+                }
+                return true
+            }
+            else -> return false
+        }
     }
 
     override fun refreshInputDevices() {
@@ -156,7 +189,7 @@ class X11TabController(
         try {
             if (s.asBinder().isBinderAlive) {
                 val logcatOutput: ParcelFileDescriptor? = s.logcatOutput
-                if (logcatOutput != null) view.startLogcat(logcatOutput.detachFd())
+                if (logcatOutput != null) runWithView { it.startLogcat(logcatOutput.detachFd()) }
             }
         } catch (e: Exception) {
             Logger.logStackTraceWithMessage(LOG_TAG, "Logcat fd extraction skipped", e)
@@ -166,23 +199,28 @@ class X11TabController(
     }
 
     private fun tryConnect() {
-        if (view.connected()) {
+        var connected = false
+        runWithView { v -> connected = v.connected() }
+        if (connected) {
             cancelRetry()
             setConnectionState(X11ConnectionState.CONNECTED)
             return
         }
         val s = service
         if (s == null) {
-            view.requestConnection()
+            runWithView { it.requestConnection() }
             scheduleConnect()
             return
         }
         try {
             val fd = s.xConnection
             if (fd != null) {
-                view.connect(fd.detachFd())
-                view.triggerCallback()
-                view.reloadPreferences(prefsSettings)
+                val fdNumber = fd.detachFd()
+                runWithView { v ->
+                    v.connect(fdNumber)
+                    v.triggerCallback()
+                    v.reloadPreferences(prefsSettings)
+                }
                 setConnectionState(X11ConnectionState.CONNECTED)
                 cancelRetry()
             } else {
@@ -208,7 +246,7 @@ class X11TabController(
     private fun disconnect() {
         service = null
         onMainThreadSave {
-            view.connect(-1)
+            view?.connect(-1)
             setConnectionState(X11ConnectionState.DISCONNECTED)
         }
     }

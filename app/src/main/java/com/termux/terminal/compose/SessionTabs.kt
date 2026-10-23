@@ -97,10 +97,10 @@ private fun SessionTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (session is TermuxSessionUiModel.FileManager) {
-                        Icons.Default.Folder
-                    } else {
-                        Icons.Default.Terminal
+                    imageVector = when (session) {
+                        is TermuxSessionUiModel.FileManager -> Icons.Default.Folder
+                        is TermuxSessionUiModel.X11 -> Icons.Default.DesktopWindows
+                        else -> Icons.Default.Terminal
                     },
                     contentDescription = stringResource(R.string.session),
                     modifier = Modifier.size(18.dp).padding(end = 4.dp),
