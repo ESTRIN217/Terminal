@@ -1482,6 +1482,9 @@ public final class TermuxConstants {
         /** Nice name given to the companion X server process launched via app_process. */
         public static final String X11_COMPANION_PROCESS_NAME = "termux-x11"; // Default: "termux-x11"
 
+        /** Absolute path of the Android {@code pm} tool used to resolve the companion classpath; absolute so the paste command also works inside the proot guest with {@code /system} bound (spec 014, RF-8). */
+        public static final String X11_COMPANION_PM_PATH = "/system/bin/pm"; // Default: "/system/bin/pm"
+
         /** Fallback display name used by the companion command when none is passed. */
         public static final String X11_DEFAULT_DISPLAY = ":0"; // Default: ":0"
 

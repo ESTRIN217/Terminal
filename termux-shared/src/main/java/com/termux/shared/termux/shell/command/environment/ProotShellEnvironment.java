@@ -324,7 +324,7 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
 
     /**
      * Build the default proot guest command: {@code proot -r <rootfs> -0 -w /root
-     * -b /dev -b <app-shm>:/dev/shm -b /dev/pts -b /proc -b /sys -b /sdcard:/root/sdcard
+     * -b /dev -b <app-shm>:/dev/shm -b /dev/pts -b /proc -b /sys -b /system -b /sdcard:/root/sdcard
      * -b /storage:/root/storage /bin/bash --login [extraArgs...]}.
      *
      * <p>When the linkfix shim is installed, the guest program is wrapped as
@@ -440,6 +440,11 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
         }
         command.add("-b");
         command.add("/sys");
+        // Android /system read-only (spec 014, RF-8): lets the guest run the X11
+        // companion paste command (/system/bin/pm, /system/bin/app_process are
+        // hidden without it). Kernel permissions and SELinux are unchanged.
+        command.add("-b");
+        command.add("/system");
         command.add("-b");
         command.add("/sdcard:" + GUEST_HOME + "/sdcard");
         command.add("-b");

@@ -74,18 +74,22 @@
 
                     <h2>Arrancar el companion</h2>
                     <p>
-                        Pega el comando en una sesión de terminal normal de la app. El comando
-                        mostrado por la pestaña siempre refleja el id de paquete instalado;
-                        para este fork es:
+                        Pega el comando en una sesión de terminal normal de la app (la sesión
+                        Debian). Las sesiones enlazan <code>/system</code> de Android en
+                        lectura, así que <code>pm</code> y <code>app_process</code> son visibles
+                        desde el guest por rutas absolutas. El comando mostrado por la pestaña
+                        siempre refleja el id de paquete instalado; para este fork es:
                     </p>
-                    <pre><code>CLASSPATH=$(pm path --user 0 com.estrin217.terminal | head -1 | cut -d: -f2) \
+                    <pre><code>CLASSPATH=$(/system/bin/pm path --user 0 com.estrin217.terminal | head -1 | cut -d: -f2) \
   /system/bin/app_process / --nice-name=termux-x11 com.termux.x11.CmdEntryPoint :0</code></pre>
                     <p>
-                        Lo que hace:
+                        Notas del caso proot:
                     </p>
                     <ul>
+                        <li>Las rutas son absolutas a propósito: dentro del guest el PATH es Debian puro y <code>pm</code> no alcanza por caminos relativos.</li>
+                        <li>Si lo ejecutas en un shell Android de otro entorno (Termux clásico, adb shell), el mismo comando también vale: las rutas absolutas no cambian nada.</li>
                         <li><code>pm path</code> calcula la ruta del APK <strong>instalado</strong> (no rompe ninguna actualización del fork).</li>
-                        <li><code>app_process</code> lanza <code>com.termux.x11.CmdEntryPoint</code> como proceso del mismo UID que la app.</li>
+                        <li><code>app_process</code> lanza <code>com.termux.x11.CmdEntryPoint</code> como proceso con el mismo UID que la app.</li>
                         <li><code>:0</code> es el número de display. Puedes poner otro (<code>:1</code>); la pestaña se reconecta sola al servidor que aparece.</li>
                     </ul>
                     <p>

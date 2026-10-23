@@ -42,7 +42,8 @@ object X11CompanionCommand {
         if (trimmedTag.isNotEmpty() && (trimmedTag.startsWith("-") || !TAG_REGEX.matches(trimmedTag))) return null
 
         val tagPart = if (trimmedTag.isEmpty()) "" else " -tag $trimmedTag"
-        val classpath = "\$(pm path --user 0 $applicationId | head -1 | cut -d: -f2)"
+        val pmPath = TermuxConstants.TERMUX_X11.X11_COMPANION_PM_PATH
+        val classpath = "\$($pmPath path --user 0 $applicationId | head -1 | cut -d: -f2)"
         val niceName = TermuxConstants.TERMUX_X11.X11_COMPANION_PROCESS_NAME
         return "CLASSPATH=$classpath $APP_PROCESS --nice-name=$niceName $CMD_ENTRY_POINT_CLASS $display$tagPart"
     }

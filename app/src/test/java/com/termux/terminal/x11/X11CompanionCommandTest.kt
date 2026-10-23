@@ -13,7 +13,7 @@ class X11CompanionCommandTest {
     @Test
     fun buildsCommandForDefaultDisplay() {
         assertEquals(
-            "CLASSPATH=\$(pm path --user 0 $appId | head -1 | cut -d: -f2) " +
+            "CLASSPATH=\$(/system/bin/pm path --user 0 $appId | head -1 | cut -d: -f2) " +
                 "/system/bin/app_process / --nice-name=termux-x11 " +
                 "com.termux.x11.CmdEntryPoint :0",
             X11CompanionCommand.buildLaunchCommand(appId, ":0", null)
@@ -23,7 +23,7 @@ class X11CompanionCommandTest {
     @Test
     fun buildsCommandWithTag() {
         assertEquals(
-            "CLASSPATH=\$(pm path --user 0 $appId | head -1 | cut -d: -f2) " +
+            "CLASSPATH=\$(/system/bin/pm path --user 0 $appId | head -1 | cut -d: -f2) " +
                 "/system/bin/app_process / --nice-name=termux-x11 " +
                 "com.termux.x11.CmdEntryPoint :1 -tag main",
             X11CompanionCommand.buildLaunchCommand(appId, "1", "main")
@@ -33,7 +33,7 @@ class X11CompanionCommandTest {
     @Test
     fun addsColonToBareDisplay() {
         assertEquals(
-            "CLASSPATH=\$(pm path --user 0 $appId | head -1 | cut -d: -f2) " +
+            "CLASSPATH=\$(/system/bin/pm path --user 0 $appId | head -1 | cut -d: -f2) " +
                 "/system/bin/app_process / --nice-name=termux-x11 " +
                 "com.termux.x11.CmdEntryPoint :1",
             X11CompanionCommand.buildLaunchCommand(appId, "1", null)
@@ -49,7 +49,7 @@ class X11CompanionCommandTest {
     @Test
     fun treatsBlankTagAsNoTag() {
         assertEquals(
-            "CLASSPATH=\$(pm path --user 0 $appId | head -1 | cut -d: -f2) " +
+            "CLASSPATH=\$(/system/bin/pm path --user 0 $appId | head -1 | cut -d: -f2) " +
                 "/system/bin/app_process / --nice-name=termux-x11 " +
                 "com.termux.x11.CmdEntryPoint :0",
             X11CompanionCommand.buildLaunchCommand(appId, ":0", "")

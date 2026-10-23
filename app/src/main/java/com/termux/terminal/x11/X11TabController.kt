@@ -139,6 +139,16 @@ class X11TabController(
 
     override fun getPrefs(): Prefs = prefsSettings
 
+    override fun clientConnectedStateChanged() {
+        // The native side noticed a connection state change (e.g. server hangup);
+        // resync the tab state for the "no server" overlay.
+        runWithView { view ->
+            connectionState.value =
+                if (view.connected()) X11ConnectionState.CONNECTED
+                else X11ConnectionState.DISCONNECTED
+        }
+    }
+
     override fun getExtraKeys(): TermuxX11ExtraKeys? {
         // The extra keys bar of embedded tabs is hosted by the Compose screen;
         // no Termux-style modifier controller is attached in this iteration.
