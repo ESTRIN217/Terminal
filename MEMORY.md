@@ -46,7 +46,11 @@
   dlopen de `base.apk!/lib/…` — con packaging legacy (`useLegacyPackaging
   true`, extractNativeLibs por F-Droid upstream) la lib va comprimida en el
   APK. Fix en submódulo `CmdEntryPoint.initEntryPoint`: probar
-  `nativeLibraryDir/libXlorie.so` (extraída) antes de la ruta APK.
+  `nativeLibraryDir/libXlorie.so` (extraída) antes de la ruta APK. Segunda
+  vía: `createContext()` es el SYSTEM context (ApplicationInfo del framework)
+  → el hijo no ve su propio nativeLibraryDir; la app inyecta
+  `TERMUX_X11_LIBDIR` (env, código `TermuxX11GuestLoaderLibrary.ENV_X11_LIBDIR`)
+  y el hijo lo lee primero.
 - Loader guest (enmienda A RF-8, replicando el deb upstream): env
   `TERMUX_X11_APK` (sourceDir per-sesión) + wrapper idempotente
   `files/debian/usr/bin/termux-x11` escrito en `TermuxService.onStartCommand`;
