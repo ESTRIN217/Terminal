@@ -12,7 +12,7 @@ la configuración del grafo, y el build completo con `libXlorie.so` se hace en T
   en el catálogo.
   - Hecho cuando: `./gradlew help` configura todo el grafo sin errores y
     `./gradlew projects` muestra `:termux-x11:lorie` y `:shell-loader:stub`.
-- [ ] **T2. Decaplo LorieView.** RF-4..RF-7
+- [x] **T2. Decoplo LorieView.** RF-4..RF-7
   En el submódulo: nueva interfaz `LorieView.Client`, refs a MainActivity
   re-canalizadas por ahí, `MainActivity implements Client` (delegación),
   manifest de lorie sin `<application>` attrs ni LAUNCHER/SECONDARY_HOME y

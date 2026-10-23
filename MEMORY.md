@@ -15,6 +15,23 @@
   NONE|ADRENO_KGSL|VIRGL mutuamente excluyentes. Pendiente: aprobación del
   borrador → plan → tareas. Dudas clave pinned: tag/commit de virglrenderer,
   path del socket (`VIRGL_TEST_SERVER_URI` vs /tmp vtest) con mesa 25.0.7.
+- **Spec 014 (termux-x11 complemento) borrador en
+  `specs/014-termux-x11-complemento/`:** integrar el módulo `lorie` del fork
+  ESTRIN217 de termux-x11 (clonado en `/root/Terminal-external/termux-x11`, con
+  submódulos; ya está reorganizado como librería `lorie` + host `lorie-app`, y su
+  build.gradle resuelve APPLICATION_ID desde la app host). Objetivo: lib en el
+  proyecto + pestañas X11 polimórficas con acceso desde el drawer (patrón
+  filemanager). **APROBADA (2026-10-22):** submódulo git (`termux-x11/` en la raíz,
+  `:termux-x11:lorie` + alias `:shell-loader:stub`), pestaña que embebe `LorieView`
+  con client surrogate (`LorieView.Client` nuevo, `MainActivity` lo implementa),
+  companion arrancado con comando copy-paste (`app_process` + CLASSPATH del APK),
+  sin icono LAUNCHER standalone, `LoriePreferences` fuera de alcance. Plan y 10
+  tareas escritos y aprobados. **T1 hecha (commit T1):** submódulo pin
+  `1c721a9` (gradle adapts), includes planos `:termux-x11-lorie`/`:termux-x11-stub`,
+  catalog alias, `preBuild` de lorie verde con configuration-cache (providers.exec).
+  Pendiente: T3→T10. Hecho T2 (submódulo pin `65a9a06`): interface `LorieView.Client`,
+  `MainActivity` la implementa, manifest de lorie en base (sin LAUNCHER/Application/
+  Receiver) y `lorie-app` los re-declara para standalone.
 
 ## Arquitectura y reglas prácticas
 - `terminal-emulator` → `terminal-view` → `termux-shared` → `app`;
@@ -36,6 +53,10 @@
 - Build Java 17/NDK 30.0.14904198/CMake 3.31.6; tests `./gradlew test`; evitar builds Gradle paralelos por riesgo al incremental Kotlin.
 
 ## Learnings vigentes
+- Host de build aarch64: los binarios x86_64 del SDK (aidl, aapt, bcc) no corren;
+  aapt2 sí (binario aarch64). Solución aplicada: `apt-get install aidl` y wrapper
+  en `build-tools/36.0.0/` y `36.1.0/` (`#!/bin/sh exec /usr/bin/aidl "$@"`,
+  binario original en `aidl.x86_64.bak`).
 - Glifos multicolor Compose requieren `tint = Color.Unspecified`; viewport no
   cuadrado: centrar el arte en viewport cuadrado para que no se distorsione.
 - Semánticas similares pero distintas (p. ej. extensión para orden vs icono) no
