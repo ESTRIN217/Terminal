@@ -40,6 +40,12 @@
   Tests `./gradlew test`; ahí: `--tests 'com.termux.terminal.x11.*'`.
 
 ## Learnings vigentes
+- El native de lorie (`lorie/src/main/cpp/lorie/activity.cpp`) referenciaba el
+  campo `activity` (tipo MainActivity) que la T2 retiró de `LorieView`:
+  `GetFieldID` falla y el JNI aborta = crash nativo al abrir pestaña X11 (y
+  rompía también la standalone). Fix: hooks vía `LorieView.Client` (defaults
+  `clientConnectedStateChanged`/`onServerHeartbeat`), lookup lazy del campo
+  `client`. Regla: al quitar símbolos Java de lorie, grep del espejo en `cpp/`.
 - Host build aarch64: binarios x86_64 del SDK rotos: aidl (wrapper a /usr/bin/aidl),
   aapt2, **cmake/3.22.1 (usar 3.31.6, pin en lorie/build.gradle)**. BISON y FLEX
   necesarios para el build nativo de lorie (apt-get). Pull/push del submódulo:
