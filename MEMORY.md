@@ -1,32 +1,23 @@
 # MEMORY.md — Terminal
 ## Estado actual
-- Rama `3.0`. **Spec 014 (termux-x11 complemento): T1–T10 hechas; enmienda A
-  (loader guest T11/T12) implementada.** Pendiente mantenedor: probar en
-  dispositivo real (wrapper guest, conexión companion, touch, hardware keys)
-  y cerrar la spec.
-- Cerradas antes: 010 (overlay /proc), 011/012 (GPU llvmpipe; doc Mali pendiente),
+- Rama `3.0`. **Spec 014 (termux-x11 complemento): T1–T10 + enmienda A (loader
+  guest T11/T12) hechas.** Pendiente: probar en dispositivo real (wrapper
+  guest, companion, touch, HW keys) y cerrar la spec. Cerradas antes: 010–012,
   001–009; 2.1.0 publicada.
-- **Spec 013 (VirGL) borrador en `specs/013-virgl-aceleracion-gpu/`:** solo VirGL,
-  binario NDK/CMake como proot, VNC dentro del invitado, `gpu_solution` =
-  NONE|ADRENO_KGSL|VIRGL. Pendiente aprobación → plan → tareas. Dudas pinned: tag
-  de virglrenderer, path del socket con mesa 25.0.7.
+- **Spec 013 (VirGL) borrador en `specs/013-virgl-aceleracion-gpu/`:** pendiente
+  aprobación → plan → tareas.
 
 ## Spec 014 — decisiones y estado
-- Submódulo `termux-x11/` (pin `c82664b0` = `65a9a06` + fix CMake). Pins internos lorie
-  (xserver, xorgproto…) ahora inicializados (`--init --recursive`). El fork envía
-  ~17 parches de xserver **sin commit** (working tree del submódulo anidado);
-  conservar, no limpiar.
-- Cadena pura→UI: `X11CompanionCommand` (comando copy-paste) → `X11Sessions` →
-  `X11SessionBus` (tag→binder, untagged a primera pestaña sin tag) →
-  `X11TabController` (surrogate `LorieView.Client`, reconnector 250 ms,
-  `bindView()` para rebind tras rotación) → `X11SessionRegistry` (controller por
-  sessionId, vive rotaciones) → `X11SessionHost` (Compose). El cierre de pestaña
-  libera en `removeSession` de la Activity; no toca TermuxService.
-- Touch embebido: forwarder propio en el host (`sendTouchEvent` 18/19/20 XI);
-  gestos completos quedan en la app standalone. HW keys vía `handleKey` →
-  `view.sendKeyEvent` (down solo con repeatCount 0).
-- `TermuxConstants.TERMUX_X11`, strings ×3 (`x11_*`, `action_open_x11`). Overlay
-  "no server" con comando + copiar; estados NO_SERVER/CONNECTED/DISCONNECTED.
+- Submódulo `termux-x11/` (pin `c82664b0`); parches xserver **sin commit**
+  (working tree anidado), conservar; submódulos anidados con `--init --recursive`.
+- Cadena: `X11CompanionCommand` → `X11Sessions` → `X11SessionBus` (tag→binder,
+  untagged a primera pestaña) → `X11TabController` (surrogate `LorieView.Client`,
+  reconnector 250 ms, `bindView()`) → `X11SessionRegistry` (por sessionId, vive
+  rotaciones) → `X11SessionHost` (Compose). Cierre de pestaña no toca TermuxService.
+- Touch: forwarder propio (XI 18/19/20); gestos completos en standalone;
+  HW keys `view.sendKeyEvent` (down solo repeatCount 0).
+- `TermuxConstants.TERMUX_X11`, strings ×3; overlay "no server" con comando
+  primario/fallback e ícono copiar; estados NO_SERVER/CONNECTED/DISCONNECTED.
 
 ## Arquitectura y reglas prácticas
 - `terminal-emulator` → `terminal-view` → `termux-shared` → `app`;
