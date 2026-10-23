@@ -1,6 +1,7 @@
 package com.termux.terminal.x11
 
 import com.termux.shared.termux.TermuxConstants
+import com.termux.shared.termux.shell.command.environment.ProotShellEnvironment
 
 /**
  * Pure helpers to build the companion X server launch command shown to the user in
@@ -50,6 +51,23 @@ object X11CompanionCommand {
         )
         if (trimmedTag.isNotEmpty()) args += listOf("-tag", trimmedTag)
         return args
+    }
+
+    /**
+     * Builds the extra environment for the spawned companion (spec 014, enmienda B, pure).
+     * `TMPDIR` must be the **rootfs** `/tmp`: the X server creates its sockets there
+     * (`$TMPDIR/.X11-unix/X*`) so proot guests reach the same socket at `/tmp`, and
+     * the companion's chroot-style xkb heuristic then finds the rootfs keymaps.
+     *
+     * @param tmpDirPath writable tmp dir path (rootfs `/tmp` preferred); null/blank skips
+     * @return env entries to merge into the spawn environment (may be empty)
+     */
+    fun buildCompanionEnv(tmpDirPath: String?): Map<String, String> {
+        val env = mutableMapOf<String, String>()
+        if (!tmpDirPath.isNullOrBlank()) {
+            env[ProotShellEnvironment.ENV_TMPDIR] = tmpDirPath
+        }
+        return env
     }
 
     /**

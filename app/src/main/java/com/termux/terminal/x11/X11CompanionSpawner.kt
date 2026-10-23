@@ -4,6 +4,7 @@ import android.content.Context
 import com.termux.shared.errors.Errno
 import com.termux.shared.errors.Error
 import com.termux.shared.logger.Logger
+import com.termux.shared.termux.TermuxConstants
 import com.termux.shared.termux.x11.TermuxX11GuestLoaderLibrary
 
 /**
@@ -41,6 +42,20 @@ object X11CompanionSpawner {
         if (classpath.isNullOrEmpty())
             return Errno.ERRNO_FAILED.getError("Could not resolve the app APK path (applicationInfo.sourceDir)")
 
+        // TMPDIR must point at the rootfs /tmp: the X server creates its X11
+        // sockets there so proot guests (whose /tmp maps to the rootfs) reach
+        // the same socket, and the companion's chroot-style xkb heuristic finds
+        // the rootfs keymaps. Fall back to the app's own tmp dir when the
+        // rootfs is not usable yet.
+        val rootfsTmp = java.io.File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH, "tmp")
+        if (!rootfsTmp.isDirectory && !rootfsTmp.mkdirs())
+            Logger.logWarn(LOG_TAG, "Failed to ensure rootfs tmp dir; falling back to the app tmp dir")
+        val tmpDirPath = if (rootfsTmp.isDirectory && rootfsTmp.canWrite())
+            rootfsTmp.absolutePath
+        else {
+            java.io.File(context.filesDir, "tmp").apply { mkdirs() }.absolutePath
+        }
+
         return try {
             val process = ProcessBuilder(args)
                 .apply {
@@ -50,6 +65,8 @@ object X11CompanionSpawner {
                     // context) must load it from there, not from the APK.
                     environment()[TermuxX11GuestLoaderLibrary.ENV_X11_LIBDIR] =
                         context.applicationInfo.nativeLibraryDir ?: ""
+                    environment().putAll(
+                        X11CompanionCommand.buildCompanionEnv(tmpDirPath))
                     redirectErrorStream(true)
                 }
                 .start()

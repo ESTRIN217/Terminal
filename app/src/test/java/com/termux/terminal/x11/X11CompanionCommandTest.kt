@@ -84,6 +84,20 @@ class X11CompanionCommandTest {
     }
 
     @Test
+    fun companionEnvSetsRootfsTmpdir() {
+        assertEquals(
+            mapOf("TMPDIR" to "/data/data/com.estrin217.terminal/files/debian/tmp"),
+            X11CompanionCommand.buildCompanionEnv("/data/data/com.estrin217.terminal/files/debian/tmp")
+        )
+    }
+
+    @Test
+    fun companionEnvSkipsNullOrBlankTmpdir() {
+        assertEquals(emptyMap<String, String>(), X11CompanionCommand.buildCompanionEnv(null))
+        assertEquals(emptyMap<String, String>(), X11CompanionCommand.buildCompanionEnv("  "))
+    }
+
+    @Test
     fun guestSelectionIgnoresApplicationId() {
         assertEquals(
             "termux-x11 :0",
