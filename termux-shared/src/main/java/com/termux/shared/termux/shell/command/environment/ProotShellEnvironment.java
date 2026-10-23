@@ -325,7 +325,7 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
 
     /**
      * Build the default proot guest command: {@code proot -r <rootfs> -0 -w /root
-     * -b /dev -b <app-shm>:/dev/shm -b /dev/pts -b /proc -b /sys -b /system -b /data/app -b /sdcard:/root/sdcard
+     * -b /dev -b <app-shm>:/dev/shm -b /dev/pts -b /proc -b /sys -b /system -b /apex -b /data/app -b /sdcard:/root/sdcard
      * -b /storage:/root/storage /bin/bash --login [extraArgs...]}.
      *
      * <p>When the linkfix shim is installed, the guest program is wrapped as
@@ -446,6 +446,13 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
         // hidden without it). Kernel permissions and SELinux are unchanged.
         command.add("-b");
         command.add("/system");
+        // APEX runtime (Android 11+): app_process's ELF interpreter is
+        // /apex/com.android.runtime/bin/linker64 and ART libs live under
+        // /apex/com.android.art; proot translates unbound paths to the rootfs,
+        // which has no /apex, so the companion would die with ENOENT at exec
+        // ("required file not found"). Read-only for the same-uid guest.
+        command.add("-b");
+        command.add("/apex");
         // APK install tree (spec 014, enmienda A): `pm path` output and the
         // TERMUX_X11_APK classpath must be resolvable inside the guest, otherwise
         // proot would translate /data/app/* into the rootfs and the companion

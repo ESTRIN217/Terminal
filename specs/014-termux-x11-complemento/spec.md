@@ -82,6 +82,9 @@ con entrada en el drawer.
     `exec /system/bin/app_process / --nice-name=termux-x11
     com.termux.x11.CmdEntryPoint "$@"` con `CLASSPATH=${TERMUX_X11_APK:?}`),
     replicando el mecanismo del paquete deb upstream sin deb ni loader aparte.
+    Las sesiones proot enlazan además `/apex` (intérprete ELF de `app_process`
+    en Android 11+ y arte de ART) para que el exec del companion resuelva
+    dentro del guest.
     EL SI el wrapper existe ENTONCES el comando primario del overlay es
     `termux-x11 :0 [-tag t]`; SI NO, se conserva el one-liner con rutas
     absolutas `/system/bin/*` como fallback. La escritura del wrapper es barata

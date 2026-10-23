@@ -23,7 +23,7 @@ public class ProotShellEnvironmentTest {
             "-0", "-w", "/root",
             "-b", "/dev", "-b", TermuxConstants.DEBIAN_SHM_DIR_PATH + ":/dev/shm", "-b", "/dev/pts",
             "-b", "/proc", "-b", "/sys",
-            "-b", "/system", "-b", "/data/app",
+            "-b", "/system", "-b", "/apex", "-b", "/data/app",
             "-b", "/sdcard:/root/sdcard", "-b", "/storage:/root/storage",
             "/bin/bash", "--login"
         };
@@ -46,10 +46,10 @@ public class ProotShellEnvironmentTest {
     @Test
     public void testBuildProotCommand_extraArgsAppended() {
         String[] command = ProotShellEnvironment.buildProotCommand(new String[]{"-c", "echo hi"});
-        Assert.assertEquals(28, command.length);
-        Assert.assertEquals("--login", command[25]);
-        Assert.assertEquals("-c", command[26]);
-        Assert.assertEquals("echo hi", command[27]);
+        Assert.assertEquals(30, command.length);
+        Assert.assertEquals("--login", command[27]);
+        Assert.assertEquals("-c", command[28]);
+        Assert.assertEquals("echo hi", command[29]);
     }
 
     @Test
@@ -58,22 +58,22 @@ public class ProotShellEnvironmentTest {
         String script = "nano '/root/sdcard/notes.txt'; exec bash";
         String[] command = ProotShellEnvironment.buildProotCommand(
             "/root/sdcard", new String[]{"-c", script});
-        Assert.assertEquals("--login", command[25]);
-        Assert.assertEquals("-c", command[26]);
-        Assert.assertEquals(script, command[27]);
+        Assert.assertEquals("--login", command[27]);
+        Assert.assertEquals("-c", command[28]);
+        Assert.assertEquals(script, command[29]);
         Assert.assertEquals("/root/sdcard", command[5]);
     }
 
     @Test
     public void testBuildProotCommand_withLinkfix_wrapsGuestInEnv() {
         String[] command = ProotShellEnvironment.buildProotCommand(null, true);
-        Assert.assertEquals(28, command.length);
+        Assert.assertEquals(30, command.length);
         // LD_PRELOAD must reach the guest via argv (/usr/bin/env), never via
         // the host process environment (it would break the Bionic proot binary).
-        Assert.assertEquals("/usr/bin/env", command[24]);
-        Assert.assertEquals("LD_PRELOAD=" + TermuxConstants.LINKFIX_GUEST_SO_PATH, command[25]);
-        Assert.assertEquals("/bin/bash", command[26]);
-        Assert.assertEquals("--login", command[27]);
+        Assert.assertEquals("/usr/bin/env", command[26]);
+        Assert.assertEquals("LD_PRELOAD=" + TermuxConstants.LINKFIX_GUEST_SO_PATH, command[27]);
+        Assert.assertEquals("/bin/bash", command[28]);
+        Assert.assertEquals("--login", command[29]);
     }
 
     @Test
@@ -82,8 +82,8 @@ public class ProotShellEnvironmentTest {
         // "-w" is replaced but the rest of the layout is unchanged.
         Assert.assertEquals("-w", command[4]);
         Assert.assertEquals("/root/sdcard", command[5]);
-        Assert.assertEquals(26, command.length);
-        Assert.assertEquals("--login", command[25]);
+        Assert.assertEquals(28, command.length);
+        Assert.assertEquals("--login", command[27]);
     }
 
     @Test
@@ -92,9 +92,9 @@ public class ProotShellEnvironmentTest {
             new String[]{"-c", "echo hi"});
         Assert.assertEquals("-w", command[4]);
         Assert.assertEquals("/var/lib", command[5]);
-        Assert.assertEquals("--login", command[25]);
-        Assert.assertEquals("-c", command[26]);
-        Assert.assertEquals("echo hi", command[27]);
+        Assert.assertEquals("--login", command[27]);
+        Assert.assertEquals("-c", command[28]);
+        Assert.assertEquals("echo hi", command[29]);
     }
 
     @Test
@@ -173,10 +173,10 @@ public class ProotShellEnvironmentTest {
     @Test
     public void testBuildProotCommand_withLinkfix_extraArgsAfterLogin() {
         String[] command = ProotShellEnvironment.buildProotCommand(new String[]{"-c", "echo hi"}, true);
-        Assert.assertEquals(30, command.length);
-        Assert.assertEquals("--login", command[27]);
-        Assert.assertEquals("-c", command[28]);
-        Assert.assertEquals("echo hi", command[29]);
+        Assert.assertEquals(32, command.length);
+        Assert.assertEquals("--login", command[29]);
+        Assert.assertEquals("-c", command[30]);
+        Assert.assertEquals("echo hi", command[31]);
     }
 
     // ---- spec 010: proc-stat overlay binds ----
@@ -203,14 +203,14 @@ public class ProotShellEnvironmentTest {
     @Test
     public void testBuildProotCommand_nullOverlayBinds_identicalToCurrentLayout() {
         String[] command = ProotShellEnvironment.buildProotCommand("/root", null, false, null);
-        Assert.assertEquals(28 - 2, command.length); // 26 without linkfix, no extra args
+        Assert.assertEquals(30 - 2, command.length); // 28 without linkfix, no extra args
         Assert.assertEquals("-w", command[4]);
         Assert.assertEquals("/root", command[5]);
         Assert.assertEquals("-b", command[8]);
         Assert.assertEquals("/proc", command[13]);
         Assert.assertEquals("-b", command[14]);
         Assert.assertEquals("/sys", command[15]);
-        Assert.assertEquals("--login", command[25]);
+        Assert.assertEquals("--login", command[27]);
     }
 
     @Test
