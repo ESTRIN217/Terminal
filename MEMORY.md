@@ -1,10 +1,10 @@
 # MEMORY.md — Terminal
 ## Estado actual
-- Rama `3.0`. **Spec 015 (DISPLAY pre-exportado en el guest) COMPLETADA
-  (2026-10-24):** `ProotShellEnvironment` inyecta `DISPLAY=:0`
-  (`X11_DEFAULT_DISPLAY`) sin condición, para no escribir `export DISPLAY=:0`
-  por sesión; docs del wiki ajustadas (export pasa a override). Pendiente de
-  validación fina en dispositivo (no bloquea).
+- Rama `3.0`. **Spec 015 (DISPLAY pre-exportado en el guest) CERRADA y
+  verificada en dispositivo (2026-10-24):** `ProotShellEnvironment` inyecta
+  `DISPLAY=:0` (`X11_DEFAULT_DISPLAY`) sin condición, para no escribir
+  `export DISPLAY=:0` por sesión; docs del wiki ajustadas (export pasa a
+  override).
 - **Spec 014** COMPLETADA y verificada en dispositivo (T1–T13 + enmiendas
   A/B). Pendiente de verificación fina (no bloquea): touch/HW keys/extra
   keys en más apps.

@@ -1,6 +1,8 @@
 # Spec 015 — `DISPLAY` pre-exportado en el guest Debian
 
-Estado: implementada (pendiente de validación en dispositivo)
+Estado: implementada y verificada en dispositivo (2026-10-24): la sesión Debian
+arranca con `DISPLAY=:0` inyectado y las apps gráficas contra la pestaña X11
+funcionan sin export manual.
 
 ## Problema
 
