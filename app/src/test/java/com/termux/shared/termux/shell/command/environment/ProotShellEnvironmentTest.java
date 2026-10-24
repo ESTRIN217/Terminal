@@ -2,6 +2,7 @@ package com.termux.shared.termux.shell.command.environment;
 
 import com.termux.shared.shell.command.ExecutionCommand;
 import com.termux.shared.termux.TermuxConstants;
+import com.termux.shared.termux.proot.VirglLibrary;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -379,6 +380,69 @@ public class ProotShellEnvironmentTest {
 
         Assert.assertEquals("kgsl", map.get("MESA_LOADER_DRIVER_OVERRIDE"));
         Assert.assertEquals(1, map.size());
+    }
+
+    // ---- spec 013 T3: VirGL guest environment (RF-3, RF-5, NFR-3) ----
+
+    @Test
+    public void testApplyVirglSessionEnv_prefActiveAndSocketInjected_addsThreeVariables() {
+        HashMap<String, String> map = new HashMap<>();
+        map.put("HOME", "/root");
+
+        ProotShellEnvironment.applyVirglSessionEnv(map, true, true, "/rootfs/tmp");
+
+        Assert.assertEquals("virpipe", map.get("GALLIUM_DRIVER"));
+        Assert.assertEquals(VirglLibrary.GL_VERSION_OVERRIDE, map.get("MESA_GL_VERSION_OVERRIDE"));
+        Assert.assertEquals("unix:path=/rootfs/tmp/" + VirglLibrary.SOCKET_NAME,
+            map.get("VIRGL_TEST_SERVER_URI"));
+        Assert.assertEquals(4, map.size());
+    }
+
+    @Test
+    public void testApplyVirglSessionEnv_socketAbsent_mapIdentical() {
+        HashMap<String, String> map = new HashMap<>();
+        map.put("HOME", "/root");
+        map.put("TZ", "Europe/Madrid");
+        HashMap<String, String> before = new HashMap<>(map);
+
+        ProotShellEnvironment.applyVirglSessionEnv(map, true, false, "/rootfs/tmp");
+
+        // No server alive → byte-to-byte identical to the pre-spec environment.
+        Assert.assertEquals(before, map);
+        Assert.assertFalse(map.containsKey("GALLIUM_DRIVER"));
+    }
+
+    @Test
+    public void testApplyVirglSessionEnv_prefNone_mapIdentical() {
+        HashMap<String, String> map = new HashMap<>();
+        map.put("HOME", "/root");
+        HashMap<String, String> before = new HashMap<>(map);
+
+        ProotShellEnvironment.applyVirglSessionEnv(map, false, true, "/rootfs/tmp");
+
+        Assert.assertEquals(before, map);
+    }
+
+    @Test
+    public void testApplyVirglSessionEnv_nullRootfsTmp_driverStillMarked() {
+        // Missing tmp path must never erase the driver hint (the URI is only the
+        // addressing layer; the glue logs the missing path instead of inventing one).
+        HashMap<String, String> map = new HashMap<>();
+
+        ProotShellEnvironment.applyVirglSessionEnv(map, true, true, null);
+
+        Assert.assertEquals("virpipe", map.get("GALLIUM_DRIVER"));
+        Assert.assertFalse(map.containsKey("VIRGL_TEST_SERVER_URI"));
+    }
+
+    // ---- spec 013 T3: llvmpipe threads are inert while any GPU path is active ----
+
+    @Test
+    public void testShouldInjectLlvmpipeThreads_gpuOrVirglActiveInhibits() {
+        Assert.assertTrue(ProotShellEnvironment.shouldInjectLlvmpipeThreads(true, false, false));
+        Assert.assertFalse(ProotShellEnvironment.shouldInjectLlvmpipeThreads(true, true, false));
+        Assert.assertFalse(ProotShellEnvironment.shouldInjectLlvmpipeThreads(true, false, true));
+        Assert.assertFalse(ProotShellEnvironment.shouldInjectLlvmpipeThreads(false, false, false));
     }
 
     @Test

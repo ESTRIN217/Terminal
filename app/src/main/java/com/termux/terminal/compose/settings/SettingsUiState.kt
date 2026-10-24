@@ -56,6 +56,16 @@ data class SettingsUiState(
     val gpuBusy: Boolean = false,
 
     /**
+     * VirGL lever (spec 013, RF-2/RF-6/RF-7). [virglReasonKey] carries the
+     * VirglLibrary.REASON_* gate outcome when the switch is refused (solutions
+     * are mutually exclusive); [virglServerAlive] is the honest liveness line.
+     */
+    val virglSolutionActive: Boolean = false,
+    val virglServerAlive: Boolean = false,
+    val virglBusy: Boolean = false,
+    val virglReasonKey: String? = null,
+
+    /**
      * Llvmpipe multithreading lever (spec 012, RF-1, RF-2).
      */
     val llvmpipeThreadsEnabled: Boolean = true,

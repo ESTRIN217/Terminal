@@ -1,25 +1,31 @@
 # Tareas — Spec 013: VirGL (servidor nativo embebido + vía virpipe en el invitado)
 
-- [ ] **T1. `VirglLibrary` puro: gate de exclusión mutua + env + args del servidor.** RF-6, RF-3.
+- [x] **T1. `VirglLibrary` puro: gate de exclusión mutua + env + args del servidor.** RF-6, RF-3.
   - Hecho cuando: tests en rojo primero (`resolveSolutionChange` con las cinco
     transiciones del plan, motivo i18n estable en `NEEDS_OFF`; `applyVirglEnv`
     activo → las tres variables presentes y, inactivo, byte a byte idéntico;
     `buildServerArgs`);
     luego verde; `./gradlew :termux-shared:test` en verde.
 
-- [ ] **T2. `Solution.VIRGL` en `GpuDetectionLibrary` + prefs round-trip.** RF-2, RF-6, gotcha 008.
+- [x] **T2. `Solution.VIRGL` en `GpuDetectionLibrary` + prefs round-trip.** RF-2, RF-6, gotcha 008.
   - Hecho cuando: añadir el valor del enum NO altera ninguna constante ni clave
     existente; test en rojo→verde que persiste `VIRGL` y lo lee; el bloque
     persistido de la app conserva todas sus claves (matriz existente del test
     de prefs, y la del get/set de gpu_solution).
 
-- [ ] **T3. Cableado del env proot: `getEnvironment` + `isVirglSolutionActive` (glue).** RF-3, RF-5, NFR-3.
+- [x] **T3. Cableado del env proot: `getEnvironment` + `isVirglSolutionActive` (glue).** RF-3, RF-5, NFR-3.
+  - [x] Variante documentada: la señal de «servidor vivo» no la pasa `TermuxService`
+    porque el propio builder la obtiene al comprobar la existencia del socket vtest
+    en el TMPDIR del rootfs (`isVirglSocketPresent`, mismo directorio compartido del
+    companion X de 014) — menos plomería y la sesión nueva siempre ve el estado real.
+    Además el guard de llvmpipe multihilo (012) ahora se apaga con VirGL activo
+    (`shouldInjectLlvmpipeThreads`), coherente con «llvmpipe no aplica si hay GPU».
   - Hecho cuando: test en rojo: pref `VIRGL`+servidor vivo según el glue → env
     con la vía; pref `VIRGL`+servidor muerto o pref `NONE`/`ADRENO_KGSL` → mapa
     byte a byte idéntico al vigente; `TermuxService` pasa el estado del servidor
     al builder como ya hace con el env KGSL (011 T7) sin tocar su implementación.
 
-- [ ] **T4. `VirglServerManager` (glue `app`): extracción, spawn, ciclo por sesiones.** RF-2, RF-4, RF-9.
+- [x] **T4. `VirglServerManager` (glue `app`): extracción, spawn, ciclo por sesiones.** RF-2, RF-4, RF-9.
   - Hecho cuando: lógica del estado (deseado vs vivo, contaje de sesiones proot
     tipo sampler 010, limpieza de socket rancio, timeout de READY) va en
     funciones puras testadas con el proceso abstracto; spawn con
@@ -28,7 +34,7 @@
     extracto purificado (rojo→verde). Sin tocar el ciclo de vida de
     `mTermuxService` ni el spawn del companion X (014).
 
-- [ ] **T5. Panel «Estado GPU»: tercera vía VirGL + strings ×3 locales.** RF-2, RF-6, RF-7.
+- [x] **T5. Panel «Estado GPU»: tercera vía VirGL + strings ×3 locales.** RF-2, RF-6, RF-7.
   - Hecho cuando: switch «Aceleración GPU (VirGL)» con el gate visual frente a
     KGSL (deshabilitado con motivo cuando `ADRENO_KGSL` activo, RF-6), estado
     real (vivo/no vivo/fallo) desde `VirglServerManager`, estados por familia

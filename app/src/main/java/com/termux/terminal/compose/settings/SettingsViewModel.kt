@@ -9,6 +9,7 @@ import com.termux.shared.logger.Logger
 import com.termux.shared.termux.TermuxConstants
 import com.termux.shared.termux.proot.GpuDetectionLibrary
 import com.termux.shared.termux.proot.GpuDeviceReader
+import com.termux.shared.termux.proot.VirglLibrary
 import com.termux.shared.termux.settings.preferences.TermuxAPIAppSharedPreferences
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences
 import com.termux.shared.termux.settings.preferences.TermuxFloatAppSharedPreferences
@@ -263,6 +264,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 prefs?.getGpuSolution()
             )
             val keys = GpuDetectionLibrary.toUiKeys(familyResult, gate)
+            val solution = prefs?.getGpuSolution()
             _uiState.update {
                 it.copy(
                     gpuFamily = familyResult.family.name,
@@ -274,7 +276,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         else -> GpuPanelAction.INFO
                     },
                     gpuReasonKey = keys.reasonKey,
-                    isGpuSolutionActive = prefs?.gpuSolution == GpuDetectionLibrary.Solution.ADRENO_KGSL
+                    isGpuSolutionActive = solution != GpuDetectionLibrary.Solution.NONE,
+                    // Spec 013 (RF-7): honest VirGL liveness, never guessed.
+                    virglSolutionActive = solution == GpuDetectionLibrary.Solution.VIRGL,
+                    virglServerAlive = solution == GpuDetectionLibrary.Solution.VIRGL
+                        && com.termux.app.VirglServerManager.isAlive()
                 )
             }
         }
@@ -283,6 +289,52 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setLlvmpipeThreadsEnabled(value: Boolean) {
         prefs?.isLlvmpipeThreadsEnabled = value
         _uiState.update { it.copy(llvmpipeThreadsEnabled = value) }
+    }
+
+    /**
+     * VirGL switch (spec 013, RF-2/RF-5/RF-6): evaluates the pure exclusivity
+     * gate first; on refusal the reason key lands in the state for the honest
+     * message and the pref is NOT changed. On activation the server must start
+     * successfully BEFORE the pref is persisted (RF-2(c): a failed start never
+     * marks the acceleration active); errors are logged and toasted, never
+     * silent. On deactivation the pref clears and the server stops (RF-5).
+     */
+    fun onVirglSwitchRequested(value: Boolean) {
+        val currentPrefs = prefs ?: return
+        val state = _uiState.value
+        if (state.virglBusy || state.gpuBusy)
+            return
+
+        val requested = if (value) GpuDetectionLibrary.Solution.VIRGL else GpuDetectionLibrary.Solution.NONE
+        val gate = VirglLibrary.resolveSolutionChange(currentPrefs.getGpuSolution(), requested)
+        if (gate.status == VirglLibrary.SolutionGate.Status.NEEDS_OFF) {
+            _uiState.update { it.copy(virglReasonKey = gate.reason) }
+            return
+        }
+
+        _uiState.update { it.copy(virglBusy = true, virglReasonKey = null) }
+        val context = getApplication<Application>()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                if (value) {
+                    val error = com.termux.app.VirglServerManager.ensureRunning(context)
+                    if (error == null)
+                        currentPrefs.setGpuSolution(GpuDetectionLibrary.Solution.VIRGL)
+                    else {
+                        // RF-2: the pref stays untouched; user sees the failure, log keeps the detail.
+                        Logger.logErrorExtended(LOG_TAG, "VirGL activation failed (pref untouched)\n" + error.toString())
+                        Logger.showToast(context, error.toString(), false)
+                    }
+                } else {
+                    com.termux.app.VirglServerManager.stopNow(context)
+                    currentPrefs.setGpuSolution(GpuDetectionLibrary.Solution.NONE)
+                }
+                withContext(Dispatchers.Main) {
+                    _uiState.update { it.copy(virglBusy = false) }
+                }
+                reloadGpu()
+            }
+        }
     }
 
     fun setLlvmpipeThreadsCount(value: Int) {

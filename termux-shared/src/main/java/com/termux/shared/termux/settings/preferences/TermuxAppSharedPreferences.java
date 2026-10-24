@@ -402,11 +402,7 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     @NonNull
     public GpuDetectionLibrary.Solution getGpuSolution() {
         String value = SharedPreferenceUtils.getString(mSharedPreferences, TERMUX_APP.KEY_GPU_SOLUTION, TERMUX_APP.DEFAULT_VALUE_GPU_SOLUTION, false);
-        try {
-            return GpuDetectionLibrary.Solution.valueOf(value);
-        } catch (IllegalArgumentException e) {
-            return GpuDetectionLibrary.Solution.NONE;
-        }
+        return GpuDetectionLibrary.parseSolutionName(value);
     }
 
     /**

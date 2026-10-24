@@ -65,7 +65,27 @@ public final class GpuDetectionLibrary {
      * T3 ({@code gpu_solution} key). {@code NONE} is the default; only
      * {@code ADRENO_KGSL} marks a completed acceleration install (RF-3/RF-5).
      */
-    public enum Solution { NONE, ADRENO_KGSL }
+    /** Specializes the persisted acceleration path (spec 011/013). */
+    public enum Solution { NONE, ADRENO_KGSL, VIRGL }
+
+    /**
+     * Pure parsing of a persisted solution name (spec 013 T2): null, blank or
+     * unknown values degrade to {@link Solution#NONE} instead of crashing, so
+     * values written by other builds read back safely.
+     *
+     * @param name persisted name of a {@link Solution}, or anything else
+     * @return the matching solution; {@link Solution#NONE} when unmatched
+     */
+    @NonNull
+    public static Solution parseSolutionName(@Nullable String name) {
+        if (name == null || name.trim().isEmpty())
+            return Solution.NONE;
+        try {
+            return Solution.valueOf(name.trim());
+        } catch (IllegalArgumentException e) {
+            return Solution.NONE;
+        }
+    }
 
     /** Action the panel may offer (RF-3, RF-5, RF-6). */
     public enum Action {

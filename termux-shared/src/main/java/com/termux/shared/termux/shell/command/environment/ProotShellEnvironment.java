@@ -14,6 +14,7 @@ import com.termux.shared.shell.command.environment.ShellEnvironmentUtils;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.proot.GpuDetectionLibrary;
 import com.termux.shared.termux.proot.LlvmpipeThreadsLibrary;
+import com.termux.shared.termux.proot.VirglLibrary;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.shared.termux.x11.TermuxX11GuestLoaderLibrary;
 
@@ -218,6 +219,82 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
         int threads = LlvmpipeThreadsLibrary.computeThreads(coresRaw, prefThreadsCount);
         map.putAll(LlvmpipeThreadsLibrary.llvmpipeEnvEntries(threads));
         return map;
+    }
+
+    /**
+     * Testable core of the VirGL guest environment injection (spec 013, RF-3/RF-5/NFR-3).
+     *
+     * <p>Pure: while {@code prefActive} and the server socket is {@code socketPresent},
+     * stores the VirGL guest variables (gallium driver override, GL version and vtest
+     * server URI) via {@link VirglLibrary}; otherwise {@code map} is left byte-for-byte
+     * identical to the pre-spec guest environment.</p>
+     *
+     * @param map            The guest environment map being built, modified in place.
+     * @param prefActive     Whether the persisted {@code gpu_solution} pref is {@code VIRGL}.
+     * @param socketPresent  Whether the vtest socket of the native server exists on the host.
+     * @param rootfsTmpDir   Host path of the guest {@code /tmp}; null skips the URI only.
+     */
+    public static void applyVirglSessionEnv(@NonNull Map<String, String> map, boolean prefActive,
+                                            boolean socketPresent, @Nullable String rootfsTmpDir) {
+        VirglLibrary.applyVirglEnv(map, prefActive && socketPresent, rootfsTmpDir);
+    }
+
+    /**
+     * Whether the persisted {@code gpu_solution} app preference is {@code VIRGL}
+     * (spec 013, RF-2). Same failure policy as {@link #isGpuSolutionActive}: any
+     * read failure keeps the environment inert (NFR-3).
+     *
+     * @param currentPackageContext The {@link Context} for reading the app preferences; may be {@code null}.
+     * @return Returns {@code true} only when {@code gpu_solution=VIRGL} is readable.
+     */
+    static boolean isVirglSolutionActive(@Nullable Context currentPackageContext) {
+        if (currentPackageContext == null)
+            return false;
+        try {
+            TermuxAppSharedPreferences preferences =
+                TermuxAppSharedPreferences.build(currentPackageContext);
+            return preferences != null
+                && preferences.getGpuSolution() == GpuDetectionLibrary.Solution.VIRGL;
+        } catch (Exception e) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to read gpu_solution=VIRGL preference (env stays inert)\n" + e.toString());
+            return false;
+        }
+    }
+
+    /**
+     * Whether the VirGL vtest socket is visible on the host (spec 013, RF-3
+     * "server alive"). The socket lives in the rootfs {@code /tmp} — the same
+     * directory the X11 companion already shares with the guest (spec 014) —
+     * so its existence doubles as the server-liveness signal without any
+     * process inspection from this layer. Never throws; failures log and keep
+     * the environment inert (RF-9).
+     *
+     * @return Returns {@code true} only when the server socket file exists.
+     */
+    static boolean isVirglSocketPresent() {
+        try {
+            String socketPath = VirglLibrary.guestSocketPath(TermuxConstants.DEBIAN_ROOTFS_TMP_DIR_PATH);
+            if (socketPath == null)
+                return false;
+            return new File(socketPath).exists();
+        } catch (Exception e) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to check for the VirGL vtest socket (env stays inert)\n" + e.toString());
+            return false;
+        }
+    }
+
+    /**
+     * Whether the multithreaded llvmpipe env applies (spec 012/013, pure). The
+     * threads variables only speak to the CPU rasterizer they configure: while
+     * any GPU path (KGSL or VirGL) is active, they stay out of the map.
+     *
+     * @param llvmpipeEnabled Whether the llvmpipe multithreading pref is enabled.
+     * @param gpuActive       Whether the KGSL path is active.
+     * @param virglActive     Whether the VirGL path is active.
+     * @return Returns {@code true} only when enabled and no GPU path is active.
+     */
+    static boolean shouldInjectLlvmpipeThreads(boolean llvmpipeEnabled, boolean gpuActive, boolean virglActive) {
+        return LlvmpipeThreadsLibrary.shouldInject(llvmpipeEnabled, gpuActive || virglActive);
     }
 
     /**
@@ -521,10 +598,23 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
         boolean gpuActive = isGpuSolutionActive(currentPackageContext);
         applyGpuEnv(environment, gpuActive);
 
+        // Spec 013 (RF-3): VirGL acceleration via the native vtest server. Injected
+        // only when the pref is VIRGL AND the server socket actually exists at the
+        // rootfs /tmp; a dead server degrades to the pre-spec environment with the
+        // missing socket logged (RF-9), never silently guessing drivers.
+        boolean virglActive = isVirglSolutionActive(currentPackageContext);
+        if (virglActive) {
+            boolean socketPresent = isVirglSocketPresent();
+            if (!socketPresent)
+                Logger.logWarn(LOG_TAG, "gpu_solution=VIRGL but the vtest socket is not present at " + TermuxConstants.DEBIAN_ROOTFS_TMP_DIR_PATH + " (guest env stays inert)");
+            applyVirglSessionEnv(environment, virglActive, socketPresent, TermuxConstants.DEBIAN_ROOTFS_TMP_DIR_PATH);
+        }
+
         // Spec 012 (RF-1, RF-2, RF-4): multithreaded llvmpipe rasterizer. Injected
-        // into the guest environment when enabled and GPU acceleration is inactive.
+        // into the guest environment when enabled and no GPU path (KGSL or VirGL)
+        // is active, because the threads variables configure the CPU rasterizer.
         boolean llvmpipeThreadsEnabled = isLlvmpipeThreadsEnabled(currentPackageContext);
-        if (LlvmpipeThreadsLibrary.shouldInject(llvmpipeThreadsEnabled, gpuActive)) {
+        if (shouldInjectLlvmpipeThreads(llvmpipeThreadsEnabled, gpuActive, virglActive)) {
             applyLlvmpipeEnv(environment,
                 true,
                 false,

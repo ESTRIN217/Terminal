@@ -550,6 +550,14 @@ public final class TermuxConstants {
 
     public static final String DEBIAN_SHM_DIR_PATH = TERMUX_FILES_DIR_PATH + "/debian-shm";
 
+    /**
+     * Host path of the guest rootfs {@code /tmp} directory (spec 013): the vtest
+     * socket of the VirGL native server is created here and the guest reaches it
+     * as {@code /tmp/<socket>} without extra proot binds — the same directory the
+     * X11 companion already shares with the guest (spec 014 pattern).
+     */
+    public static final String DEBIAN_ROOTFS_TMP_DIR_PATH = DEBIAN_ROOTFS_DIR_PATH + "/tmp";
+
     /** Directory of the synthetic proc file snapshots served to blocked procfs reads (spec 010). */
     public static final String DEBIAN_PROC_OVERLAY_DIR_PATH = TERMUX_FILES_DIR_PATH + "/proc-stat-overlay";
     /** Directory of the synthetic proc file snapshots (spec 010). */
@@ -667,6 +675,17 @@ public final class TermuxConstants {
     public static final String PROOT_BIN_PATH = APP_BIN_DIR_PATH + "/proot";
     /** proot executable file */
     public static final File PROOT_BIN = new File(PROOT_BIN_PATH);
+
+    /**
+     * Asset path of the bundled VirGL server binary (spec 013, arm64-v8a only).
+     * The very same convention as {@link #PROOT_ASSET_PATH}: the pipeline compiles
+     * it, the APK embeds it, {@code TermuxInstaller} extracts it on first use.
+     */
+    public static final String VIRGL_ASSET_PATH = "arm64-v8a/virgl_test_server";
+    /** VirGL server executable path (spec 013, next to proot). */
+    public static final String VIRGL_BIN_PATH = APP_BIN_DIR_PATH + "/virgl_test_server";
+    /** VirGL server executable file (spec 013). */
+    public static final File VIRGL_BIN = new File(VIRGL_BIN_PATH);
 
     /** Asset path of the bundled proot binary (Fase 2B, arm64-v8a only). */
     public static final String PROOT_ASSET_PATH = "arm64-v8a/proot";

@@ -33,6 +33,8 @@ import com.termux.shared.shell.command.runner.app.AppShell;
 import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
 import com.termux.shared.termux.shell.command.environment.ProotShellEnvironment;
 import com.termux.shared.termux.proot.ProcStatOverlaySampler;
+import com.termux.shared.termux.proot.VirglLibrary;
+import com.termux.app.VirglServerManager;
 import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment;
 import com.termux.shared.termux.shell.TermuxShellUtils;
 import com.termux.shared.termux.TermuxConstants;
@@ -310,6 +312,8 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
                 // Spec 010: mass teardown also stops the overlay sampler at zero.
                 if (isProotSession(termuxSessions.get(i)))
                     onProotOverlaySessionEnded();
+                // Spec 013: last proot session closed → shared VirGL server stops (NFR-6).
+                refreshVirglServer();
             }
         }
 
@@ -690,6 +694,10 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         mShellManager.mTermuxSessions.add(newTermuxSession);
 
+        // Spec 013: session bookkeeping — one shared VirGL server follows the
+        // proot sessions (start on first, stop at last; sessions++ on real start).
+        refreshVirglServer();
+
         // Remove the execution command from the pending plugin execution commands list since it has
         // now been processed
         if (executionCommand.isPluginExecutionCommand)
@@ -732,6 +740,8 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
             // Spec 010: a finished proot session may release the overlay sampler.
             if (isProotSession(termuxSession))
                 onProotOverlaySessionEnded();
+            // Spec 013: a finished proot session may release the VirGL server.
+            refreshVirglServer();
 
             // The Compose UI re-seeds its session list from the service when it binds
             // (onServiceConnected), so no explicit session list notification is needed.
@@ -747,6 +757,24 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         ProcStatOverlaySampler.onProotSessionRemoved();
         Logger.logDebug(LOG_TAG, "Proc stat overlay released; active overlay sessions: "
             + mProotOverlaySessionCount);
+    }
+
+    /**
+     * Recomputes the desired state of the shared VirGL server from the currently
+     * active proot sessions and applies it (spec 013, RF-2/RF-4). Decisions are
+     * pure ({@link VirglLibrary#decideServerAction}); failures are logged here,
+     * never silently swallowed.
+     */
+    private synchronized void refreshVirglServer() {
+        int activeProotSessions = 0;
+        for (TermuxSession termuxSession : mShellManager.mTermuxSessions)
+            if (isProotSession(termuxSession))
+                activeProotSessions++;
+        Error virglError = VirglServerManager.applySessionCount(this, activeProotSessions);
+        if (virglError != null)
+            Logger.logErrorExtended(LOG_TAG, "VirGL server state refresh failed\n" + virglError.toString());
+        else
+            Logger.logDebug(LOG_TAG, "VirGL server refreshed; active proot sessions: " + activeProotSessions);
     }
 
 

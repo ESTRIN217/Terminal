@@ -423,19 +423,31 @@
     <string name="gpu_state_evaluating">Consultando el estado de la GPU…</string>
     <string name="gpu_state_adreno_kgsl">Aceleración GPU disponible (vía KGSL)</string>
     <string name="gpu_state_adreno_kgsl_model">Aceleración GPU disponible (vía KGSL): %1$s</string>
-    <string name="gpu_state_adreno_other">GPU Adreno sin dispositivo KGSL visible: sin aceleración GPU disponible sin root; llvmpipe (CPU) seguirá en uso</string>
-    <string name="gpu_state_mali">GPU Mali: sin aceleración GPU disponible sin root; llvmpipe (CPU) seguirá en uso</string>
-    <string name="gpu_state_powervr">GPU PowerVR: sin aceleración GPU disponible sin root; llvmpipe (CPU) seguirá en uso</string>
-    <string name="gpu_state_unknown">GPU no identificada: sin aceleración GPU disponible sin root; llvmpipe (CPU) seguirá en uso</string>
+    <string name="gpu_state_adreno_other">GPU Adreno sin dispositivo KGSL visible: la vía VirGL está disponible; llvmpipe (CPU) solo como respaldo</string>
+    <string name="gpu_state_mali">GPU Mali: aceleración disponible vía VirGL (renderiza en el GPU del teléfono desde la app, sin root); llvmpipe (CPU) solo como respaldo</string>
+    <string name="gpu_state_powervr">GPU PowerVR: aceleración disponible vía VirGL (renderiza en el GPU del teléfono desde la app, sin root); llvmpipe (CPU) solo como respaldo</string>
+    <string name="gpu_state_unknown">GPU no identificada; la vía VirGL no depende del identificador y sigue disponible, mientras que la KGSL puede no serlo</string>
     <string name="gpu_reason_rootfs_not_installed">El rootfs de Debian no está instalado</string>
     <string name="gpu_reason_mesa_version_mismatch">La versión de Mesa del invitado no coincide con la esperada</string>
-    <string name="gpu_reason_family_unsupported">Esta familia de GPU no admite la vía KGSL</string>
+    <string name="gpu_reason_family_unsupported">Esta familia de GPU no admite la vía KGSL (la vía VirGL sigue disponible más abajo)</string>
     <string name="gpu_reason_no_gpu_data">No se pudo leer información de la GPU en este dispositivo</string>
     <string name="gpu_reason_unrecognized_gpu">La GPU reportada no se reconoce</string>
     <string name="gpu_solution_active">La aceleración GPU está activa</string>
     <string name="gpu_action_running">Operación GPU en curso…</string>
     <string name="gpu_install_button">Instalar aceleración GPU</string>
     <string name="gpu_uninstall_button">Desinstalar aceleración GPU</string>
+
+    <!-- Vía VirGL (Spec 013, RF-2/RF-6/RF-7). Las claves mapean las constantes
+         VirglLibrary.REASON_*. -->
+    <string name="gpu_virgl_switch_title">Aceleración GPU vía VirGL</string>
+    <string name="gpu_virgl_switch_subtitle">Servidor nativo + virpipe dentro de Debian; aplica a las sesiones nuevas</string>
+    <string name="gpu_virgl_switch_subtitle_inactive">Apagado: las sesiones siguen con el rasterizador por CPU (llvmpipe)</string>
+    <string name="gpu_virgl_switch_hint">Mali, PowerVR, Adreno y otras: capa de traducción (virpipe → servidor → EGL del sistema), una mejora real pero no directa; sin promesas de FPS</string>
+    <string name="gpu_virgl_server_alive">Servidor VirGL activo (socket vtest en el /tmp del rootfs)</string>
+    <string name="gpu_virgl_server_down">Servidor VirGL sin correr; la próxima sesión no usará aceleración</string>
+    <string name="gpu_virgl_server_failed">VirGL no arrancó; la aceleración NO está activa (el detalle del error queda en el log de la app)</string>
+    <string name="gpu_virgl_gate_kgsl_active">La vía KGSL está activa: desactívala antes de activar VirGL</string>
+    <string name="gpu_virgl_gate_virgl_active">VirGL ya está activo: desactívalo antes de pasar a KGSL</string>
 
     <!-- Multihilo de llvmpipe (Spec 012) -->
     <string name="llvmpipe_threads_title">Hilos de llvmpipe</string>

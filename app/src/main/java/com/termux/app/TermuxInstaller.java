@@ -128,6 +128,50 @@ final class TermuxInstaller {
         return null;
     }
 
+    /**
+     * Installs the bundled VirGL server binary on first use (spec 013, RF-1/RF-9),
+     * exactly the {@link #installProotIfNeeded} convention: copy from assets,
+     * chmod 0700, verify executability. Missing asset (old APK / ABI mismatch)
+     * yields an Error object — never a thrown exception (RF-9).
+     *
+     * @param context The Android {@link Context} whose assets carry the binary.
+     * @return Returns {@code null} on success (convention of the repo), or an {@link Error}.
+     */
+    static Error installVirglIfNeeded(final Context context) {
+        File virglBin = new File(TermuxConstants.VIRGL_BIN_PATH);
+        if (virglBin.isFile() && virglBin.canExecute() && virglBin.length() > 0) {
+            Logger.logDebug(LOG_TAG, "VirGL server already installed at \"" + TermuxConstants.VIRGL_BIN_PATH + "\".");
+            return null;
+        }
+
+        Logger.logInfo(LOG_TAG, "Installing VirGL server from assets to \"" + TermuxConstants.VIRGL_BIN_PATH + "\".");
+
+        Error error = TermuxFileUtils.isTermuxAppBinDirectoryAccessible(true, true);
+        if (error != null) return error;
+
+        try (java.io.InputStream in = context.getAssets().open(TermuxConstants.VIRGL_ASSET_PATH);
+             java.io.OutputStream out = new java.io.FileOutputStream(virglBin)) {
+            byte[] buffer = new byte[32768];
+            int readBytes;
+            while ((readBytes = in.read(buffer)) != -1)
+                out.write(buffer, 0, readBytes);
+        } catch (Exception e) {
+            return new Error("Failed to copy VirGL binary to \"" + TermuxConstants.VIRGL_BIN_PATH + "\".", e);
+        }
+
+        try {
+            android.system.Os.chmod(virglBin.getAbsolutePath(), 0700);
+        } catch (Exception e) {
+            return new Error("Failed to chmod 0700 VirGL binary at \"" + TermuxConstants.VIRGL_BIN_PATH + "\".", e);
+        }
+
+        if (!virglBin.canExecute())
+            return new Error("VirGL binary at \"" + TermuxConstants.VIRGL_BIN_PATH + "\" is not executable after install.");
+
+        Logger.logInfo(LOG_TAG, "VirGL server installed successfully.");
+        return null;
+    }
+
     public static void showBootstrapErrorDialog(Activity activity, Runnable whenDone, String message) {
         Logger.logErrorExtended(LOG_TAG, "Bootstrap Error:\n" + message);
 

@@ -1,6 +1,7 @@
 package com.termux.terminal.compose.settings
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.ui.Alignment
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -34,6 +36,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -47,6 +50,7 @@ import com.termux.R
 import com.termux.shared.logger.Logger
 import com.termux.shared.termux.proot.GpuDetectionLibrary
 import com.termux.shared.termux.proot.LlvmpipeThreadsLibrary
+import com.termux.shared.termux.proot.VirglLibrary
 import com.termux.terminal.compose.SettingsCardGroup
 import com.termux.terminal.compose.SettingsDialogTile
 import com.termux.terminal.compose.SettingsListTile
@@ -437,6 +441,96 @@ private fun GpuStatusPanel(
                 Text(text = buttonLabel)
             }
         }
+
+        VirglSwitchRow(state = state, viewModel = viewModel)
+    }
+}
+
+/**
+ * VirGL lever (spec 013, RF-2/RF-6/RF-7): the switch plus the honest liveness
+ * line (alive / not running / failed) and the exclusivity gate message when
+ * the last toggle was refused. Available on every family — the KGSL route
+ * stays marked as preferred by its own state line and install button.
+ */
+@Composable
+private fun VirglSwitchRow(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.padding(top = 12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.gpu_virgl_switch_title),
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = stringResource(R.string.gpu_virgl_switch_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+            Switch(
+                checked = state.virglSolutionActive,
+                enabled = !state.virglBusy && !state.gpuBusy,
+                onCheckedChange = { viewModel.onVirglSwitchRequested(it) }
+            )
+        }
+        Text(
+            text = virglLivenessText(state),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        Text(
+            text = stringResource(R.string.gpu_virgl_switch_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        if (state.virglReasonKey != null) {
+            Text(
+                text = virglGateReasonText(state.virglReasonKey),
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+        if (state.virglBusy) {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+            )
+        }
+    }
+}
+
+/** Honest liveness line of the VirGL server (RF-2(c)/RF-7, no guessing). */
+@Composable
+private fun virglLivenessText(state: SettingsUiState): String {
+    if (!state.virglSolutionActive)
+        return stringResource(R.string.gpu_virgl_switch_subtitle_inactive)
+    return when {
+        state.virglServerAlive -> stringResource(R.string.gpu_virgl_server_alive)
+        state.virglReasonKey != null -> stringResource(R.string.gpu_virgl_server_failed)
+        else -> stringResource(R.string.gpu_virgl_server_down)
+    }
+}
+
+/** Map a [VirglLibrary.REASON_*] onto its gate message (RF-6). */
+@Composable
+private fun virglGateReasonText(reasonKey: String): String {
+    return when (reasonKey) {
+        VirglLibrary.REASON_VIRGL_ACTIVE ->
+            stringResource(R.string.gpu_virgl_gate_virgl_active)
+        else -> stringResource(R.string.gpu_virgl_gate_kgsl_active)
     }
 }
 
