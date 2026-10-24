@@ -1,6 +1,8 @@
 # Spec 016 — Teclado completo en pestañas X11 (HW, extra keys, IME)
 
-Estado: implementada (pendiente de validación en dispositivo T7)
+Estado: implementada y verificada en dispositivo (2026-10-24): teclado HW,
+enter/borrar del IME y barra extra keys funcionan en la pestaña X11; touch sin
+regresión. Spec cerrada.
 
 ## Problema
 
