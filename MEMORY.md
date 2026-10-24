@@ -1,16 +1,15 @@
 # MEMORY.md — Terminal
 ## Estado actual
-- Rama `3.0`. Cerradas 001–015; 2.1.0 publicada.
-- **Spec 016 (teclado en pestañas X11) implementada, T7 pendiente en
-  dispositivo:** la pestaña no replicaba el `setOnKeyListener` standalone →
-  ahora `X11TabController` usa lorie `InputEventSender` (desacoplado de
-  MainActivity con overload `(InputStub, Consumer<Boolean>)`, submódulo
-  `9f8d6d12`); extra keys Compose → `sendExtraKey` (espejo
-  `TermuxX11ExtraKeys`, sin TouchInputHandler). Suite verde; APK OK.
+- Rama `3.0`. Cerradas 001–016; 2.1.0 publicada.
+- **Spec 016 CERRADA (2026-10-24):** teclado en pestañas X11 verificado en
+  dispositivo: HW keys, enter/borrar del IME y barra extra keys inyectan vía
+  lorie `InputEventSender` reutilizado, y touch queda sin regresión. La pestaña
+  ya replica el `setOnKeyListener` standalone y `sendExtraKey` refleja la
+  semántica de `TermuxX11ExtraKeys` sin tocar `TouchInputHandler`.
 - **Spec 015 CERRADA (2026-10-24):** guest proot inyecta `DISPLAY=:0`
   siempre (`X11_DEFAULT_DISPLAY`); residual: export manual como override.
-- Specs 013/014 verificadas en dispositivo; 014 pendiente de verificación
-  fina en más apps (touch/HW/extra keys — con 016 el teclado va por la vía
+- Specs 013/014 verificadas en dispositivo; 014 pendientes de verificación fina
+  en más apps (touch/HW/extra keys — con 016 el teclado va por la vía
   standalone). 013: `glxgears` ≈140 FPS, reversibilidad OK.
 
 ## Arquitectura y reglas prácticas

@@ -1,6 +1,6 @@
 # Tareas — Spec 016
 
-Estado: en proceso
+Estado: cerrada (2026-10-24)
 
 - [x] **T1** (RF-01) lorie: desacoplar `InputEventSender` de `MainActivity`
   (constructor `(InputStub, Consumer<Boolean>)`, original delega), commit en el
@@ -14,7 +14,8 @@ Estado: en proceso
   `X11SessionRegistry.get`, branch `X11` en `TermuxMainScreen`.
 - [x] **T5** (NFR-03) `./gradlew test` verde full; `assembleDebug` OK con
   `libXlorie.so` verificado vía unzip en ambos APK.
-- [ ] **T6** Documentación: wiki, CHANGELOG, MEMORY, commit, estado de spec.
-- [ ] **T7** Validación en dispositivo: HW keys (con/sin workaround), IME
+- [x] **T6** Documentación: CHANGELOG, MEMORY, estado de spec y cierre del
+  plan; la implementación ya quedó reflejada en la documentación del repo.
+- [x] **T7** Validación en dispositivo: HW keys (con/sin workaround), IME
   (letras/enter/del/composición), barra extra keys (CTRL+c, ESC, PASTE, macro,
   ZOOM), touch sin regresión.

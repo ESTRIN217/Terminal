@@ -1,5 +1,9 @@
 # Plan — Spec 016 (teclado completo en pestañas X11)
 
+Estado: cerrada (2026-10-24). Implementada y verificada en dispositivo; la
+funcionalidad ya está cubierta por la suite de pruebas y la validación HW/IME
+con extra keys y touch sin regresión.
+
 ## Archivos y responsabilidades
 
 | Archivo | Responsabilidad | RF |
