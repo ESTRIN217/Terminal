@@ -16,6 +16,10 @@ y no está afiliado al equipo de Termux.
   arrancan con `DISPLAY=:0` (el display del companion X11), de forma que las apps
   gráficas no requieren `export DISPLAY=:0` manual en cada sesión; un export
   manual posterior (p. ej. `DISPLAY=:1`) lo sobrescribe como antes.
+- **Teclado completo en pestañas X11** (spec 016): las teclas hardware, enter/borrar
+  del teclado virtual y la barra de teclas extra inyectan vía el procesador de
+  teclas del standalone (lorie `InputEventSender` reutilizado), con macros de
+  modificadores, paste del portapapeles y zoom del renderer.
 
 ## [2.1.0] — 2026-10-21
 

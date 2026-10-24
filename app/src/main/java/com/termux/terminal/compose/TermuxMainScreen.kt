@@ -49,6 +49,7 @@ import com.termux.app.TermuxComposeActivity
 import com.termux.shared.logger.Logger
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.bridge.TerminalKeyHandler
+import com.termux.terminal.x11.X11SessionRegistry
 import com.termux.view.TerminalViewClient
 import com.termux.R
 
@@ -443,9 +444,13 @@ fun TermuxMainScreen(
                         is TermuxSessionUiModel.FileManager -> {
                             FileManagerKeyHandlerHolder.active?.invoke(key, isMacro)
                         }
-                        // X11 tabs route their own extra keys via the LorieView
-                        // extra keys bar; the Compose bar does nothing here yet.
-                        is TermuxSessionUiModel.X11 -> {}
+                        // X11 tabs inject the key through their LorieView via the
+                        // tab controller (sticky modifiers prepended, spec 016).
+                        is TermuxSessionUiModel.X11 -> {
+                            val controller = X11SessionRegistry.get(activeModel.id) ?: return@ExtraKeysCallback
+                            val sticky = viewModel.uiState.value.extraKeysModifiers
+                            controller.sendExtraKey(key, isMacro, sticky)
+                        }
                     }
                 }
             }

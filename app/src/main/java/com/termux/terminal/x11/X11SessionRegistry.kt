@@ -49,6 +49,16 @@ object X11SessionRegistry {
         return true
     }
 
+    /**
+     * Gets an existing controller without creating one (extra keys bar wiring,
+     * spec 016): the bar only routes to tabs that were already composed.
+     *
+     * @param sessionId stable session id
+     * @return The controller, or {@code null} when the tab has never been created
+     */
+    @Synchronized
+    fun get(sessionId: String): X11TabController? = controllers[sessionId]
+
     @Synchronized
     fun activeSessionIds(): List<String> = controllers.keys.toList()
 }
