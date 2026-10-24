@@ -151,7 +151,7 @@ public final class VirglServerManager {
             return new Error("Failed to start the VirGL server process", e);
         }
         mServerProcess = process;
-        discardOutput(process);
+        pumpOutput(process);
 
         for (long waited = 0; VirglLibrary.shouldKeepWaiting(waited, READY_TIMEOUT_MS,
             socketPath != null && new File(socketPath).exists()); waited += READY_POLL_MS) {
@@ -242,21 +242,43 @@ public final class VirglServerManager {
     }
 
     /**
-     * Drains the server stdout/stderr in a detached thread so the never-forked
-     * process cannot block on a full pipe; output is debug-logged only.
+     * Pumps the server stdout+stderr (redirectErrorStream) into the app log at
+     * INFO level in a detached thread so the never-forked process cannot block
+     * on a full pipe. This is the only witness of why the server dies at the
+     * first client connect (e. g. EGL initialization failures on the host
+     * driver, spec 013 T7 debugging).
      */
-    private static void discardOutput(@NonNull Process process) {
+    private static void pumpOutput(@NonNull Process process) {
         Thread reader = new Thread(() -> {
             try (BufferedReader reader1 = new BufferedReader(
                 new InputStreamReader(process.getInputStream()))) {
                 String line;
                 while ((line = reader1.readLine()) != null)
-                    Logger.logDebug(LOG_TAG, "virgl_test_server: " + line);
+                    Logger.logInfo(LOG_TAG, "virgl_test_server: " + line);
             } catch (Exception ignored) {
                 // the stream ends when the process dies; nothing to report here
             }
         }, "virgl-server-output");
         reader.setDaemon(true);
         reader.start();
+
+        Thread watcher = new Thread(() -> {
+            int exitCode = -1;
+            try {
+                exitCode = process.waitFor();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            // A death we did not request is the one worth reporting loudly:
+            // the client side only shows "lost connection to rendering server".
+            if (mServerProcess == process) {
+                mServerProcess = null;
+                Logger.logWarn(LOG_TAG,
+                    "VirGL server died unexpectedly after being ready (exit code " + exitCode + ").");
+            }
+        }, "virgl-server-death");
+        watcher.setDaemon(true);
+        watcher.start();
     }
 }
