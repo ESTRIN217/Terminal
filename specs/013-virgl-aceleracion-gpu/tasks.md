@@ -67,6 +67,20 @@
     de compilación del mantenedor.
 
 - [ ] **T7. Validación en dispositivo (Mali T606) + cierre de constantes.** RF-2..RF-5, RF-9.
+  - (2026-10-24) Progreso: el servidor nativo arranca bien en el dispositivo
+    (SELinux `enforcing` concede el `execute`; socket creado en ~120 ms; ruido
+    no bloqueante: `avc: denied { search }` del directorio `tests` de
+    virglrenderer). Primer arranque del servidor OK, pero el primer intento con
+    `glxinfo`.abortó con «lost connection to rendering server on 8 read -1 22»:
+    el env inyectaba el URI con el path HOST (`<rootfs>/tmp/virgl_test`), que no
+    existe en la vista del guest. Fix aplicado con tests rojo→verde
+    (`VirglLibraryTest`, `ProotShellEnvironmentTest`): el URI del cliente es el
+    path GUEST constante «`unix:path=/tmp/virgl_test`» (proot traduce el
+    `connect()` del guest al socket del host, patrón companion X de 014); el
+    lado servidor sigue pasando el path host a `--socket-path`. Firma
+    simplificada (`applyVirglEnv(env, active)`, `applyVirglSessionEnv(map,
+    prefActive, socketPresent)`); GREEN `./gradlew test`; APK recompilado y
+    pendiente de retest en el dispositivo.
   - Hecho cuando: activar VirGL → el servidor (proceso nativo) está vivo y el
     socket está en el rootfs `/tmp`; dentro del guest, con la pestaña X11 de la
     014 abierta, una app con el env del invitado conecta al servidor; además se

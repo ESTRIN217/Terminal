@@ -81,11 +81,17 @@ public class VirglLibraryTest {
         Map<String, String> env = new HashMap<>();
         env.put("PATH", "/usr/bin");
 
-        VirglLibrary.applyVirglEnv(env, true, "/data/rootfs/tmp");
+        VirglLibrary.applyVirglEnv(env, true);
 
         Assert.assertEquals("virpipe", env.get("GALLIUM_DRIVER"));
         Assert.assertEquals(VirglLibrary.GL_VERSION_OVERRIDE, env.get("MESA_GL_VERSION_OVERRIDE"));
-        Assert.assertEquals("unix:path=/data/rootfs/tmp/" + VirglLibrary.SOCKET_NAME,
+        // Spec 013 T7 (device validation on the Mali T606): the mesa virpipe
+        // client must dial the GUEST unix path (/tmp inside the proot rootfs);
+        // proot translates the guest connect() to the host socket. The HOST
+        // path ("unix:path=/data/rootfs/tmp/virgl_test") does not exist inside
+        // the rootfs view and the client dies with "lost connection to
+        // rendering server".
+        Assert.assertEquals("unix:path=" + VirglLibrary.GUEST_SOCKET_PATH,
             env.get("VIRGL_TEST_SERVER_URI"));
         // Existing entries are preserved
         Assert.assertEquals("/usr/bin", env.get("PATH"));
@@ -98,32 +104,25 @@ public class VirglLibraryTest {
         env.put("LP_NUM_THREADS", "8");
         Map<String, String> expected = new HashMap<>(env);
 
-        VirglLibrary.applyVirglEnv(env, false, "/data/rootfs/tmp");
+        VirglLibrary.applyVirglEnv(env, false);
 
         Assert.assertEquals(expected, env);
         Assert.assertFalse(env.containsKey("VIRGL_TEST_SERVER_URI"));
     }
 
     @Test
-    public void testApplyVirglEnv_nullSocketPath_stillInjectsDriverWithoutUri() {
-        // The socket path resolution is the glue's job; the pure builder must not
-        // invent a URI. With no path, the driver override stays (pingable later).
-        Map<String, String> env = new HashMap<>();
+    public void testApplyVirglEnv_uriIsGuestPath_sameUriForAnyHostTmp() {
+        // The client URI is the constant GUEST socket path (proot translates the
+        // guest connect()); the host rootfs tmp directory never leaks into it.
+        Map<String, String> envOne = new HashMap<>();
+        Map<String, String> envTwo = new HashMap<>();
 
-        VirglLibrary.applyVirglEnv(env, true, null);
+        VirglLibrary.applyVirglEnv(envOne, true);
+        VirglLibrary.applyVirglEnv(envTwo, true);
 
-        Assert.assertEquals("virpipe", env.get("GALLIUM_DRIVER"));
-        Assert.assertFalse(env.containsKey("VIRGL_TEST_SERVER_URI"));
-    }
-
-    @Test
-    public void testApplyVirglEnv_trailingSlashNormalized() {
-        Map<String, String> env = new HashMap<>();
-
-        VirglLibrary.applyVirglEnv(env, true, "/rootfs/tmp/");
-
-        Assert.assertEquals("unix:path=/rootfs/tmp/" + VirglLibrary.SOCKET_NAME,
-            env.get("VIRGL_TEST_SERVER_URI"));
+        Assert.assertEquals("/tmp/" + VirglLibrary.SOCKET_NAME,
+            VirglLibrary.GUEST_SOCKET_PATH);
+        Assert.assertEquals(envOne, envTwo);
     }
 
     // ---- buildServerEnv: native server environment (RF-2/RF-4) ----

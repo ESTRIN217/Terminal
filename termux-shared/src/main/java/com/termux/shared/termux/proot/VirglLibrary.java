@@ -41,10 +41,20 @@ public final class VirglLibrary {
     /**
      * File name of the vtest socket under the rootfs {@code /tmp} (the directory
      * already shared with the native side by the X11 companion, spec 014).
-     * Placeholder documented in the spec's open doubts; spec 013 T7 pins the
-     * final value after validating what the guest mesa {@code virpipe} accepts.
+     * Validated on the device in spec 013 T7 against mesa {@code virpipe}.
      */
     public static final String SOCKET_NAME = "virgl_test";
+
+    /**
+     * GUEST unix socket path the mesa {@code virpipe} client dials (spec 013 T7,
+     * validated on the Mali T606 device). It must be the path AS SEEN INSIDE the
+     * proot rootfs (guest {@code /tmp}), NOT the host path of the rootfs tmp
+     * directory: proot translates the guest {@code connect()} to the host socket
+     * (same companion X pattern, spec 014), while a host path does not exist in
+     * the guest filesystem view and the client dies with
+     * {@code lost connection to rendering server on ... read -1 22}.
+     */
+    public static final String GUEST_SOCKET_PATH = "/tmp/" + SOCKET_NAME;
 
     /** Guest environment variable: forces the mesa virgl vtest client driver. */
     public static final String ENV_GALLIUM_DRIVER = "GALLIUM_DRIVER";
@@ -125,22 +135,20 @@ public final class VirglLibrary {
     /**
      * Injects the VirGL guest environment when the acceleration is active and
      * the server is alive (RF-3); leaves the map byte for byte identical otherwise
-     * (RF-5, NFR-3), so callers reuse it blindly.
+     * (RF-5, NFR-3), so callers reuse it blindly. The client URI is the constant
+     * guest socket path (see {@link #GUEST_SOCKET_PATH}); where the socket lives
+     * on the host is the server's concern (see {@link #buildServerArgs}), not
+     * the guest's.
      *
-     * @param env          the already-built guest environment, mutated in place
-     * @param active       whether the pipeline applies to this session
-     * @param rootfsTmpDir guest {@code /tmp} as seen by the host (null/blank skips
-     *                     only the server URI; the driver override still marks the way)
+     * @param env    the already-built guest environment, mutated in place
+     * @param active whether the pipeline applies to this session
      */
-    public static void applyVirglEnv(@NonNull Map<String, String> env, boolean active,
-                                     @Nullable String rootfsTmpDir) {
+    public static void applyVirglEnv(@NonNull Map<String, String> env, boolean active) {
         if (!active)
             return;
         env.put(ENV_GALLIUM_DRIVER, GALLIUM_DRIVER_VIRPIPE);
         env.put(ENV_MESA_GL_VERSION_OVERRIDE, GL_VERSION_OVERRIDE);
-        String socketPath = guestSocketPath(rootfsTmpDir);
-        if (socketPath != null)
-            env.put(ENV_TEST_SERVER_URI, "unix:path=" + socketPath);
+        env.put(ENV_TEST_SERVER_URI, "unix:path=" + GUEST_SOCKET_PATH);
     }
 
     /**
@@ -248,8 +256,10 @@ public final class VirglLibrary {
     }
 
     /**
-     * Pure path composition for the vtest socket; shared by the server launch
-     * (stale cleanup) and the guest URI.
+     * Pure host path composition for the vtest socket; used by the server launch
+     * and its stale cleanup. The guest dials the constant {@link
+     * #GUEST_SOCKET_PATH} instead (proot translates the guest connect(), spec
+     * 013 T7), so the host directory is never part of the client URI.
      *
      * @param rootfsTmpDir host path of the guest {@code /tmp}
      * @return normalized ({@code [dir]/<name>}; trailing separator collapsed),

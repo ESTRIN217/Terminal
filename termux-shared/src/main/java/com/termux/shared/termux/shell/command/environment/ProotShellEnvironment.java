@@ -232,11 +232,10 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
      * @param map            The guest environment map being built, modified in place.
      * @param prefActive     Whether the persisted {@code gpu_solution} pref is {@code VIRGL}.
      * @param socketPresent  Whether the vtest socket of the native server exists on the host.
-     * @param rootfsTmpDir   Host path of the guest {@code /tmp}; null skips the URI only.
      */
     public static void applyVirglSessionEnv(@NonNull Map<String, String> map, boolean prefActive,
-                                            boolean socketPresent, @Nullable String rootfsTmpDir) {
-        VirglLibrary.applyVirglEnv(map, prefActive && socketPresent, rootfsTmpDir);
+                                            boolean socketPresent) {
+        VirglLibrary.applyVirglEnv(map, prefActive && socketPresent);
     }
 
     /**
@@ -607,7 +606,7 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
             boolean socketPresent = isVirglSocketPresent();
             if (!socketPresent)
                 Logger.logWarn(LOG_TAG, "gpu_solution=VIRGL but the vtest socket is not present at " + TermuxConstants.DEBIAN_ROOTFS_TMP_DIR_PATH + " (guest env stays inert)");
-            applyVirglSessionEnv(environment, virglActive, socketPresent, TermuxConstants.DEBIAN_ROOTFS_TMP_DIR_PATH);
+            applyVirglSessionEnv(environment, virglActive, socketPresent);
         }
 
         // Spec 012 (RF-1, RF-2, RF-4): multithreaded llvmpipe rasterizer. Injected

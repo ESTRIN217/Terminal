@@ -174,12 +174,18 @@
                     <p>
                         La parte no dependiente del dispositivo (compilación del binario,
                         embebido en el APK, panel y ciclo de vida ligado a las sesiones) está
-                        implementada y en verde (<code>./gradlew test</code>). La
-                        <strong>validación en el dispositivo real (Mali T606)</strong> sigue
-                        pendiente y aquí se anotará el resultado medido — incluyendo qué
-                        env variable exacta acepta la mesa <code>virpipe</code>
-                        (<code>25.0.7-2+deb13u1</code>) del rootfs — sin promesas de
-                        rendimiento y sin marcar la ruta como «oficial» hasta entonces.
+                        implementada y en verde (<code>./gradlew test</code>). En el
+                        dispositivo real (Mali T606) ya está confirmado que el servidor
+                        nativo arranca dentro de la app y crea el socket
+                        <code>/tmp/virgl_test</code>; la URI del cliente quedó fijada
+                        tras la depuración: la mesa <code>virpipe</code> del rootfs
+                        (<code>25.0.7-2+deb13u1</code>) marca el socket como el path del
+                        invitado <code>unix:path=/tmp/virgl_test</code> — proot traduce
+                        esa conexión al socket del host —. La
+                        <strong>medición final del renderer con <code>glxinfo</code></strong>
+                        sigue pendiente y aquí se anotará el resultado medido, sin
+                        promesas de rendimiento y sin marcar la ruta como «oficial»
+                        hasta entonces.
                     </p>
                     <h3>Alternativa sin pestaña X11: VNC dentro del invitado (secundaria)</h3>
                     <p>
