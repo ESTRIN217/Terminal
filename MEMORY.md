@@ -72,7 +72,14 @@
   ABSOLUTO (TMPDIR no lo mueve) → `--socket-path` explícito siempre; virglrenderer
   exige gbm para EGL (no existe sin root en Android) → parches 001/002 +
   shims `scripts/ndk-shims/` (log/log.h y cutils/properties.h no vienen en el
-  NDK); deps del binario solo libc/libm/libdl/liblog.
+  NDK); deps del binario solo libc/libm/libdl/liblog. Constantes finales
+  T7: server `--socket-path <rootfs>/tmp/virgl_test`; guest env
+  **`VTEST_SOCKET_NAME=/tmp/virgl_test`** (path crudo) — la mesa stock
+  (Debian 25.0.7) NO lee `VIRGL_TEST_SERVER_URI` (leyenda de wikis: solo el
+  paquete mesa parcheado de Termux) y su `connect()` fallido no aborta
+  (ruidoso `read -1 22` sobre fd no conectado). `glxinfo` completo aborta
+  con `X_GetImage` BadMatch en display rootless (quirk del stack); validar
+  con `glxgears`/`glmark2`. Sin GBM: sin import dmabuf/EGL-image.
 - Glifos multicolor Compose requieren `tint = Color.Unspecified`.
 - Semánticas parecidas no se unifican sin spec; cuido tests en rojo primero.
 - Conventional Commits capitalizados (`Added`, `Changed`, `Fixed`…); semver.
