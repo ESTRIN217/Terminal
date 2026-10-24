@@ -15,16 +15,22 @@
   en `TermuxService`, panel con switch VirGL + strings ×3, y **T6: binario
   virgl_test_server arm64 compilado por `scripts/build-virglrenderer.sh`**
   (pins SHA-256, patches `scripts/virgl-patches/`, shims `scripts/ndk-shims/`)
-  embebido en assets y verificado con `unzip -l`. GREEN `./gradlew test`.
-  Falta: T7 device (Mali T606; URI del guest por confirmar contra mesa
-  25.0.7) y T8 wiki/README. Server args fijados: `--no-fork --multi-clients
-  --use-egl-surfaceless --use-gles --socket-path <rootfs>/tmp/virgl_test`.
+  embebido en assets y verificado con `unzip -l`. **T8 hecha (2026-10-23):**
+  wiki limitaciones (receta X11 + excluyente + estado de validación, VNC
+  secundaria, Zink/OpenCL), x11.html remite a VirGL, README tercera vía.
+  **T7 en curso (2026-10-24):** servidor nativo OK en dispositivo (SELinux
+  `enforcing` ejecuta el binario; socket en ~120 ms). Diagnosticado y fixeado
+  Rojo→Verde el fallo «lost connection to rendering server»: el URI del
+  cliente iba con path HOST (no visible desde el guest); fijado URI GUEST
+  constante `unix:path=/tmp/virgl_test` (proot traduce el `connect()`, patrón
+  companion X de 014); firmas simplificadas (`applyVirglEnv(env, active)`,
+  `applyVirglSessionEnv(map, prefActive, socketPresent)`); `./gradlew test`
+  verdes y APK recompilado. Falta: retest del checklist en el dispositivo
+  (activar → pestaña X11 → sesión nueva → `glxinfo` ≠ llvmpipe → desactivar →
+  env byte a byte) y anotar la medición del renderer en la wiki. Server args
+  fijados: `--no-fork --multi-clients --use-egl-surfaceless --use-gles
+  --socket-path <rootfs>/tmp/virgl_test`.
   Limitación sin GBM registrada: sin import de dmabuf/EGL-image.
-  **T8 hecha (2026-10-23):** wiki limitaciones (receta X11 + excluyente + estado
-  de validación pendiente + VNC secundaria + Zink/OpenCL), x11.html remite a
-  VirGL, README tercera vía. Solo queda **T7**: validación en el Mali T606
-  (activar switch, comprobar `/tmp/virgl_test`, pestaña X11, `glxinfo` ≠
-  llvmpipe, desactivar → env byte a byte) y anotar medición en la wiki.
 
 ## Spec 014 — decisiones y estado
 - Submódulo `termux-x11/` (pin `c82664b0`); parches xserver **sin commit**
