@@ -20,6 +20,11 @@
   25.0.7) y T8 wiki/README. Server args fijados: `--no-fork --multi-clients
   --use-egl-surfaceless --use-gles --socket-path <rootfs>/tmp/virgl_test`.
   Limitación sin GBM registrada: sin import de dmabuf/EGL-image.
+  **T8 hecha (2026-10-23):** wiki limitaciones (receta X11 + excluyente + estado
+  de validación pendiente + VNC secundaria + Zink/OpenCL), x11.html remite a
+  VirGL, README tercera vía. Solo queda **T7**: validación en el Mali T606
+  (activar switch, comprobar `/tmp/virgl_test`, pestaña X11, `glxinfo` ≠
+  llvmpipe, desactivar → env byte a byte) y anotar medición en la wiki.
 
 ## Spec 014 — decisiones y estado
 - Submódulo `termux-x11/` (pin `c82664b0`); parches xserver **sin commit**
