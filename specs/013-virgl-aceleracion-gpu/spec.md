@@ -240,12 +240,14 @@ programa.
   (tag/commit de `virglrenderer` y de sus dependencias menores) se fija en el
   plan; hasta fijarlo no se cierra el pipeline (espíritu de la constitución
   #5: nada sin pin).
-- [NECESITA ACLARACIÓN] **Path del socket y variable de conexión del cliente**
-  (`VIRGL_TEST_SERVER_URI` vs path estándar de la era vtest): depende de la
-  mesa `virpipe` del rootfs (`25.0.7-2+deb13u1`); el socket debe nacer bajo el
-  TMPDIR que la integración X11 (014) ya comparte con el guest, y se confirma
-  con prueba real dentro del invitado en la primera tarea de dispositivo
-  antes de cerrar las constantes.
+- [NECESITA ACLARACIÓN] **Variable de conexión del cliente** (`VIRGL_TEST_SERVER_URI`
+  vs path vtest estándar): depende de la mesa `virpipe` del rootfs
+  (`25.0.7-2+deb13u1`); el socket ya tiene **lado servidor fijado** (T6: los
+  fuentes pineados muestran que el default del vtest server es el path absoluto
+  `/tmp/.virgl_test` y que TMPDIR no lo mueve, así que el binario se lanza con
+  `--socket-path <rootfs>/tmp/virgl_test`; el guest lo ve como `/tmp/virgl_test`).
+  Lo que falta confirmar en el dispositivo es lo que el cliente mesa del guest
+  acepta por env/probe, y se fija en T7.
 - ¿Arranque del servidor: al crear la primera sesión con la preferencia
   activa vs. al activar el switch en Ajustes? El borrador asume «al activar
   el switch + al crear sesión si no está vivo» (RF-2/RF-4).

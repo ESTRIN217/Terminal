@@ -132,8 +132,13 @@ public final class VirglServerManager {
         if (serverEnv == null)
             return new Error("Invalid rootfs /tmp path for the VirGL server");
 
-        List<String> args = VirglLibrary.buildServerArgs();
-        ProcessBuilder builder = new ProcessBuilder(TermuxConstants.VIRGL_BIN_PATH, args.get(0));
+        List<String> args = VirglLibrary.buildServerArgs(tmpDir);
+        if (args == null)
+            return new Error("Invalid rootfs /tmp path for the VirGL server arguments");
+        java.util.List<String> command = new java.util.ArrayList<>(args.size() + 1);
+        command.add(TermuxConstants.VIRGL_BIN_PATH);
+        command.addAll(args);
+        ProcessBuilder builder = new ProcessBuilder(command);
         builder.environment().putAll(serverEnv);
         builder.redirectErrorStream(true);
         Logger.logInfo(LOG_TAG, "Starting VirGL server \"" + TermuxConstants.VIRGL_BIN_PATH + "\" (vtest socket: "

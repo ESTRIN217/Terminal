@@ -1,0 +1,20 @@
+--- a/src/vrend/vrend_winsys.c
++++ b/src/vrend/vrend_winsys.c
+@@ -77,9 +77,15 @@
+ 
+       use_context = CONTEXT_EGL;
+ #else
++      /* ESTRIN217 virgl-android fork (spec 013 T6, patch 2/2): Android hosts have
++       * no GBM/DRM — initialize the system EGL surfaceless directly (the server
++       * always runs with --use-egl-surfaceless and --use-gles on this fork). */
+       (void)preferred_fd;
+-      virgl_error("EGL is not supported on this platform\n");
+-      return -1;
++      egl = virgl_egl_init(0, flags & VIRGL_RENDERER_USE_SURFACELESS,
++                           flags & VIRGL_RENDERER_USE_GLES);
++      if (!egl)
++         return -1;
++      use_context = CONTEXT_EGL;
+ #endif
+    } else if (flags & VIRGL_RENDERER_USE_GLX) {
+ #ifdef HAVE_EPOXY_GLX_H

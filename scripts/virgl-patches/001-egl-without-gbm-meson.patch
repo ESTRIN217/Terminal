@@ -1,0 +1,20 @@
+--- a/meson.build
++++ b/meson.build
+@@ -291,11 +291,12 @@
+       if with_host_windows or with_host_darwin
+          have_egl = true
+       else
+-         if libdrm_dep.found()
+-            gbm_dep = dependency('gbm', version: '>= ' + _gbm_ver, required: require_egl)
+-         endif
+-         have_egl = gbm_dep.found() and cc.has_header('sys/mman.h', required: require_egl)
+-         conf_data.set('ENABLE_GBM', have_egl)
++         # ESTRIN217 virgl-android fork (spec 013 T6, patch 1/2): Android hosts have
++         # no DRM device and no Mesa GBM; EGL must initialize through the surfaceless
++         # system platform (see vrend_winsys.c patch 2/2 in this package). Instead of
++         # requiring `gbm`, EGL capability follows epoxy and ENABLE_GBM stays off.
++         have_egl = true
++         conf_data.set('ENABLE_GBM', false)
+       endif
+       conf_data.set('HAVE_EPOXY_EGL_H', have_egl)
+    else

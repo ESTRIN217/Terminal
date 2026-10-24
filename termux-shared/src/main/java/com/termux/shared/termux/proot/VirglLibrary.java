@@ -5,7 +5,7 @@ import androidx.annotation.Nullable;
 
 import com.termux.shared.shell.command.environment.UnixShellEnvironment;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +57,14 @@ public final class VirglLibrary {
 
     /** Server argument keeping the process under the app's lifecycle (RF-2/RF-4). */
     private static final String SERVER_ARG_NO_FORK = "--no-fork";
+    /** Server argument accepting several concurrent guest clients (spec 013 T6). */
+    private static final String SERVER_ARG_MULTI_CLIENTS = "--multi-clients";
+    /** Server argument: system EGL surfaceless platform (Android has no GBM). */
+    private static final String SERVER_ARG_EGL_SURFACELESS = "--use-egl-surfaceless";
+    /** Server argument: Android system EGL is GLES-only. */
+    private static final String SERVER_ARG_USE_GLES = "--use-gles";
+    /** Server argument: explicit Unix socket path (overrides the /tmp/.virgl_test default). */
+    private static final String SERVER_ARG_SOCKET_PATH = "--socket-path";
 
     /** Result of the mutually exclusive solution gate (RF-6). */
     public static final class SolutionGate {
@@ -154,14 +162,39 @@ public final class VirglLibrary {
     }
 
     /**
-     * Immutable server arguments: the process must live under the app's own
-     * lifecycle, so it is not allowed to fork itself away (RF-2, RF-4).
+     * Immutable server arguments (RF-2, RF-4): the constant feedback of running
+     * the pinned vtest sources on Android (spec 013, T6):
+     * <ul>
+     *   <li>{@code --no-fork}: the process must live under the app lifecycle,
+     *       not fork itself away;</li>
+     *   <li>{@code --multi-clients}: several guest processes (apps, X11) connect
+     *       concurrently; the server trusts its Unix socket peers;</li>
+     *   <li>{@code --use-egl-surfaceless}: the Android host has no DRM/GBM
+     *       device; rendering goes through the system EGL surfaceless platform;</li>
+     *   <li>{@code --use-gles}: the system EGL of Android is GLES-only;</li>
+     *   <li>{@code --socket-path}: the vtest default name is the absolute
+     *       {@code /tmp/.virgl_test}, which {@code TMPDIR} does not move, so the
+     *       host path of the guest {@code /tmp} plus {@link #SOCKET_NAME} is
+     *       given explicitly.</li>
+     * </ul>
      *
-     * @return the process arguments
+     * @param rootfsTmpDir host path of the guest {@code /tmp}; null/blank yields null
+     * @return the process arguments, or null on invalid input (the glue turns it
+     *         into an Error object; never thrown)
      */
-    @NonNull
-    public static List<String> buildServerArgs() {
-        return Collections.singletonList(SERVER_ARG_NO_FORK);
+    @Nullable
+    public static List<String> buildServerArgs(@Nullable String rootfsTmpDir) {
+        String socketPath = guestSocketPath(rootfsTmpDir);
+        if (socketPath == null)
+            return null;
+        List<String> args = new ArrayList<>();
+        args.add(SERVER_ARG_NO_FORK);
+        args.add(SERVER_ARG_MULTI_CLIENTS);
+        args.add(SERVER_ARG_EGL_SURFACELESS);
+        args.add(SERVER_ARG_USE_GLES);
+        args.add(SERVER_ARG_SOCKET_PATH);
+        args.add(socketPath);
+        return args;
     }
 
     /**

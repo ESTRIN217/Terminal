@@ -42,7 +42,22 @@
     VirGL disponible»); cero literales en Compose (strings `values/`,
     `values-es-rVE/`, `values-pt-rBR/`); `./gradlew test` verde.
 
-- [ ] **T6. Pipeline nativo: compilar `virglrenderer` arm64 y embeber en assets.** RF-1, NFR-2, NFR-4.
+- [x] **T6. Pipeline nativo: compilar `virglrenderer` arm64 y embeber en assets.** RF-1, NFR-2, NFR-4.
+  - [x] Variantes documentadas: (a) el lado servidor del socket se fijó ya — los
+    fuentes pineados revelan que el nombre default `/tmp/.virgl_test` es ABSOLUTO
+    (TMPDIR no lo mueve), así que el binario recibe siempre
+    `--socket-path <rootfs>/tmp/virgl_test`, más `--no-fork --multi-clients
+    --use-egl-surfaceless --use-gles` (Android: EGL del sistema, GLES, sin GBM);
+    la URI que la mesa del guest acepta sigue pegada a T7. (b) virglrenderer
+    exige gbm (de Mesa) para EGL: parche mínimo de 2 archivos
+    (`scripts/virgl-patches/001/002`) + shims NDK (`scripts/ndk-shims/include/`)
+    contra los headers internos ausentes (log/log.h, cutils/properties.h).
+    (c) el pipeline completo vive en `scripts/build-virglrenderer.sh` (pins +
+    SHA-256 + patches + stubs, idempotente, re-ejecutado de cero) y verifica con
+    readelf que el binario solo depende de libc/libm/libdl/liblog. El binario
+    quedó embebido y verificado con `unzip -l` en el APK debug arm64; queda como
+    limitación honesta registrada: sin GBM no hay import de imágenes EGL/dmabuf
+    (`VREND_STORAGE_EGL_IMAGE`), sin efecto sobre el render por protocolo.
   - Hecho cuando: fuentes pineadas (tag/commit escritos en el script y en las
     constantes del plan; nada sin pin, constitución #5); dependencias
     estáticas en el mismo multistage; binario en

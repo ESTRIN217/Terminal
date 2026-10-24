@@ -147,9 +147,22 @@ public class VirglLibraryTest {
     // ---- buildServerArgs: lifecycle-owned process (RF-2/RF-4) ----
 
     @Test
-    public void testBuildServerArgs_noFork() {
-        Assert.assertEquals(java.util.Collections.singletonList("--no-fork"),
-            VirglLibrary.buildServerArgs());
+    public void testBuildServerArgs_fullInvocation() {
+        // Spec 013 T6 (closing the open doubt from the plan, learned from the
+        // pinned vtest sources): the vtest default socket name is the absolute
+        // /tmp/.virgl_test and TMPDIR does NOT move it, so the socket path must be
+        // given explicitly (host view of the guest /tmp). The system EGL of the
+        // Android host is GLES-only and has no DRM/GBM device, hence surfaceless.
+        Assert.assertEquals(java.util.Arrays.asList(
+                "--no-fork", "--multi-clients", "--use-egl-surfaceless", "--use-gles",
+                "--socket-path", "/rootfs/tmp/" + VirglLibrary.SOCKET_NAME),
+            VirglLibrary.buildServerArgs("/rootfs/tmp"));
+    }
+
+    @Test
+    public void testBuildServerArgs_blankPathIsNull() {
+        Assert.assertNull(VirglLibrary.buildServerArgs(null));
+        Assert.assertNull(VirglLibrary.buildServerArgs(" "));
     }
 
     // ---- T4: pure server state machine (RF-2, RF-4, NFR-6) ----
