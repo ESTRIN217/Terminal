@@ -76,7 +76,14 @@
     sesión nueva idéntico al pre-spec; overlay 010 y tab X11 sin regresión;
     el resultado de la medición de renderer se anota en la wiki sin promesas.
 
-- [ ] **T8. Documentación: wiki + README (RF-8) y MEMORY.** RF-8.
+- [x] **T8. Documentación: wiki + README (RF-8) y MEMORY.** RF-8.
+  - [x] (2026-10-23, antes de T7 por petición del mantenedor) `wiki/limitaciones.html`
+    con la sección «Aceleración VirGL» (modelo cliente-servidor, receta paso a paso
+    sobre la pestaña X11 con comprobación `glxinfo`, mutua exclusión con KGSL),
+    el estado honesto de validación (pendiente del dispositivo, se anotará el
+    resultado medido de T7), la alternativa VNC marcada secundaria, y las
+    limitaciones Zink/OpenCL sin vía; `wiki/x11.html` ya no remite a llvmpipe
+    sin más; README con la tercera vía y la exclusividad. MEMORY actualizado.
   - Hecho cuando: `wiki/limitaciones.html` y README describen la tercera vía
     (receta sobre la pestaña X11: activar VirGL, abrir companion/LorieView,
     salir con el env en el invitado, comprobar con `glxinfo` que NO es

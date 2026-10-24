@@ -126,12 +126,81 @@
                             <a href="https://github.com/lfdevs/mesa-for-android-container">lfdevs/mesa-for-android-container</a>.
                         </li>
                         <li>
-                            <strong>Mali / PowerVR (MediaTek, Exynos…):</strong> sin vía real a la
-                            GPU sin root (los drivers libres necesitan módulos kernel DRM que el
+                            <strong>Mali / PowerVR (MediaTek, Exynos…):</strong> sin vía directa
+                            a la GPU sin root (los drivers libres necesitan módulos kernel DRM que el
                             kernel Android no trae, y <code>libhybris</code> no está en Debian 13).
-                            El panel lo dice en claro: llvmpipe sigue en uso.
+                            Pero ahora <strong>sí hay una vía indirecta agnóstica</strong>: la
+                            <a href="#aceleracion-virgl">aceleración VirGL</a> de más abajo,
+                            disponible en Ajustes para cualquier GPU. El panel «Estado GPU» ya
+                            lo refleja: para Mali y PowerVR el texto ya no es «sin aceleración»,
+                            sino «aceleración disponible vía VirGL».
                         </li>
                     </ul>
+                    <h2 id="aceleracion-virgl">Aceleración VirGL: la vía agnóstica del fabricante</h2>
+                    <p>
+                        VirGL es la segunda familia de aceleración sin root del fork (spec&nbsp;013)
+                        y la única accesible desde GPUs no Qualcomm (Mali, PowerVR, Adreno sin
+                        KGSL…). El modelo es <em>cliente-servidor</em>: la app ejecuta un pequeño
+                        servidor nativo (<code>virgl_test_server</code>, compilado en el pipeline
+                        del fork con el mismo NDK que proot y dentro del APK) que renderiza 3D con
+                        el <strong>EGL del sistema Android</strong> — el driver del fabricante que
+                        la app puede usar sin root — mientras el invitado Debian habla con él
+                        mediante el driver <code>virpipe</code> de mesa. Es una
+                        <strong>capa de traducción</strong>: offload real del GPU para quienes hoy
+                        usan llvmpipe, pero no equivalente a la aceleración nativa; no prometemos FPS.
+                    </p>
+                    <h3>Receta de uso (display = la pestaña X11 de la app)</h3>
+                    <ol>
+                        <li>Ajustes → «Estado GPU» → activa <strong>«Aceleración GPU vía VirGL»</strong>.
+                            El switch arranca el servidor nativo y falla <em>antes</em> de marcar
+                            la opción si algo sale mal (el detalle queda en el log de la app).
+                            Es mutuamente excluyente con la vía Adreno/KGSL: para cambiar de una
+                            a otra hay que pasar por «desactivada».</li>
+                        <li>Abre la <a href="x11.html">pestaña X11</a> de la app (el companion se
+                            arranca desde la propia app; el comando manual del handbook es solo
+                            el plan B) y deja el display vivo.</li>
+                        <li>En la sesión Debian, las variables del entorno de la vía se inyectan
+                            <strong>solo cuando el socket del servidor existe</strong>
+                            (<code>/tmp/virgl_test</code>; haz <code>ls -l /tmp/virgl_test</code> para
+                            comprobarlo). En una sesión nueva:
+                            <pre><code>env | grep -E 'GALLIUM_DRIVER|MESA_GL_VERSION_OVERRIDE|VIRGL_TEST_SERVER_URI'</code></pre>
+                            y <code>export DISPLAY=:0</code> para el display.</li>
+                        <li>Lanza una app gráfica y verifica el renderer con
+                            <code>glxinfo</code>: el proveedor debe ser el del fabricante
+                            <strong>no</strong> <code>llvmpipe</code>. Con la opción apagada, una
+                            sesión nueva debe volver byte a byte al entorno previo.</li>
+                    </ol>
+                    <h3>Estado de la validación de la vía VirGL (spec&nbsp;013)</h3>
+                    <p>
+                        La parte no dependiente del dispositivo (compilación del binario,
+                        embebido en el APK, panel y ciclo de vida ligado a las sesiones) está
+                        implementada y en verde (<code>./gradlew test</code>). La
+                        <strong>validación en el dispositivo real (Mali T606)</strong> sigue
+                        pendiente y aquí se anotará el resultado medido — incluyendo qué
+                        env variable exacta acepta la mesa <code>virpipe</code>
+                        (<code>25.0.7-2+deb13u1</code>) del rootfs — sin promesas de
+                        rendimiento y sin marcar la ruta como «oficial» hasta entonces.
+                    </p>
+                    <h3>Alternativa sin pestaña X11: VNC dentro del invitado (secundaria)</h3>
+                    <p>
+                        Si no usas la pestaña X11, un escritorio VNC <em>dentro</em> del Debian
+                        (paquetes de la distro, p.&nbsp;ej. <code>tigervnc-standalone-server</code>)
+                        + un visor VNC externo invocan las mismas variables del invitado y
+                        renderizan por la misma vía. Queda como alternativa secundaria para
+                        usuarios sin acceso a la pestaña X11; el camino principal del fork es
+                        el display integrado de la spec&nbsp;014.
+                    </p>
+                    <h3>Lo que sí quedan como «sin vía» (limitaciones honestas)</h3>
+                    <p>
+                        Esta spec deliberadamente <strong>no añade</strong> estas dos rutas y se
+                        documentan como pendientes: <strong>Zink</strong> (OpenGL sobre Vulkan)
+                        exige un driver Vulkan visible sin root — lavapipe es CPU, y los drivers
+                        vendor hardware Vulkan no son alcanzables por la app — por lo que tampoco
+                        mejoraría nada respecto a llvmpipe hoy; <strong>OpenCL</strong> requiere
+                        el ICD del fabricante (libOpenCL vendor-aware de Qualcomm/Mali), que en
+                        Debian 13 no hay para estos ICD de Android. La spec&nbsp;011 documentó
+                        ambos como límites; siguen siéndolo.
+                    </p>
                     <p>
                         Para los casos por CPU (spec&nbsp;012), el rasterizador de llvmpipe corre
                         <strong>multihilo</strong> (<code>LP_NUM_THREADS</code>,
@@ -145,8 +214,8 @@
                         Para volver al entorno sin estas variables, desactiva
                         <strong>«Activar multihilo»</strong> en ese panel. El cambio se aplica a
                         las sesiones nuevas; las ya abiertas conservan el entorno con el que
-                        arrancaron. Si la aceleración Adreno/KGSL está activa, llvmpipe no usa
-                        estos ajustes.
+                        arrancaron. Con aceleración GPU activa (KGSL <em>o</em> VirGL),
+                        llvmpipe no usa estos ajustes.
                     </p>
                     <p>
                         Validación en dispositivo (2026-10-22): Infinix X6525, Unisoc T606,

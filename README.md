@@ -144,11 +144,11 @@ escribe ningún snapshot y se usa la vía nativa. Sin sesiones activas, el muest
 se para. Detalles de datos en [`docs/proot-debian-arm64-plan.md`](docs/proot-debian-arm64-plan.md)
 (sección 7) y [`specs/010-procstat-htop/`](specs/010-procstat-htop/).
 
-## Gráficos y GPU (specs 011/012)
+## Gráficos y GPU (specs 011/012/013)
 
 Sin root, lo que ve `glxinfo`/`vulkaninfo` dentro de la sesión Debian es el
 renderizador por CPU de Mesa (**llvmpipe**, con la lavapipe de Vulkan): no es un
-bug, es lo máximo posible en la mayoría de móviles. La sección «Estado GPU» de
+bug, es el punto de partida en la mayoría de móviles. La sección «Estado GPU» de
 Ajustes dice qué situación tiene tu dispositivo:
 
 - **Adreno (Qualcomm):** el backend KGSL de los drivers libres freedreno/turnip
@@ -160,15 +160,27 @@ Ajustes dice qué situación tiene tu dispositivo:
   partir de entonces inyecta `MESA_LOADER_DRIVER_OVERRIDE=kgsl`. Desinstalar
   devuelve el invitado al estado del mirror Debian. Referencia externa:
   [`lfdevs/mesa-for-android-container`](https://github.com/lfdevs/mesa-for-android-container).
-- **Mali / PowerVR (MediaTek, Exynos...):** sin vía real a la GPU sin root
+- **VirGL (cualquier GPU: Mali, PowerVR, Adreno sin KGSL…):** segunda vía sin
+  root, agnóstica del fabricante (spec 013). La app ejecuta un servidor nativo
+  (`virgl_test_server`, compilado con el pipeline del fork y embebido en el
+  APK) que renderiza 3D con el EGL del sistema Android, y el invitado lo usa
+  con el driver `virpipe` de mesa (`GALLIUM_DRIVER=virpipe`). El interruptor
+  «Aceleración GPU vía VirGL» está disponible en el panel «Estado GPU» para
+  todas las familias y es mutuamente excluyente con la vía KGSL: para cambiar
+  de una a otra hay que pasar por «desactivada». Es una capa de traducción:
+  offload real del GPU frente a llvmpipe, no aceleración nativa equivalente.
+  El display gráfico es la pestaña X11 de la app (spec 014); la receta paso a
+  paso, la alternativa VNC y las limitaciones (Zink/OpenCL) están en la
+  [wiki](wiki/limitaciones.html). Validación en dispositivo pendiente.
+- **Mali / PowerVR (MediaTek, Exynos...):** sin vía directa a la GPU sin root
   (habría que portar módulos kernel DRM). El panel lo dice en claro y
-  llvmpipe sigue en uso. La spec 012 saca partido a la CPU: el rasterizador
-  por software corre multihilo. En Ajustes → «Hilos de llvmpipe» viene
-  activado con N=8; puedes configurar N entre 1 y 16. Se inyecta
-  `LP_NUM_THREADS` y `GALLIUM_NUM_THREADS` con `min(núcleos, N)`. Apaga
+  llvmpipe sigue en uso al no activar VirGL. La spec 012 saca partido a la
+  CPU: el rasterizador por software corre multihilo. En Ajustes → «Hilos de
+  llvmpipe» viene activado con N=8; puedes configurar N entre 1 y 16. Se
+  inyecta `LP_NUM_THREADS` y `GALLIUM_NUM_THREADS` con `min(núcleos, N)`. Apaga
   «Activar multihilo» para no inyectar ninguna de las dos variables. Los cambios
   se aplican a las sesiones nuevas; las que ya están abiertas conservan su entorno.
-  En Adreno con aceleración KGSL activa, estos ajustes no aplican.
+  Con aceleración activa (KGSL o VirGL) estos ajustes no aplican.
 
 ## Mantenimiento y contribuciones
 

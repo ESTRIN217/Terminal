@@ -116,7 +116,7 @@
                     <p>Algunas notas del entorno:</p>
                     <ul>
                         <li>El servidor atiende las conexiones por el socket del display (<code>:0</code>); no requiere root ni TCP.</li>
-                        <li>Si el programa se queja de <code>libGL</code>, acelera por <em>llvmpipe</em> (software): ver <a href="limitaciones.html">Limitaciones conocidas</a>.</li>
+                        <li>Si el programa se queja de <code>libGL</code>, por defecto acelera por <em>llvmpipe</em> (software); con la opción <strong>«Aceleración GPU vía VirGL»</strong> activada en Ajustes, la sesión nueva va por la vía VirGL: ver <a href="limitaciones.html">Limitaciones conocidas</a>.</li>
                         <li>Las teclas extra (CTRL, ESC, etc.) de la pestaña X11 salen de la barra de la app; el teclado físico se manda al servidor tal cual.</li>
                         <li>El touch del servidor se pasa a las ventanas directamente; la emulación de gestos completa vive en la app standalone de termux-x11, no en esta pestaña.</li>
                     </ul>
