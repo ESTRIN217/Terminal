@@ -88,6 +88,17 @@
     (`applyVirglEnv(env, active)`, `applyVirglSessionEnv(map, prefActive,
     socketPresent)`); GREEN `./gradlew test`; APK recompilado, retest en el
     dispositivo pendiente.
+  - (2026-10-24) **Medición (Mali T606, Mali-G57):** con la vía activa y la
+    pestaña X11 como display, `glxgears` ≈ 140 FPS (sin límite por
+    vsincronía; sobre todo CPU+puente) y **`glmark2` Score 57**
+    (`GL_RENDERER: virgl (Mali-G57)`, `GL_VERSION: 4.0` del override);
+    fastfetch reporta «GPU: Mesa virgl (Mali-G57)». Quirks del stack
+    documentados en la wiki, no de la vía: la mesa stock no soporta
+    `GLX_EXT_swap_control`/`GLX_MESA_swap_control` en este display, y
+    `glxinfo` completo aborta con `X_GetImage` BadMatch en el display
+    rootless (síntoma conocido en los hilos de Termux con este stack; la
+    validación se hizo con `glxgears`/`glmark2`). Falta la prueba de
+    desactivación (env byte a byte + sin proceso/socket) para cerrar T7.
   - Hecho cuando: activar VirGL → el servidor (proceso nativo) está vivo y el
     socket está en el rootfs `/tmp`; dentro del guest, con la pestaña X11 de la
     014 abierta, una app con el env del invitado conecta al servidor; además se

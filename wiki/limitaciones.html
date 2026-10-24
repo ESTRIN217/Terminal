@@ -165,10 +165,15 @@
                             comprobarlo). En una sesión nueva:
                             <pre><code>env | grep -E 'GALLIUM_DRIVER|MESA_GL_VERSION_OVERRIDE|VTEST_SOCKET_NAME'</code></pre>
                             y <code>export DISPLAY=:0</code> para el display.</li>
-                        <li>Lanza una app gráfica y verifica el renderer con
-                            <code>glxinfo</code>: el proveedor debe ser el del fabricante
-                            <strong>no</strong> <code>llvmpipe</code>. Con la opción apagada, una
-                            sesión nueva debe volver byte a byte al entorno previo.</li>
+                        <li>Lanza una app gráfica y verifica el renderer:
+                            <code>glxgears</code> (del paquete <code>mesa-utils</code>)
+                            imprime <code>GL_RENDERER = virgl (…)</code> al arrancar y
+                            <code>glmark2</code> da un score comparable. Nota honesta de
+                            validación: <code>glxinfo</code> completo aborta en un
+                            <code>X_GetImage</code> BadMatch en displays rootless (quirk
+                            conocido del stack, mesa&nbsp;25.0.7 + servidor X11
+                            rootless), no un problema de la vía. Con la opción apagada,
+                            una sesión nueva debe volver byte a byte al entorno previo.</li>
                     </ol>
                     <h3>Estado de la validación de la vía VirGL (spec&nbsp;013)</h3>
                     <p>
@@ -184,10 +189,22 @@
                         ese nombre con el path crudo del invitado, y no la URI
                         <code>VIRGL_TEST_SERVER_URI</code> que solo entienden las
                         mesas del paquete de Termux). La
-                        <strong>medición final del renderer con <code>glxinfo</code></strong>
-                        sigue pendiente y aquí se anotará el resultado medido, sin
-                        promesas de rendimiento y sin marcar la ruta como «oficial»
-                        hasta entonces.
+                        <strong>medición de validación (2026-10-24, Mali T606,
+                        Mali-G57)</strong>: con la vía activa sobre la pestaña
+                        X11, <code>glxgears</code> ≈&nbsp;140&nbsp;FPS (sin límite
+                        por vsincronía, sobre todo CPU+puente) y
+                        <strong><code>glmark2&nbsp;2023.01 Score&nbsp;57</code></strong>
+                        (<code>GL_RENDERER: virgl (Mali-G57)</code>,
+                        <code>GL_VERSION: 4.0</code> con el override inyectado).
+                        Pegas documentadas del stack, no de la vía: la mesa
+                        stock no soporta <code>GLX_EXT_swap_control</code>/<code>
+                        GLX_MESA_swap_control</code> en este display (glmark2 lo
+                        advierte), y <code>glxinfo</code> completo aborta con un
+                        <code>X_GetImage</code> BadMatch en el display rootless
+                        (coincide con el síntoma conocido del stack en los hilos
+                        de Termux; la validación se hizo con <code>glxgears</code> y <code>glmark2</code>). Sin promesas de rendimiento y sin marcar
+                        la ruta como «oficial» para apps reales hasta más
+                        validación.
                     </p>
                     <h3>Alternativa sin pestaña X11: VNC dentro del invitado (secundaria)</h3>
                     <p>
