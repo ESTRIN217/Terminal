@@ -163,7 +163,7 @@
                             <strong>solo cuando el socket del servidor existe</strong>
                             (<code>/tmp/virgl_test</code>; haz <code>ls -l /tmp/virgl_test</code> para
                             comprobarlo). En una sesión nueva:
-                            <pre><code>env | grep -E 'GALLIUM_DRIVER|MESA_GL_VERSION_OVERRIDE|VIRGL_TEST_SERVER_URI'</code></pre>
+                            <pre><code>env | grep -E 'GALLIUM_DRIVER|MESA_GL_VERSION_OVERRIDE|VTEST_SOCKET_NAME'</code></pre>
                             y <code>export DISPLAY=:0</code> para el display.</li>
                         <li>Lanza una app gráfica y verifica el renderer con
                             <code>glxinfo</code>: el proveedor debe ser el del fabricante
@@ -177,11 +177,13 @@
                         implementada y en verde (<code>./gradlew test</code>). En el
                         dispositivo real (Mali T606) ya está confirmado que el servidor
                         nativo arranca dentro de la app y crea el socket
-                        <code>/tmp/virgl_test</code>; la URI del cliente quedó fijada
-                        tras la depuración: la mesa <code>virpipe</code> del rootfs
-                        (<code>25.0.7-2+deb13u1</code>) marca el socket como el path del
-                        invitado <code>unix:path=/tmp/virgl_test</code> — proot traduce
-                        esa conexión al socket del host —. La
+                        <code>/tmp/virgl_test</code>; el path del cliente quedó fijado
+                        tras la depuración contra la mesa stock del rootfs
+                        (<code>25.0.7-2+deb13u1</code>): la variable del invitado es
+                        <code>VTEST_SOCKET_NAME=/tmp/virgl_test</code> (mesa stock lee
+                        ese nombre con el path crudo del invitado, y no la URI
+                        <code>VIRGL_TEST_SERVER_URI</code> que solo entienden las
+                        mesas del paquete de Termux). La
                         <strong>medición final del renderer con <code>glxinfo</code></strong>
                         sigue pendiente y aquí se anotará el resultado medido, sin
                         promesas de rendimiento y sin marcar la ruta como «oficial»

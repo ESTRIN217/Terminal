@@ -46,13 +46,15 @@ public final class VirglLibrary {
     public static final String SOCKET_NAME = "virgl_test";
 
     /**
-     * GUEST unix socket path the mesa {@code virpipe} client dials (spec 013 T7,
-     * validated on the Mali T606 device). It must be the path AS SEEN INSIDE the
-     * proot rootfs (guest {@code /tmp}), NOT the host path of the rootfs tmp
-     * directory: proot translates the guest {@code connect()} to the host socket
-     * (same companion X pattern, spec 014), while a host path does not exist in
-     * the guest filesystem view and the client dies with
-     * {@code lost connection to rendering server on ... read -1 22}.
+     * GUEST unix socket path the stock mesa client dials (spec 013 T7,
+     * validated on the Mali T606 device). It must be the path AS SEEN INSIDE
+     * the proot rootfs (guest {@code /tmp}), NOT the host path of the rootfs
+     * tmp directory: the guest's {@code /tmp} IS the rootfs tmp directory, so
+     * the guest {@code connect()} reaches the same socket inode the app's
+     * server created there (no separate host path translation needed). A host
+     * path does not exist in the guest filesystem view and the client dies
+     * with {@code lost connection to rendering server} (or proceeds spinning
+     * on the never-connected fallback socket).
      */
     public static final String GUEST_SOCKET_PATH = "/tmp/" + SOCKET_NAME;
 
@@ -62,8 +64,16 @@ public final class VirglLibrary {
     public static final String GALLIUM_DRIVER_VIRPIPE = "virpipe";
     /** Guest environment variable: mesa override for the reported GL version. */
     public static final String ENV_MESA_GL_VERSION_OVERRIDE = "MESA_GL_VERSION_OVERRIDE";
-    /** Guest environment variable: URI of the vtest server (modern mesa, &ge; 20.2). */
-    public static final String ENV_TEST_SERVER_URI = "VIRGL_TEST_SERVER_URI";
+
+    /**
+     * Guest environment variable: raw vtest socket path read by the stock mesa
+     * client (validated device-side in spec 013 T7 against Debian mesa
+     * 25.0.7, and it is the stock upstream variable, not the Termux-package
+     * legend {@code VIRGL_TEST_SERVER_URI}, which stock mesa ignores
+     * entirely). Plain guest filesystem path, no {@code unix:path=} wrapper:
+     * the client {@code connect()} dials it literally.
+     */
+    public static final String ENV_VTEST_SOCKET_NAME = "VTEST_SOCKET_NAME";
 
     /** Server argument keeping the process under the app's lifecycle (RF-2/RF-4). */
     private static final String SERVER_ARG_NO_FORK = "--no-fork";
@@ -148,7 +158,7 @@ public final class VirglLibrary {
             return;
         env.put(ENV_GALLIUM_DRIVER, GALLIUM_DRIVER_VIRPIPE);
         env.put(ENV_MESA_GL_VERSION_OVERRIDE, GL_VERSION_OVERRIDE);
-        env.put(ENV_TEST_SERVER_URI, "unix:path=" + GUEST_SOCKET_PATH);
+        env.put(ENV_VTEST_SOCKET_NAME, GUEST_SOCKET_PATH);
     }
 
     /**

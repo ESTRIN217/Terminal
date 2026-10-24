@@ -85,14 +85,17 @@ public class VirglLibraryTest {
 
         Assert.assertEquals("virpipe", env.get("GALLIUM_DRIVER"));
         Assert.assertEquals(VirglLibrary.GL_VERSION_OVERRIDE, env.get("MESA_GL_VERSION_OVERRIDE"));
-        // Spec 013 T7 (device validation on the Mali T606): the mesa virpipe
-        // client must dial the GUEST unix path (/tmp inside the proot rootfs);
-        // proot translates the guest connect() to the host socket. The HOST
-        // path ("unix:path=/data/rootfs/tmp/virgl_test") does not exist inside
-        // the rootfs view and the client dies with "lost connection to
-        // rendering server".
-        Assert.assertEquals("unix:path=" + VirglLibrary.GUEST_SOCKET_PATH,
-            env.get("VIRGL_TEST_SERVER_URI"));
+        // Spec 013 T7 (device validation on the Mali T606): the stock Debian
+        // mesa (25.0.7, and the stock client of other versions too) reads the
+        // vtest socket path from the plain env VTEST_SOCKET_NAME with the RAW
+        // guest path (no "unix:path=" URI wrapper and no URI encoding: its
+        // connect() would dial "/unix:path=..." literally). The URI variable
+        // VIRGL_TEST_SERVER_URI is a Termux-wiki legend for patched mesa
+        // builds only; stock mesa ignores it entirely and then reads an
+        // UNCONNECTED socket after the failed connect (read -1 22).
+        Assert.assertEquals("/tmp/" + VirglLibrary.SOCKET_NAME,
+            env.get("VTEST_SOCKET_NAME"));
+        Assert.assertFalse(env.containsKey("VIRGL_TEST_SERVER_URI"));
         // Existing entries are preserved
         Assert.assertEquals("/usr/bin", env.get("PATH"));
     }
@@ -107,13 +110,14 @@ public class VirglLibraryTest {
         VirglLibrary.applyVirglEnv(env, false);
 
         Assert.assertEquals(expected, env);
-        Assert.assertFalse(env.containsKey("VIRGL_TEST_SERVER_URI"));
+        Assert.assertFalse(env.containsKey("VTEST_SOCKET_NAME"));
     }
 
     @Test
-    public void testApplyVirglEnv_uriIsGuestPath_sameUriForAnyHostTmp() {
-        // The client URI is the constant GUEST socket path (proot translates the
-        // guest connect()); the host rootfs tmp directory never leaks into it.
+    public void testApplyVirglEnv_socketNameIsGuestPath_sameForAnyHostTmp() {
+        // The client path is the constant GUEST socket path (the guest's /tmp
+        // is the rootfs tmp directory, shared with the native server host
+        // side); the host rootfs tmp directory never leaks into it.
         Map<String, String> envOne = new HashMap<>();
         Map<String, String> envTwo = new HashMap<>();
 

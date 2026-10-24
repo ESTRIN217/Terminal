@@ -11,25 +11,30 @@
   `decideServerAction`, `shouldKeepWaiting`, `parseSolutionName`), `Solution.VIRGL`,
   env virgl en `ProotShellEnvironment` vía existencia del socket en
   `DEBIAN_ROOTFS_TMP_DIR_PATH`, guard llvmpipe extendido a VirGL,
-  `VirglServerManager` (assets→bin, socket rancio, READY window, stop), hooks
-  en `TermuxService`, panel con switch VirGL + strings ×3, y **T6: binario
-  virgl_test_server arm64 compilado por `scripts/build-virglrenderer.sh`**
-  (pins SHA-256, patches `scripts/virgl-patches/`, shims `scripts/ndk-shims/`)
-  embebido en assets y verificado con `unzip -l`. **T8 hecha (2026-10-23):**
-  wiki limitaciones (receta X11 + excluyente + estado de validación, VNC
-  secundaria, Zink/OpenCL), x11.html remite a VirGL, README tercera vía.
+  `VirglServerManager` (assets→bin, socket rancio, READY window, stop),
+  hooks en `TermuxService`, panel con switch VirGL + strings ×3, y **T6:
+  binario virgl_test_server arm64 compilado por
+  `scripts/build-virglrenderer.sh`** (pins SHA-256, patches
+  `scripts/virgl-patches/`, shims `scripts/ndk-shims/`) embebido en assets
+  y verificado con `unzip -l`. **T8 hecha (2026-10-23):** wiki limitaciones
+  (receta X11 + excluyente + estado de validación, VNC secundaria,
+  Zink/OpenCL), x11.html remite a VirGL, README tercera vía.
   **T7 en curso (2026-10-24):** servidor nativo OK en dispositivo (SELinux
-  `enforcing` ejecuta el binario; socket en ~120 ms). Diagnosticado y fixeado
-  Rojo→Verde el fallo «lost connection to rendering server»: el URI del
-  cliente iba con path HOST (no visible desde el guest); fijado URI GUEST
-  constante `unix:path=/tmp/virgl_test` (proot traduce el `connect()`, patrón
-  companion X de 014); firmas simplificadas (`applyVirglEnv(env, active)`,
-  `applyVirglSessionEnv(map, prefActive, socketPresent)`); `./gradlew test`
-  verdes y APK recompilado. Falta: retest del checklist en el dispositivo
-  (activar → pestaña X11 → sesión nueva → `glxinfo` ≠ llvmpipe → desactivar →
-  env byte a byte) y anotar la medición del renderer en la wiki. Server args
-  fijados: `--no-fork --multi-clients --use-egl-surfaceless --use-gles
-  --socket-path <rootfs>/tmp/virgl_test`.
+  `enforcing` ejecuta el binario; socket en ~120 ms). **Hallazgo clave:** la
+  mesa stock (Debian 25.0.7) ignora `VIRGL_TEST_SERVER_URI` (leyenda de
+  wikis, válida solo para el paquete mesa parcheado de Termux) y lee el
+  socket de **`VTEST_SOCKET_NAME`** con path guest crudo, sin `unix:path=`;
+  su `connect()` fallido no aborta → «lost connection … read -1 22» leyendo
+  de un fd no conectado. Fix Rojo→Verde: `applyVirglEnv` inyecta
+  `VTEST_SOCKET_NAME=/tmp/virgl_test` (constantes `ENV_VTEST_SOCKET_NAME`,
+  `GUEST_SOCKET_PATH`), ya no la URI; server stdout a logcat INFO + vigía de
+  muerte (`pumpOutput`); firmas simplificadas `applyVirglEnv(env, active)` /
+  `applyVirglSessionEnv(map, prefActive, socketPresent)`; test verdes; APK
+  recompilado (08:21). Falta: retest del checklist en el dispositivo
+  (activar → pestaña X11 → sesión nueva → `echo $VTEST_SOCKET_NAME` →
+  `glxinfo` ≠ llvmpipe → desactivar → env byte a byte) y anotar la medición
+  del renderer en la wiki. Server args fijados: `--no-fork --multi-clients
+  --use-egl-surfaceless --use-gles --socket-path <rootfs>/tmp/virgl_test`.
   Limitación sin GBM registrada: sin import de dmabuf/EGL-image.
 
 ## Spec 014 — decisiones y estado

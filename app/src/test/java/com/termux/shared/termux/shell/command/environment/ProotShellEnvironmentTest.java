@@ -393,11 +393,12 @@ public class ProotShellEnvironmentTest {
 
         Assert.assertEquals("virpipe", map.get("GALLIUM_DRIVER"));
         Assert.assertEquals(VirglLibrary.GL_VERSION_OVERRIDE, map.get("MESA_GL_VERSION_OVERRIDE"));
-        // Spec 013 T7 (device, Mali T606): the client URI must be the GUEST path
-        // (/tmp inside the proot rootfs); proot translates the guest connect()
-        // to the host socket. The host path leaks outside the rootfs view.
-        Assert.assertEquals("unix:path=" + VirglLibrary.GUEST_SOCKET_PATH,
-            map.get("VIRGL_TEST_SERVER_URI"));
+        // Spec 013 T7 (device, Mali T606): stock mesa reads VTEST_SOCKET_NAME
+        // with the RAW guest path (no URI wrapper); VIRGL_TEST_SERVER_URI is
+        // ignored by stock mesa.
+        Assert.assertEquals("/tmp/" + VirglLibrary.SOCKET_NAME,
+            map.get("VTEST_SOCKET_NAME"));
+        Assert.assertFalse(map.containsKey("VIRGL_TEST_SERVER_URI"));
         Assert.assertEquals(4, map.size());
     }
 

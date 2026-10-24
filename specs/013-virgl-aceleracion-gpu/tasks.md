@@ -70,17 +70,24 @@
   - (2026-10-24) Progreso: el servidor nativo arranca bien en el dispositivo
     (SELinux `enforcing` concede el `execute`; socket creado en ~120 ms; ruido
     no bloqueante: `avc: denied { search }` del directorio `tests` de
-    virglrenderer). Primer arranque del servidor OK, pero el primer intento con
-    `glxinfo`.abortó con «lost connection to rendering server on 8 read -1 22»:
-    el env inyectaba el URI con el path HOST (`<rootfs>/tmp/virgl_test`), que no
-    existe en la vista del guest. Fix aplicado con tests rojo→verde
-    (`VirglLibraryTest`, `ProotShellEnvironmentTest`): el URI del cliente es el
-    path GUEST constante «`unix:path=/tmp/virgl_test`» (proot traduce el
-    `connect()` del guest al socket del host, patrón companion X de 014); el
-    lado servidor sigue pasando el path host a `--socket-path`. Firma
-    simplificada (`applyVirglEnv(env, active)`, `applyVirglSessionEnv(map,
-    prefActive, socketPresent)`); GREEN `./gradlew test`; APK recompilado y
-    pendiente de retest en el dispositivo.
+    virglrenderer). Primer `glxinfo` abortó con «lost connection … read -1 22».
+    Diagnóstico original (URI host vs guest) descartado al seguir el síntoma
+    con el URI guest. **Causa raíz real (hallazgo de T7):** la mesa stock
+    (Debian `25.0.7`, y también master) ignora `VIRGL_TEST_SERVER_URI` —
+    leyenda de las wikis, propia del paquete mesa parcheado de Termux — y lee
+    el path del socket de **`VTEST_SOCKET_NAME`** (path guest crudo, sin
+    `unix:path=`); con la variable ausente el cliente usa el default
+    `/tmp/.virgl_test` y, como su `connect()` fallido no aborta, procede a
+    leer de un socket no conectado → `read -1 22` (idéntico con URI host y
+    guest). Fix aplicado con tests rojo→verde (`VirglLibraryTest` y
+    `ProotShellEnvironmentTest`): `applyVirglEnv` inyecta
+    `VTEST_SOCKET_NAME=/tmp/virgl_test` y deja de inyectar la URI; el lado
+    servidor pasa el path host a `--socket-path`. Apoyo de diagnóstico: salida
+    del server a log nivel INFO + vigía de muerte con código de salida
+    (`VirglServerManager.pumpOutput`). Firma simplificada
+    (`applyVirglEnv(env, active)`, `applyVirglSessionEnv(map, prefActive,
+    socketPresent)`); GREEN `./gradlew test`; APK recompilado, retest en el
+    dispositivo pendiente.
   - Hecho cuando: activar VirGL → el servidor (proceso nativo) está vivo y el
     socket está en el rootfs `/tmp`; dentro del guest, con la pestaña X11 de la
     014 abierta, una app con el env del invitado conecta al servidor; además se
