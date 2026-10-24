@@ -1,12 +1,18 @@
 # MEMORY.md — Terminal
 ## Estado actual
-- Rama `3.0`. **Spec 013 (VirGL aceleración GPU) COMPLETADA y verificada en
-  dispositivo (2026-10-24, T1–T8):** render validado con
+- Rama `3.0`. **Spec 015 (DISPLAY pre-exportado en el guest) COMPLETADA
+  (2026-10-24):** `ProotShellEnvironment` inyecta `DISPLAY=:0`
+  (`X11_DEFAULT_DISPLAY`) sin condición, para no escribir `export DISPLAY=:0`
+  por sesión; docs del wiki ajustadas (export pasa a override). Pendiente de
+  validación fina en dispositivo (no bloquea).
+- **Spec 014** COMPLETADA y verificada en dispositivo (T1–T13 + enmiendas
+  A/B). Pendiente de verificación fina (no bloquea): touch/HW keys/extra
+  keys en más apps.
+- **Spec 013 (VirGL aceleración GPU)** COMPLETADA y verificada en
+  dispositivo (2026-10-24, T1–T8): render validado con
   `glxgears` ≈ 140 FPS y `glmark2` Score 57, renderer `virgl (Mali-G57)`;
   desactivación reversible (env byte a byte, sin proceso ni socket).
-  **Spec 014** COMPLETADA y verificada en dispositivo (T1–T13 + enmiendas
-  A/B). Pendiente de verificación fina (no bloquea): touch/HW keys/extra
-  keys en más apps. Cerradas antes: 010–012, 001–009; 2.1.0 publicada.
+  Cerradas antes: 010–012, 001–009; 2.1.0 publicada.
 - **Spec 013 COMPLETADA (2026-10-23/24): `specs/013-virgl-aceleracion-gpu/`**
   T1–T8 cerradas. Implementación: `VirglLibrary` puro (gate exclusión
   KGSL/VirGL, `applyVirglEnv`, args/env del servidor, máquina de estados del
@@ -45,6 +51,9 @@
   Tests `./gradlew test`; ahí: `--tests 'com.termux.terminal.x11.*'`.
 
 ## Learnings vigentes
+- Spec 015: el entorno guest va sin gates (precedente kitty branding) cuando la
+  variable es inofensiva sin el servicio: el guard VirGL (socket) quedó como
+  excepción por el coste de driver, no por prudencia de display.
 - lorie/`activity.cpp` referenciaba símbolos Java retirados (`MainActivity`) →
   JNI abort = crash al abrir pestaña. Fix: hooks vía `LorieView.Client`;
   regla: al quitar símbolos Java de lorie, grep del espejo en `cpp/`.

@@ -109,10 +109,14 @@
 
                     <h2>Usar las aplicaciones gráficas (caso Debian/proot)</h2>
                     <p>
-                        Con el servidor corriendo, entra en la sesión Debian de la app y exporta el
-                        display antes de lanzar cada programa gráfico:
+                        Las sesiones Debian ya vienen con el display exportado
+                        (<code>DISPLAY=:0</code>, inyectado por la app de forma
+                        predeterminada): con el servidor corriendo, entra en la sesión
+                        Debian y lanza el programa gráfico sin exports previos. Si usas
+                        otro display (p. ej. <code>:1</code> con un servidor etiquetado),
+                        sobrescríbelo en la sesión:
                     </p>
-                    <pre><code>export DISPLAY=:0</code></pre>
+                    <pre><code>export DISPLAY=:1</code></pre>
                     <p>Algunas notas del entorno:</p>
                     <ul>
                         <li>El servidor atiende las conexiones por el socket del display (<code>:0</code>); no requiere root ni TCP.</li>

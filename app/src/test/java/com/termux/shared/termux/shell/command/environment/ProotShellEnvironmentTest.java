@@ -304,6 +304,8 @@ public class ProotShellEnvironmentTest {
         Assert.assertEquals("C.UTF-8", env.get("LANG"));
         Assert.assertEquals("C.UTF-8", env.get("LC_ALL"));
         Assert.assertEquals("noninteractive", env.get("DEBIAN_FRONTEND"));
+        // Spec 015 (RF-01): the X11 display ships pre-exported.
+        Assert.assertEquals(TermuxConstants.TERMUX_X11.X11_DEFAULT_DISPLAY, env.get("DISPLAY"));
         Assert.assertFalse(env.containsKey("LD_PRELOAD"));
         Assert.assertFalse(env.containsKey("LD_LIBRARY_PATH"));
     }
@@ -450,6 +452,26 @@ public class ProotShellEnvironmentTest {
         HashMap<String, String> env = new ProotShellEnvironment().getEnvironment(null, false);
         Assert.assertEquals("1", env.get("KITTY_WINDOW_ID"));
         Assert.assertEquals("kitty", env.get("TERM_PROGRAM"));
+    }
+
+    // ---- spec 015: X11 display pre-exported for the guest (RF-01, NFR-01) ----
+
+    @Test
+    public void testGetEnvironment_displayDefaultsToZero() {
+        // Guest sessions ship with DISPLAY = the companion default display
+        // (spec 014 constant) so GUI apps work without a manual export.
+        HashMap<String, String> env = new ProotShellEnvironment().getEnvironment(null, false);
+        Assert.assertEquals(TermuxConstants.TERMUX_X11.X11_DEFAULT_DISPLAY,
+            env.get("DISPLAY"));
+    }
+
+    @Test
+    public void testGetEnvironment_displayIsTheOnlyNewKey() {
+        // NFR-03: the injection must not add anything besides DISPLAY.
+        HashMap<String, String> env = new ProotShellEnvironment().getEnvironment(null, false);
+        HashMap<String, String> before = new HashMap<>(env);
+        before.put("DISPLAY", TermuxConstants.TERMUX_X11.X11_DEFAULT_DISPLAY);
+        Assert.assertEquals(before, env);
     }
 
     // ---- spec 012: llvmpipe multithread guest environment (RF-1, RF-2, RF-4) ----

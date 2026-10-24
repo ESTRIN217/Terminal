@@ -164,7 +164,9 @@
                             (<code>/tmp/virgl_test</code>; haz <code>ls -l /tmp/virgl_test</code> para
                             comprobarlo). En una sesión nueva:
                             <pre><code>env | grep -E 'GALLIUM_DRIVER|MESA_GL_VERSION_OVERRIDE|VTEST_SOCKET_NAME'</code></pre>
-                            y <code>export DISPLAY=:0</code> para el display.</li>
+                            El display también viene exportado de fábrica
+                            (<code>DISPLAY=:0</code>, spec&nbsp;015), así que no hace
+                            falta ningún export manual.</li>
                         <li>Lanza una app gráfica y verifica el renderer:
                             <code>glxgears</code> (del paquete <code>mesa-utils</code>)
                             imprime <code>GL_RENDERER = virgl (…)</code> al arrancar y

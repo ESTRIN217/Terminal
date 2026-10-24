@@ -7,6 +7,16 @@ Todos los cambios relevantes de Terminal. El formato sigue
 Este proyecto es un fork independiente de [termux/termux-app](https://github.com/termux/termux-app)
 y no está afiliado al equipo de Termux.
 
+## [Sin publicar]
+
+### Añadido
+
+#### Terminal
+- **`DISPLAY` pre-exportado en el guest Debian** (spec 015): todas las sesiones proot
+  arrancan con `DISPLAY=:0` (el display del companion X11), de forma que las apps
+  gráficas no requieren `export DISPLAY=:0` manual en cada sesión; un export
+  manual posterior (p. ej. `DISPLAY=:1`) lo sobrescribe como antes.
+
 ## [2.1.0] — 2026-10-21
 
 ### Añadido

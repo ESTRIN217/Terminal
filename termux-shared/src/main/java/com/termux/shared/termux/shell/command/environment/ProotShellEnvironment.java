@@ -51,6 +51,8 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
     public static final String ENV_LANGUAGE = "LANGUAGE";
     public static final String ENV_DEBIAN_FRONTEND = "DEBIAN_FRONTEND";
     public static final String ENV_LD_PRELOAD = "LD_PRELOAD";
+    /** Guest X11 display used by GUI apps against the X11 companion (spec 014/015). */
+    public static final String ENV_DISPLAY = "DISPLAY";
     /** Guest IANA timezone (from the host device settings). */
     public static final String ENV_TZ = "TZ";
 
@@ -588,6 +590,14 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
         // Kitty Graphics Protocol image adapter without requiring manual env setup.
         environment.put(ENV_KITTY_WINDOW_ID, "1");
         environment.put(ENV_TERM_PROGRAM, "kitty");
+
+        // Spec 015 (RF-01): ship the X11 display pre-exported so GUI apps work
+        // against the X11 companion without a manual `export DISPLAY=:0` per
+        // session. Always present: an absent server fails GUI apps exactly like
+        // the manual export does, while plain CLI sessions are unaffected
+        // (RF-02 keeps a per-session `export DISPLAY=:1` override working
+        // because this only seeds the initial process environment).
+        environment.put(ENV_DISPLAY, TermuxConstants.TERMUX_X11.X11_DEFAULT_DISPLAY);
 
         // Spec 011 (RF-4): while gpu_solution=ADRENO_KGSL is persisted, the guest Mesa
         // loader is forced to the KGSL gallium driver (Adreno acceleration). The pref is
