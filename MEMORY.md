@@ -5,8 +5,15 @@
   display X11 en pestaña, apps gráficas Debian funcionando. Pendiente de
   verificación fina (no bloquea): touch/HW keys/extra keys en más apps, GPU.
   Cerradas antes: 010–012, 001–009; 2.1.0 publicada.
-- **Spec 013 (VirGL) borrador en `specs/013-virgl-aceleracion-gpu/`:** pendiente
-  aprobación → plan → tareas.
+- **Spec 013 aprobada (2026-10-23): `specs/013-virgl-aceleracion-gpu/`** con
+  spec+plan+tareas T1–T8, PENDIENTE DE IMPLEMENTAR. Solo VirGL (la vía sin root
+  que beneficia a Mali): binario del servidor compilado NDK como proot y
+  embebido, socket vtest en el TMPDIR del rootfs (patrón companion X de 014),
+  env vía virpipe en el invitado, ciclo de vida ligado a sesiones (patrón
+  sampler 010), `gpu_solution` ampliado a NONE|ADRENO_KGSL|VIRGL (excluyentes,
+  gate puro), panel Estado GPU con tercera vía; doc: receta sobre la pestaña
+  X11 de la 014 + VNC como alternativa secundaria. Placeholders a cerrar:
+  tag/commit de virglrenderer (T6, nada sin pin) y path/URI del socket (T7).
 
 ## Spec 014 — decisiones y estado
 - Submódulo `termux-x11/` (pin `c82664b0`); parches xserver **sin commit**
