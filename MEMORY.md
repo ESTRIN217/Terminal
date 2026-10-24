@@ -6,15 +6,20 @@
   verificación fina (no bloquea): touch/HW keys/extra keys en más apps, GPU.
   Cerradas antes: 010–012, 001–009; 2.1.0 publicada.
 - **Spec 013 aprobada (2026-10-23): `specs/013-virgl-aceleracion-gpu/`** con
-  spec+plan+tareas T1–T8. **T1–T5 implementadas (2026-10-23):** `VirglLibrary`
-  puro (gate exclusión KGSL/VirGL, `applyVirglEnv`, args/TMPDIR del servidor,
+  spec+plan+tareas T1–T8. **T1–T6 implementadas (2026-10-23):** `VirglLibrary`
+  puro (gate exclusión KGSL/VirGL, `applyVirglEnv`, args/env del servidor,
   `decideServerAction`, `shouldKeepWaiting`, `parseSolutionName`), `Solution.VIRGL`,
-  env virgin en `ProotShellEnvironment` vía existencia del socket en el
+  env virgl en `ProotShellEnvironment` vía existencia del socket en
   `DEBIAN_ROOTFS_TMP_DIR_PATH`, guard llvmpipe extendido a VirGL,
-  `VirglServerManager` (assets→bin, socket rancio, READY window, stop)
-  hooks en `TermuxService` (start/exit/teardown), panel con switch VirGL +
-  strings ×3 (honestidad: Mali ya muestra la vía VirGL). GREEN
-  `./gradlew test`. Falta: T6 pipeline nativo, T7 device, T8 wiki/README.
+  `VirglServerManager` (assets→bin, socket rancio, READY window, stop), hooks
+  en `TermuxService`, panel con switch VirGL + strings ×3, y **T6: binario
+  virgl_test_server arm64 compilado por `scripts/build-virglrenderer.sh`**
+  (pins SHA-256, patches `scripts/virgl-patches/`, shims `scripts/ndk-shims/`)
+  embebido en assets y verificado con `unzip -l`. GREEN `./gradlew test`.
+  Falta: T7 device (Mali T606; URI del guest por confirmar contra mesa
+  25.0.7) y T8 wiki/README. Server args fijados: `--no-fork --multi-clients
+  --use-egl-surfaceless --use-gles --socket-path <rootfs>/tmp/virgl_test`.
+  Limitación sin GBM registrada: sin import de dmabuf/EGL-image.
 
 ## Spec 014 — decisiones y estado
 - Submódulo `termux-x11/` (pin `c82664b0`); parches xserver **sin commit**
@@ -62,6 +67,13 @@
   `xserver/include/os.h` (`#include <malloc.h>` antes del rename reallocarray).
 - `BUILD SUCCESSFUL` no garantiza APK utilizable: inspeccionar con unzip
   (libXlorie.so, manifests fusionados en intermediates — aapt2 no corre en aarch64).
+- Pipeline VirGL (spec 013, `scripts/build-virglrenderer.sh`): GitLab
+  freedesktop anon archives redirige a sign-in → epoxy va vía mirrors GitHub
+  (kraj/anholt) con SHA-256 igual; el default del socket vtest es `/tmp/.virgl_test`
+  ABSOLUTO (TMPDIR no lo mueve) → `--socket-path` explícito siempre; virglrenderer
+  exige gbm para EGL (no existe sin root en Android) → parches 001/002 +
+  shims `scripts/ndk-shims/` (log/log.h y cutils/properties.h no vienen en el
+  NDK); deps del binario solo libc/libm/libdl/liblog.
 - Glifos multicolor Compose requieren `tint = Color.Unspecified`.
 - Semánticas parecidas no se unifican sin spec; cuido tests en rojo primero.
 - Conventional Commits capitalizados (`Added`, `Changed`, `Fixed`…); semver.
