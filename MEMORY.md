@@ -1,9 +1,10 @@
 # MEMORY.md — Terminal
 ## Estado actual
-- Rama `3.0`. **Spec 014 (termux-x11 complemento): T1–T12 + enmienda B
-  (T13 spawn lado app) implementadas.** Pendiente: probar en dispositivo el
-  botón «Iniciar servidor» y cerrar la spec. Cerradas antes: 010–012, 001–009;
-  2.1.0 publicada.
+- Rama `3.0`. **Spec 014 (termux-x11 complemento) COMPLETADA y verificada en
+  dispositivo** (T1–T13 + enmiendas A/B): spawn del companion desde la app,
+  display X11 en pestaña, apps gráficas Debian funcionando. Pendiente de
+  verificación fina (no bloquea): touch/HW keys/extra keys en más apps, GPU.
+  Cerradas antes: 010–012, 001–009; 2.1.0 publicada.
 - **Spec 013 (VirGL) borrador en `specs/013-virgl-aceleracion-gpu/`:** pendiente
   aprobación → plan → tareas.
 
@@ -35,26 +36,12 @@
 - lorie/`activity.cpp` referenciaba símbolos Java retirados (`MainActivity`) →
   JNI abort = crash al abrir pestaña. Fix: hooks vía `LorieView.Client`;
   regla: al quitar símbolos Java de lorie, grep del espejo en `cpp/`.
-- Ejecutar `app_process` DENTRO del proot guest no funciona (probado en
-  dispositivo, Unisoc/A12): 1) sin `/system` y `/apex` → exec ENOENT;
-  2) con ellos, el linker APEX exige `/linkerconfig/ld.config.txt`, pero el
-  uid de app no puede ni leerlo ni enlazarlo (proot: can't sanitize
-  binding; Permission denied) → CANNOT LINK (libnativeloader). Conclusión:
-  companion se inicia desde la app (ProceBuilder + CLASSPATH sourceDir,
-  `X11CompanionSpawner`, botón primario en overlay; guest wrapper/one-liner
-  quedan como avanzado). Spawn probado: ART arranca; el crash posterior era
-  dlopen de `base.apk!/lib/…` — con packaging legacy (`useLegacyPackaging
-  true`, extractNativeLibs por F-Droid upstream) la lib va comprimida en el
-  APK. Fix en submódulo `CmdEntryPoint.initEntryPoint`: probar
-  `nativeLibraryDir/libXlorie.so` (extraída) antes de la ruta APK. Segunda
-  vía: `createContext()` es el SYSTEM context (ApplicationInfo del framework)
-  → el hijo no ve su propio nativeLibraryDir; la app inyecta
-  `TERMUX_X11_LIBDIR` (env, código `TermuxX11GuestLoaderLibrary.ENV_X11_LIBDIR`)
-  y el hijo lo lee primero. Tercera vía: el native exige `TMPDIR` (aborta
-  sin él) y crea el socket X en `$TMPDIR/.X11-unix/X*`; el guest proot
-  conecta por `<rootfs>/tmp` → el spawner inyecta `TMPDIR=<rootfs>/tmp`
-  (fallback files/tmp), que además activa la heurística chroot de
-  `XKB_CONFIG_ROOT` (dirname(TMPDIR)/usr/share/X11/xkb).
+- Ejecutar `app_process` DENTRO del proot guest no funciona (probado Unisoc/A12:
+  exec→ENOENT sin `/apex`; con `/apex`, CANNOT LINK sin `/linkerconfig`; y el
+  uid de app no puede leer/enlazar `/linkerconfig`). Conclusión: companion se
+  inicia desde la app (`X11CompanionSpawner`, ProcessBuilder + CLASSPATH
+  sourceDir + `TERMUX_X11_LIBDIR` env). Sockets y keymaps: `TMPDIR=<rootfs>/tmp`
+  (`buildCompanionEnv`), que además activa la heurística chroot de XKB.
 - Loader guest (enmienda A RF-8, replicando el deb upstream): env
   `TERMUX_X11_APK` (sourceDir per-sesión) + wrapper idempotente
   `files/debian/usr/bin/termux-x11` escrito en `TermuxService.onStartCommand`;

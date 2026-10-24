@@ -1,6 +1,6 @@
 # Spec 014 — Complemento termux:x11 como librería y pestañas con acceso desde el drawer
 
-Estado: aprobada
+Estado: completada (T1–T13 + enmiendas A/B; verificada en dispositivo: spawn del companion, carga de lib nativa desde nativeLibraryDir, socket X en TMPDIR del rootfs, display en pestaña con apps gráficas)
 
 ## Contexto y objetivo
 

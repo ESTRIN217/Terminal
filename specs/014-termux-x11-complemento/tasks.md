@@ -63,7 +63,7 @@ la configuración del grafo, y el build completo con `libXlorie.so` se hace en T
   Página wiki con instrucciones del companion (comando real y casos proot),
   `MEMORY.md` actualizado con estado de la spec y aprendizajes (build nativo largo).
   - Hecho cuando: página wiki enlazada y memoria ≤ ~50 líneas.
-- [ ] **T11. Loader guest (enmienda A, RF-8).**
+- [x] **T11. Loader guest (enmienda A, RF-8).**
   `ProotShellEnvironment` inyecta `TERMUX_X11_APK` (sourceDir de la app, null-safe);
   `TermuxX11GuestLoaderLibrary` (Java, `com.termux.shared.termux.x11`) con partes
   puras (`buildWrapperScript`, `applyApkPathEnv`) y `ensureWrapperScript(context)`
@@ -72,7 +72,7 @@ la configuración del grafo, y el build completo con `libXlorie.so` se hace en T
   escritura en `TermuxService.onStartCommand`. Tests JUnit en termux-shared
   en rojo → verde.
   - Hecho cuando: tests de librería en verde y el script existe tras abrir la app.
-- [ ] **T12. Comando primario del overlay (enmienda A, RF-8).**
+- [x] **T12. Comando primario del overlay (enmienda A, RF-8).**
   `X11CompanionCommand.guestCommand(display, tag)` → `termux-x11 :0 [-tag t]`;
   `chooseCommand` decide primario (wrapper presente) vs one-liner fallback
   (rutas absolutas); `X11TabController.companionCommand` usa
@@ -80,7 +80,7 @@ la configuración del grafo, y el build completo con `libXlorie.so` se hace en T
   `X11CompanionCommandTest` en rojo → verde. Wiki `x11.html` actualizada
   (primario `termux-x11`, one-liner como avanzado).
   - Hecho cuando: `./gradlew test` verde, `assembleDebug` OK y wiki revisada.
-- [ ] **T13. Spawn lado app del companion (enmienda B, RF-8).**
+- [x] **T13. Spawn lado app del companion (enmienda B, RF-8).**
   `X11CompanionCommand.buildSpawnArgs(display, tag)` (puro, argv para
   `app_process`, tests primero); `X11CompanionSpawner.spawn(context, display,
   tag)` (ProcessBuilder con `CLASSPATH = sourceDir`, argumentos igual al
