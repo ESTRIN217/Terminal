@@ -202,9 +202,12 @@
                         advierte), y <code>glxinfo</code> completo aborta con un
                         <code>X_GetImage</code> BadMatch en el display rootless
                         (coincide con el síntoma conocido del stack en los hilos
-                        de Termux; la validación se hizo con <code>glxgears</code> y <code>glmark2</code>). Sin promesas de rendimiento y sin marcar
-                        la ruta como «oficial» para apps reales hasta más
-                        validación.
+                        de Termux; la validación se hizo con <code>glxgears</code> y
+                        <code>glmark2</code>). El ciclo completo del interruptor está
+                        validado en el dispositivo: activar → render →
+                        desactivar, con el entorno del invitado volviendo byte
+                        a byte al previo y sin proceso ni socket residuales.
+                        Sin promesas de rendimiento en apps reales.
                     </p>
                     <h3>Alternativa sin pestaña X11: VNC dentro del invitado (secundaria)</h3>
                     <p>

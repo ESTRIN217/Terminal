@@ -1,41 +1,24 @@
 # MEMORY.md — Terminal
 ## Estado actual
-- Rama `3.0`. **Spec 014 (termux-x11 complemento) COMPLETADA y verificada en
-  dispositivo** (T1–T13 + enmiendas A/B): spawn del companion desde la app,
-  display X11 en pestaña, apps gráficas Debian funcionando. Pendiente de
-  verificación fina (no bloquea): touch/HW keys/extra keys en más apps, GPU.
-  Cerradas antes: 010–012, 001–009; 2.1.0 publicada.
-- **Spec 013 aprobada (2026-10-23): `specs/013-virgl-aceleracion-gpu/`** con
-  spec+plan+tareas T1–T8. **T1–T6 implementadas (2026-10-23):** `VirglLibrary`
-  puro (gate exclusión KGSL/VirGL, `applyVirglEnv`, args/env del servidor,
-  `decideServerAction`, `shouldKeepWaiting`, `parseSolutionName`), `Solution.VIRGL`,
-  env virgl en `ProotShellEnvironment` vía existencia del socket en
-  `DEBIAN_ROOTFS_TMP_DIR_PATH`, guard llvmpipe extendido a VirGL,
-  `VirglServerManager` (assets→bin, socket rancio, READY window, stop),
-  hooks en `TermuxService`, panel con switch VirGL + strings ×3, y **T6:
-  binario virgl_test_server arm64 compilado por
-  `scripts/build-virglrenderer.sh`** (pins SHA-256, patches
-  `scripts/virgl-patches/`, shims `scripts/ndk-shims/`) embebido en assets
-  y verificado con `unzip -l`. **T8 hecha (2026-10-23):** wiki limitaciones
-  (receta X11 + excluyente + estado de validación, VNC secundaria,
-  Zink/OpenCL), x11.html remite a VirGL, README tercera vía.
-  **T7 en curso (2026-10-24):** servidor nativo OK en dispositivo (SELinux
-  `enforcing` ejecuta el binario; socket en ~120 ms). **Hallazgo clave:** la
-  mesa stock (Debian 25.0.7) ignora `VIRGL_TEST_SERVER_URI` (leyenda de
-  wikis, válida solo para el paquete mesa parcheado de Termux) y lee el
-  socket de **`VTEST_SOCKET_NAME`** con path guest crudo, sin `unix:path=`;
-  su `connect()` fallido no aborta → «lost connection … read -1 22» leyendo
-  de un fd no conectado. Fix Rojo→Verde: `applyVirglEnv` inyecta
-  `VTEST_SOCKET_NAME=/tmp/virgl_test` (constantes `ENV_VTEST_SOCKET_NAME`,
-  `GUEST_SOCKET_PATH`), ya no la URI; server stdout a logcat INFO + vigía de
-  muerte (`pumpOutput`); firmas simplificadas `applyVirglEnv(env, active)` /
-  `applyVirglSessionEnv(map, prefActive, socketPresent)`; test verdes; APK
-  recompilado (08:21). Falta: retest del checklist en el dispositivo
-  (activar → pestaña X11 → sesión nueva → `echo $VTEST_SOCKET_NAME` →
-  `glxinfo` ≠ llvmpipe → desactivar → env byte a byte) y anotar la medición
-  del renderer en la wiki. Server args fijados: `--no-fork --multi-clients
-  --use-egl-surfaceless --use-gles --socket-path <rootfs>/tmp/virgl_test`.
-  Limitación sin GBM registrada: sin import de dmabuf/EGL-image.
+- Rama `3.0`. **Spec 013 (VirGL aceleración GPU) COMPLETADA y verificada en
+  dispositivo (2026-10-24, T1–T8):** render validado con
+  `glxgears` ≈ 140 FPS y `glmark2` Score 57, renderer `virgl (Mali-G57)`;
+  desactivación reversible (env byte a byte, sin proceso ni socket).
+  **Spec 014** COMPLETADA y verificada en dispositivo (T1–T13 + enmiendas
+  A/B). Pendiente de verificación fina (no bloquea): touch/HW keys/extra
+  keys en más apps. Cerradas antes: 010–012, 001–009; 2.1.0 publicada.
+- **Spec 013 COMPLETADA (2026-10-23/24): `specs/013-virgl-aceleracion-gpu/`**
+  T1–T8 cerradas. Implementación: `VirglLibrary` puro (gate exclusión
+  KGSL/VirGL, `applyVirglEnv`, args/env del servidor, máquina de estados del
+  server), `Solution.VIRGL`, env virgl en `ProotShellEnvironment` vía
+  existencia del socket, guard llvmpipe extendido a VirGL,
+  `VirglServerManager` (assets→bin, socket rancio, READY window, stop,
+  `pumpOutput` a logcat INFO + vigía de muerte), hooks en `TermuxService`,
+  panel con switch + strings ×3, binario `virgl_test_server` arm64
+  compilado por `scripts/build-virglrenderer.sh` (pins SHA-256, patches
+  `scripts/virgl-patches/`, shims `scripts/ndk-shims/`) en assets. Wiki
+  (limitaciones.html): receta X11 + excluyente + medición + VNC secundaria
+  + Zink/OpenCL sin vía; README tercera vía.
 
 ## Spec 014 — decisiones y estado
 - Submódulo `termux-x11/` (pin `c82664b0`); parches xserver **sin commit**

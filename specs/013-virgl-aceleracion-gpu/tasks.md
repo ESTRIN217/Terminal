@@ -66,7 +66,7 @@
     verifica con `unzip` (lección de memoria); tarea explicitada en la wiki
     de compilación del mantenedor.
 
-- [ ] **T7. Validación en dispositivo (Mali T606) + cierre de constantes.** RF-2..RF-5, RF-9.
+- [x] **T7. Validación en dispositivo (Mali T606) + cierre de constantes.** RF-2..RF-5, RF-9.
   - (2026-10-24) Progreso: el servidor nativo arranca bien en el dispositivo
     (SELinux `enforcing` concede el `execute`; socket creado en ~120 ms; ruido
     no bloqueante: `avc: denied { search }` del directorio `tests` de
@@ -99,6 +99,17 @@
     rootless (síntoma conocido en los hilos de Termux con este stack; la
     validación se hizo con `glxgears`/`glmark2`). Falta la prueba de
     desactivación (env byte a byte + sin proceso/socket) para cerrar T7.
+  - (2026-10-24) **Cierre de T7:** desactivar → sin proceso, sin socket
+    (`ls: no se puede acceder a '/tmp/virgl_test': No existe el fichero o el
+    directorio`) y env de sesión nueva idéntico al pre-spec (solo reaparecen
+    las variables del multihilo llvmpipe de la 012, que VirGL inhibe cuando
+    está activo). Checklist completo: activar → server vivo + socket →
+    pestaña X11 → conexión (`VTEST_SOCKET_NAME`) → caps → render
+    (`glxgears` ≈ 140 FPS, `glmark2` Score 57, renderer `virgl (Mali-G57)`)
+    → desactivar reversible. CONSTANTES FINALES: server
+    `--socket-path <rootfs>/tmp/virgl_test`; guest
+    `VTEST_SOCKET_NAME=/tmp/virgl_test` (path crudo; la mesa stock NO lee
+    `VIRGL_TEST_SERVER_URI`).
   - Hecho cuando: activar VirGL → el servidor (proceso nativo) está vivo y el
     socket está en el rootfs `/tmp`; dentro del guest, con la pestaña X11 de la
     014 abierta, una app con el env del invitado conecta al servidor; además se
