@@ -2,6 +2,7 @@ package com.termux.shared.termux.proot;
 
 import android.app.ActivityManager;
 import android.content.Context;
+import android.os.Build;
 import android.os.SystemClock;
 import android.system.Os;
 import android.system.OsConstants;
@@ -19,6 +20,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -31,12 +33,18 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Keeps the synthetic procfs snapshots of spec 010 alive: samples the app's own
- * processes ({@code /proc/<pid>/stat}, the only per-process data Android exposes
+ * Keeps the synthetic procfs snapshots alive: samples the app's own processes
+ * ({@code /proc/<pid>/stat}, the only per-process data Android exposes
  * without root), {@code SystemClock} for the boot time and
  * {@code ActivityManager.MemoryInfo} for the memory, then rewrites the snapshot
  * files atomically (temp file + rename, RF-7) every second while there is at
  * least one proot session active (RF-6, NFR-3/NFR-4).
+ *
+ * <p>Spec 019 adds the session-start static {@code /proc/cpuinfo} enrichment
+ * snapshot (host copy plus one {@code model name} line, see
+ * {@link ProcCpuInfoOverlayLibrary}); it needs no sampling and is decided by
+ * {@link #prepareSessionOverlayBinds} too, so every {@code /proc} bind stays in
+ * a single decision point.</p>
  *
  * <p>All rendering and delta math is delegated to the pure
  * {@link ProcStatOverlayLibrary}. Lifecycle counters are static because the
@@ -54,6 +62,26 @@ public final class ProcStatOverlaySampler {
     private static final String HOST_PROC_STAT_PATH = "/proc/stat";
     private static final String HOST_PROC_MEMINFO_PATH = "/proc/meminfo";
     private static final String HOST_PROC_LOADAVG_PATH = "/proc/loadavg";
+    /**
+     * Host path of the cpuinfo source served the enriched snapshot (spec 019).
+     * The file itself IS readable by this uid; the overlay adds a
+     * {@code model name} line so tools like btop stay on the native path
+     * instead of falling back to a denied {@code readdir} of {@code /sys/devices}.
+     */
+    private static final String HOST_PROC_CPUINFO_PATH = "/proc/cpuinfo";
+    /**
+     * Host path of the uptime source (spec 019 enmienda RF-9). Same restricted
+     * procfs family as {@code /proc/stat}: when the uid cannot read it, btop
+     * dies in {@code Shared::init()} with "Failed to get uptime"; served as a
+     * live sampler snapshot derived from {@code SystemClock.elapsedRealtime()}.
+     */
+    private static final String HOST_PROC_UPTIME_PATH = "/proc/uptime";
+    /** {@link Build.SOC_MODEL} is populated only from API 31; minSdk is 24, so a guard is mandatory (same pattern as {@link GpuDeviceReader}). */
+    private static final int SOC_MODEL_MIN_API = Build.VERSION_CODES.S;
+    /** Guest path bound to the cpuinfo snapshot (spec 019 RF-2). */
+    private static final String GUEST_PROC_CPUINFO_PATH = "/proc/cpuinfo";
+    /** Guest path bound to the uptime snapshot (spec 019 enmienda RF-9). */
+    private static final String GUEST_PROC_UPTIME_PATH = "/proc/uptime";
 
     /** Samples read from {@code /proc/<pid>/stat} for a single pid. */
     public static final class PidSample {
@@ -129,6 +157,8 @@ public final class ProcStatOverlaySampler {
     private final boolean mLoadOverlayNeeded;
     /** Whether the host {@code /proc/loadavg} itself is readable (real procs running/blocked). */
     private final boolean mHostLoadavgReadable;
+    /** Whether the host {@code /proc/uptime} must be served as a live snapshot (spec 019 enmienda RF-9). */
+    private final boolean mUptimeOverlayNeeded;
 
     /** Previous tick's utime/stime samples, keyed by pid, for the delta computation. */
     @NonNull
@@ -149,18 +179,28 @@ public final class ProcStatOverlaySampler {
 
     private ProcStatOverlaySampler(@Nullable Context context, boolean statOverlayNeeded,
                                    boolean memOverlayNeeded, boolean loadOverlayNeeded,
-                                   boolean hostLoadavgReadable) {
+                                   boolean hostLoadavgReadable, boolean uptimeOverlayNeeded) {
         mContext = context;
         mStatOverlayNeeded = statOverlayNeeded;
         mMemOverlayNeeded = memOverlayNeeded;
         mLoadOverlayNeeded = loadOverlayNeeded;
         mHostLoadavgReadable = hostLoadavgReadable;
+        mUptimeOverlayNeeded = uptimeOverlayNeeded;
     }
 
     /**
      * Prepare the overlay for a new proot session: probe the direct readability
-     * of the procfs sources, ensure the snapshot directory, write the initial
-     * snapshots synchronously and start (or keep) the sampler.
+     * of the procfs sources, decide the cpuinfo enrichment snapshot (spec 019),
+     * ensure the snapshot directory, write the initial snapshots synchronously
+     * and start (or keep) the sampler when any live-stat overlay applies.
+     *
+     * <p>Spec 019 added a second, semantic kind of overlay: {@code /proc/cpuinfo}
+     * is directly readable but Android arm64 kernels omit the {@code model name}
+     * line desktop tools look for; its snapshot (host copy verbatim plus one
+     * line, {@link ProcCpuInfoOverlayLibrary}) is static per boot and needs no
+     * sampler. A session served only that overlay keeps {@code isSampling()}
+     * untouched: {@link #onProotSessionRemoved()} is a safe no-op then
+     * ({@code sSampler} stays {@code null}).</p>
      *
      * @param context App context for {@code FileUtils} and {@code ActivityManager}.
      * @return Returns the {@code {host, guest}} bind pairs for
@@ -172,9 +212,13 @@ public final class ProcStatOverlaySampler {
         boolean statRead = isDirectlyReadable(HOST_PROC_STAT_PATH);
         boolean memRead = isDirectlyReadable(HOST_PROC_MEMINFO_PATH);
         boolean loadRead = isDirectlyReadable(HOST_PROC_LOADAVG_PATH);
+        boolean uptimeRead = isDirectlyReadable(HOST_PROC_UPTIME_PATH);
 
-        if (statRead && memRead && loadRead)
-            return null; // nothing is blocked: pure native passthrough (RF-9b, NFR-5)
+        // Spec 019 (RF-2/RF-3/RF-4): decide the cpuinfo enrichment overlay.
+        String[] cpuInfoBind = prepareCpuInfoOverlayBind();
+
+        if (statRead && memRead && loadRead && uptimeRead && cpuInfoBind == null)
+            return null; // nothing is blocked and no enrichment applies: pure native passthrough (RF-3, NFR-5)
 
         Error directoryError = FileUtils.createDirectoryFile(
             TermuxConstants.DEBIAN_PROC_OVERLAY_DIR_PATH);
@@ -185,18 +229,99 @@ public final class ProcStatOverlaySampler {
                 + directoryError);
         }
 
+        if (cpuInfoBind != null && !new File(cpuInfoBind[0]).isFile()) {
+            // The snapshot write failed and no valid snapshot exists: skip the
+            // bind and stay on the native path (RF-4 / RF-7).
+            cpuInfoBind = null;
+        }
+
+        List<String[]> binds = new ArrayList<>();
+        if (cpuInfoBind != null)
+            binds.add(cpuInfoBind);
+
+        if (statRead && memRead && loadRead && uptimeRead)
+            return binds; // only the static cpuinfo overlay applies: no sampler, no session count
+
+        // At least one live-stat source needs the overlay: run (or keep) the sampler.
         if (sSampler == null) {
             sSampler = new ProcStatOverlaySampler(
-                context.getApplicationContext(), !statRead, !memRead, !loadRead, loadRead);
+                context.getApplicationContext(), !statRead, !memRead, !loadRead, loadRead, !uptimeRead);
             sSampler.sampleOnce(); // synchronous initial snapshot before the guest starts
             sSampler.startExecutor();
         }
         sOverlaySessionCount++;
 
-        return ProcStatOverlayLibrary.overlays(statRead, memRead, loadRead,
+        binds.addAll(ProcStatOverlayLibrary.overlays(statRead, memRead, loadRead,
             TermuxConstants.DEBIAN_PROC_OVERLAY_STAT_FILE_PATH,
             TermuxConstants.DEBIAN_PROC_OVERLAY_MEMINFO_FILE_PATH,
-            TermuxConstants.DEBIAN_PROC_OVERLAY_LOADAVG_FILE_PATH);
+            TermuxConstants.DEBIAN_PROC_OVERLAY_LOADAVG_FILE_PATH));
+        if (!uptimeRead)
+            binds.add(new String[]{TermuxConstants.DEBIAN_PROC_OVERLAY_UPTIME_FILE_PATH, GUEST_PROC_UPTIME_PATH});
+        return binds;
+    }
+
+    /**
+     * Decide and materialize the cpuinfo enrichment overlay of spec 019.
+     *
+     * <p>Reads the host {@code /proc/cpuinfo} (readable by this uid), chooses a
+     * presentable model name and, when the btop-style scan would miss it,
+     * writes the static snapshot (verbatim copy plus the added line). The
+     * snapshot is rewritten on every session start (cpuinfo is static per boot,
+     * NFR-2): no sampler, no background thread.</p>
+     *
+     * @return Returns the {@code {host, guest}} bind pair, or {@code null} when
+     * the overlay does not apply (RF-3/RF-4).
+     */
+    @Nullable
+    private static String[] prepareCpuInfoOverlayBind() {
+        String cpuInfoText = readWholeProcFile(HOST_PROC_CPUINFO_PATH);
+        if (cpuInfoText == null)
+            return null; // RF-4: read failure logged below, native path kept
+        String cpuName = ProcCpuInfoOverlayLibrary.presentableCpuName(readSocModel(), Build.HARDWARE);
+        if (!ProcCpuInfoOverlayLibrary.cpuInfoOverlayNeeded(cpuInfoText, cpuName))
+            return null; // RF-3: guest cpuinfo already presentable, or no usable name
+        writeSnapshotAtomic(TermuxConstants.DEBIAN_PROC_OVERLAY_CPUINFO_FILE_PATH,
+            ProcCpuInfoOverlayLibrary.buildSyntheticCpuInfo(cpuInfoText, cpuName));
+        return new String[]{TermuxConstants.DEBIAN_PROC_OVERLAY_CPUINFO_FILE_PATH, GUEST_PROC_CPUINFO_PATH};
+    }
+
+    /**
+     * Read {@code Build.SOC_MODEL}, guarded by the API level filter required by
+     * its {@code API >= 31} availability (same pattern as
+     * {@link GpuDeviceReader}, kept private there to avoid widening the spec 011
+     * API — plan 019 decision).
+     *
+     * @return Returns the SoC model label, or {@code null} on older API levels.
+     */
+    @Nullable
+    private static String readSocModel() {
+        if (Build.VERSION.SDK_INT < SOC_MODEL_MIN_API)
+            return null;
+        return Build.SOC_MODEL;
+    }
+
+    /**
+     * Read a whole procfs file as text: SELinux denials and mid-read issues
+     * surface as {@code IOException}/{@code SecurityException} (spec 019 RF-4,
+     * never assumed at face value).
+     *
+     * @param path Host path to read.
+     * @return Returns the file text, or {@code null} when unreadable (logged).
+     */
+    @Nullable
+    private static String readWholeProcFile(@NonNull String path) {
+        try (FileInputStream in = new FileInputStream(path)) {
+            StringBuilder builder = new StringBuilder();
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer, 0, buffer.length)) > 0)
+                builder.append(new String(buffer, 0, read, StandardCharsets.UTF_8));
+            return builder.toString();
+        } catch (IOException | SecurityException e) {
+            Logger.logWarnExtended(LOG_TAG, "Failed to read " + path + " (native path kept)\n"
+                + e);
+            return null;
+        }
     }
 
     /**
@@ -331,6 +456,15 @@ public final class ProcStatOverlaySampler {
             writeSnapshotAtomic(TermuxConstants.DEBIAN_PROC_OVERLAY_LOADAVG_FILE_PATH,
                 ProcStatOverlayLibrary.renderLoadavg(mLoads[0], mLoads[1], mLoads[2],
                     running, samples.size()) + "\n");
+        }
+
+        if (mUptimeOverlayNeeded) {
+            // Spec 019 enmienda RF-9: exact seconds since boot per tick; btop
+            // compares uptimes across reads (per-process CPU, disk activity),
+            // so the value must advance with every snapshot.
+            double uptimeSec = SystemClock.elapsedRealtime() / 1000.0d;
+            writeSnapshotAtomic(TermuxConstants.DEBIAN_PROC_OVERLAY_UPTIME_FILE_PATH,
+                ProcStatOverlayLibrary.renderUptime(uptimeSec, uptimeSec * cores) + "\n");
         }
     }
 

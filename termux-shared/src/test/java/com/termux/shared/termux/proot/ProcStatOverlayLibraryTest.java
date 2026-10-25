@@ -163,6 +163,23 @@ public class ProcStatOverlayLibraryTest {
         Assert.assertEquals(30, ProcStatOverlayLibrary.btimeFromBoot(60000, 30000));
     }
 
+    // ---- renderUptime (spec 019 enmienda RF-9) ----
+
+    @Test
+    public void testRenderUptime_twoFieldsWithTwoDecimals() {
+        Assert.assertEquals("3600.25 7200.00",
+            ProcStatOverlayLibrary.renderUptime(3600.25d, 7200d));
+        Assert.assertEquals("0.00 0.00",
+            ProcStatOverlayLibrary.renderUptime(0d, 0d));
+    }
+
+    @Test
+    public void testRenderUptime_localeRootAndLargeSeconds() {
+        // btop parses the first token with stod; the decimal separator must be '.'
+        Assert.assertEquals("429496.75 858993.50",
+            ProcStatOverlayLibrary.renderUptime(429496.75d, 858993.5d));
+    }
+
     // ---- overlays (RF-3/NFR-5) ----
 
     private static final String STAT_PATH = "/host/stat";

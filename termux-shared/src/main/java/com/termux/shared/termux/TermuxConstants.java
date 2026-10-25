@@ -568,6 +568,10 @@ public final class TermuxConstants {
     public static final String DEBIAN_PROC_OVERLAY_MEMINFO_FILE_PATH = DEBIAN_PROC_OVERLAY_DIR_PATH + "/meminfo";
     /** Host path of the synthetic {@code /proc/loadavg} snapshot bound as {@code /proc/loadavg} (spec 010). */
     public static final String DEBIAN_PROC_OVERLAY_LOADAVG_FILE_PATH = DEBIAN_PROC_OVERLAY_DIR_PATH + "/loadavg";
+    /** Host path of the synthetic {@code /proc/cpuinfo} snapshot bound as {@code /proc/cpuinfo} (spec 019; host copy verbatim plus one {@code model name} line). */
+    public static final String DEBIAN_PROC_OVERLAY_CPUINFO_FILE_PATH = DEBIAN_PROC_OVERLAY_DIR_PATH + "/cpuinfo";
+    /** Host path of the synthetic {@code /proc/uptime} snapshot bound as {@code /proc/uptime} (spec 019 enmienda RF-9; live sampler tick). */
+    public static final String DEBIAN_PROC_OVERLAY_UPTIME_FILE_PATH = DEBIAN_PROC_OVERLAY_DIR_PATH + "/uptime";
 
     /** Directory under the app files directory where the Mesa {@code .deb} packages downloaded for the GPU acceleration pipeline are staged before installation (spec 011). */
     public static final String DEBIAN_GPU_DEBS_DIR_PATH = TERMUX_FILES_DIR_PATH + "/debian/gpu-debs";

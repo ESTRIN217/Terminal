@@ -1,6 +1,27 @@
 # MEMORY.md — Terminal
 ## Estado actual
 - Rama `3.0`. Cerradas 001–018 (2.1.0 publicada).
+- Spec 019 **CERRADA (2026-10-25, verificado en dispositivo):** btop arranca en
+  Debian/proot. Dos overlays nuevos servidos desde
+  `ProcStatOverlaySampler.prepareSessionOverlayBinds` (único punto de binds
+  `/proc`; `TermuxService` sin cambios):
+  - cpuinfo: snapshot estático = host verbatim + línea `model name : <SoC>`
+    (`Build.SOC_MODEL` API-guard como `GpuDeviceReader`, degradación
+    `HARDWARE`; sin nombre útil → sin bind). Pura en
+    `ProcCpuInfoOverlayLibrary` (`needsModelNameLine` bug-por-bug: scan de
+    btop = prefijo-de-línea-hasta-`:` + salto a fin de línea tras cada `:`).
+    Sesión solo-cpuinfo no toca sampler ni contadores.
+  - uptime (enmienda RF-9, descubierta en dispositivo; btop caía después en
+    «Failed to get uptime», misma familia bloqueada que `/proc/stat` de spec
+    010): snapshot VIVO del sampler, `renderUptime(elapsedRealtime, ×cores)`,
+    bind solo si el probe directo falla; el valor debe avanzar por tick.
+  Origen del fallo: cpuinfo legible pero sin «model name» → fallback de btop
+  lista `/sys/devices` (readdir SELinux denegado §7) → muere en `Shared::init`;
+  batería/sensores ya blindados upstream. Residual documentado (RF-10): btop
+  pide ≥80×24 columnas («Terminal size too small» con 72) — remedio del
+  usuario (rotar apaisado / reducir letra), no intervenimos. Doc sync: plan
+  doc §7 + README + wiki; CHANGELOG para release.
+  Spec en `specs/019-cpuinfo-overlay-btop/`.
 - **Spec 018 CERRADA (2026-10-25), verificada en dispositivo:** warning
   `can't sanitize binding "/linkerconfig"` eliminado y vía guest del companion
   retirada. Resumen:

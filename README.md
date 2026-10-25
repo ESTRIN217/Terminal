@@ -144,6 +144,26 @@ escribe ningún snapshot y se usa la vía nativa. Sin sesiones activas, el muest
 se para. Detalles de datos en [`docs/proot-debian-arm64-plan.md`](docs/proot-debian-arm64-plan.md)
 (sección 7) y [`specs/010-procstat-htop/`](specs/010-procstat-htop/).
 
+En dispositivos que además deniegan enumerar `/sys`, `btop` fallaba a su arranque
+(`ERROR: Exception in Shared::init() -> ... [/sys/devices]`): sin la línea
+`model name` (que los kernels arm64 de Android no emiten en `/proc/cpuinfo`), btop cae
+a un fallback que lista `/sys/devices`. Resuelto sin root con la misma técnica de
+snapshot (spec 019): en el arranque de cada sesión Debian se bindea
+`-b <snapshot>:/proc/cpuinfo` con una copia verbatim del fichero real más una línea
+`model name` con el SoC del dispositivo. Si el invitado ya tiene `model name` (o no
+hay nombre utilizable), no se escribe bind alguno y se usa la vía nativa.
+
+Tras probar `btop` en dispositivo, cayó también en `/proc/uptime` (`Failed to get
+uptime`), de la misma familia restringida de procfs que `/proc/stat`; la enmienda RF-9
+de la spec 019 lo sirve como snapshot vivo más del mismo sampler (uptime exacto de
+`SystemClock.elapsedRealtime()`, avanzando cada tick), bindeado solo cuando el
+dispositivo bloquea su lectura directa.
+
+Nota de uso: con los overlays, `btop` arranca sin errores del sistema, pero exige por su
+propia configuración un mínimo de **80 columnas y 24 líneas**. En una terminal estrecha
+muestra `Terminal size too small: Width = 72 (…)`; no es un fallo del rootfs: rota el
+dispositivo a apaisado o reduce el tamaño de letra de la terminal hasta cubrir 80×24.
+
 ## Gráficos y GPU (specs 011/012/013)
 
 Sin root, lo que ve `glxinfo`/`vulkaninfo` dentro de la sesión Debian es el

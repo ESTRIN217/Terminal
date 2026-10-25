@@ -98,6 +98,45 @@
                         no queda ninguna sesión activa. Los medidores responden al uso real;
                         <code>htop</code> arranca normal.
                     </p>
+                    <h2>btop: arranque con <code>/sys/devices</code> denegado — resuelto con snapshot estático</h2>
+                    <p>
+                        En dispositivos que deniegan enumerar <code>sysfs</code>, <code>btop</code>
+                        moría a su arranque con
+                        <code>ERROR: Exception in Shared::init() → … [/sys/devices]</code>: los
+                        kernels arm64 de Android no emiten la línea <code>model name</code> en
+                        <code>/proc/cpuinfo</code>, así que btop cae a un fallback interno que
+                        <em>lista</em> <code>/sys/devices</code> — un <code>readdir</code> que la
+                        política SELinux del fabricante deniega al UID de la app.
+                    </p>
+                    <p>
+                        Resuelto sin root (spec&nbsp;019) por la misma vía de snapshots, pero por
+                        <strong>semántica</strong> y no por bloqueo: al abrir cada sesión Debian, la
+                        app bindea <code>-b &lt;snapshot&gt;:/proc/cpuinfo</code> con una copia
+                        <em>verbatim</em> del fichero real más una línea
+                        <code>model name : &lt;SoC&gt;</code> (prioridad
+                        <code>Build.SOC_MODEL</code>, degradación a <code>Build.HARDWARE</code>).
+                        Con esa línea, btop resuelve el nombre de la CPU antes de llegar al
+                        fallback y el listing denegado deja de ejecutarse. El snapshot es estático
+                        (no hay muestreo en background); si la lectura del fichero falla o no hay
+                        nombre utilizable, no se añade bind alguno y se queda la vía nativa.
+                    </p>
+                    <p>
+                        Con la validación en dispositivo, btop cayó después en
+                        <code>/proc/uptime</code> (<code>Failed to get uptime</code>): la misma
+                        familia restringida de procfs que <code>/proc/stat</code>. La enmienda
+                        RF-9 de la spec&nbsp;019 lo sirve como <strong>snapshot vivo</strong> del
+                        mismo sampler (uptime exacto derivado de <code>SystemClock</code>,
+                        avanzando cada tick, porque btop compara uptime entre lecturas); el bind
+                        solo se emite cuando el dispositivo bloquea su lectura directa.
+                    </p>
+                    <p>
+                        Nota de uso: con los overlays, <code>btop</code> arranca sin errores del
+                        sistema, pero exige por su propia configuración un mínimo de
+                        <strong>80 columnas × 24 líneas</strong>. En una terminal estrecha muestra
+                        <code>Terminal size too small</code>; no es un fallo del rootfs ni de la
+                        app: gira el dispositivo a apaisado o reduce el tamaño de letra de la
+                        terminal hasta cubrir ese tamaño.
+                    </p>
 
                     <h2>Gráficos GPU: llvmpipe por defecto (y cuándo se acelera)</h2>
                     <p>

@@ -220,6 +220,24 @@ public final class ProcStatOverlayLibrary {
         return Math.round((nowMs - uptimeMs) / 1000.0d);
     }
 
+    /**
+     * Render a {@code /proc/uptime} snapshot line for the live sampler tick
+     * (spec 019 enmienda RF-9): {@code <uptime> <idle>} with two decimals, the
+     * format btop parses (first token via {@code stod}).
+     *
+     * <p>Uptime is exact (derived from {@code SystemClock.elapsedRealtime()} by
+     * the caller); idle is spec 010's idle budget estimate (uptime × cores) —
+     * a cosmetic filler: btop only consumes the first field.</p>
+     *
+     * @param upSec Seconds since boot, either exact or estimated by the caller.
+     * @param idleSec Idle seconds of the interval estimate.
+     * @return Returns the snapshot line without a trailing newline.
+     */
+    @NonNull
+    public static String renderUptime(double upSec, double idleSec) {
+        return String.format(Locale.ROOT, "%.2f %.2f", upSec, idleSec);
+    }
+
     @NonNull
     private static String joinLines(@NonNull String... lines) {
         return String.join("\n", lines);

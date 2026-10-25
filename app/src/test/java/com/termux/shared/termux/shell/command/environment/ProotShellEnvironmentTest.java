@@ -214,6 +214,45 @@ public class ProotShellEnvironmentTest {
         Assert.assertEquals("--login", command[29]);
     }
 
+    // ---- spec 019: cpuinfo enrichment overlay bind ----
+
+    @Test
+    public void testBuildProotCommand_cpuInfoOverlayBind_insertedAfterProcBind() {
+        List<String[]> binds = Arrays.<String[]>asList(
+            new String[]{"/x/proc-overlay/cpuinfo", "/proc/cpuinfo"});
+
+        String[] command = ProotShellEnvironment.buildProotCommand("/root", null, false, binds);
+
+        int procIndex = indexOf(command, "/proc");
+        // The cpuinfo file bind sits right after "-b /proc" and shadows that
+        // directory bind for the one file (same shadowing as spec 010).
+        Assert.assertEquals("-b", command[procIndex + 1]);
+        Assert.assertEquals("/x/proc-overlay/cpuinfo:/proc/cpuinfo", command[procIndex + 2]);
+        Assert.assertEquals("-b", command[procIndex + 3]);
+        Assert.assertEquals("/sys", command[procIndex + 4]);
+        // The rest of the layout is unchanged after the extra bind.
+        Assert.assertEquals("--login", command[command.length - 1]);
+    }
+
+    @Test
+    public void testBuildProotCommand_mixedOverlayBinds_allInsertedInOrder() {
+        // A real session can serve live-stat overlays (spec 010) and the static
+        // cpuinfo overlay (spec 019) together; both land after "-b /proc".
+        List<String[]> binds = Arrays.asList(
+            new String[]{"/x/proc-overlay/stat", "/proc/stat"},
+            new String[]{"/x/proc-overlay/meminfo", "/proc/meminfo"},
+            new String[]{"/x/proc-overlay/cpuinfo", "/proc/cpuinfo"});
+
+        String[] command = ProotShellEnvironment.buildProotCommand("/root", null, false, binds);
+
+        int procIndex = indexOf(command, "/proc");
+        Assert.assertEquals("/x/proc-overlay/stat:/proc/stat", command[procIndex + 2]);
+        Assert.assertEquals("/x/proc-overlay/meminfo:/proc/meminfo", command[procIndex + 4]);
+        Assert.assertEquals("/x/proc-overlay/cpuinfo:/proc/cpuinfo", command[procIndex + 6]);
+        Assert.assertEquals("-b", command[procIndex + 7]);
+        Assert.assertEquals("/sys", command[procIndex + 8]);
+    }
+
     @Test
     public void testDebianProcOverlayConstants_underFilesDirectory() {
         Assert.assertTrue(TermuxConstants.DEBIAN_PROC_OVERLAY_DIR_PATH.startsWith(
@@ -221,7 +260,9 @@ public class ProotShellEnvironmentTest {
         for (String path : new String[]{
             TermuxConstants.DEBIAN_PROC_OVERLAY_STAT_FILE_PATH,
             TermuxConstants.DEBIAN_PROC_OVERLAY_MEMINFO_FILE_PATH,
-            TermuxConstants.DEBIAN_PROC_OVERLAY_LOADAVG_FILE_PATH}) {
+            TermuxConstants.DEBIAN_PROC_OVERLAY_LOADAVG_FILE_PATH,
+            TermuxConstants.DEBIAN_PROC_OVERLAY_CPUINFO_FILE_PATH,
+            TermuxConstants.DEBIAN_PROC_OVERLAY_UPTIME_FILE_PATH}) {
             Assert.assertTrue(path.startsWith(TermuxConstants.DEBIAN_PROC_OVERLAY_DIR_PATH + "/"));
         }
     }

@@ -244,3 +244,40 @@ corriendo/bloqueados del `loadavg` real o de los estados R/D de los procesos pro
 Todo con vía directa intacta cuando el dispositivo permite leer los ficheros originales
 (root/permissive), con la suma de `cpuN` cuadrada con la línea `cpu` (reparto uniforme
 cuando solo hay datos agregados). Ver `specs/010-procstat-htop/`.
+
+En la validación en dispositivo de la spec 019, `btop` cayó además en
+`Failed to get uptime from /proc/uptime`: la misma familia de procfs restringido cubre
+`/proc/uptime`, que la spec 010 no bindeaba (htop lo tolera y btop lo lanza en
+`Shared::init`). La enmienda RF-9 de la spec 019 lo sirve como snapshot **vivo** más del
+mismo sampler: `files/proc-stat-overlay/uptime` = `<uptime> <idle>` (2 decimales), con
+uptime exacto de `SystemClock.elapsedRealtime()` e idle estimado (uptime × núcleos; btop
+solo consume el primer campo) y avanzando cada tick, porque btop compara uptimes entre
+lecturas. El bind solo se emite cuando el probe directo falla. Ver
+`specs/019-cpuinfo-overlay-btop/`.
+
+Con los overlays, `btop` arranca en dispositivo (validado 2026-10-25). Queda como nota
+de uso en README/wiki el requisito propio de btop de ≥80 columnas («Terminal size too
+small» con terminal de 72): el remedio es del usuario (rotar a apaisado o reducir el
+tamaño de letra de la terminal); el sistema no interviene (RF-10 de la spec 019).
+
+La **enumeración sysfs** también mató al arranque de los monitores, pero por otra ruta:
+al iniciar, `btop` busca una línea `model name` en `/proc/cpuinfo`; los kernels arm64 de
+Android no la emiten, así que cae a su fallback de listar `/sys/devices` (`readdir` →
+`Permission denied`, véase arriba) y muere en `Shared::init()`:
+
+```
+ERROR: Exception in Shared::init() -> filesystem error: directory iterator cannot open
+directory: Permiso denegado [/sys/devices]
+```
+
+Resuelto con la misma técnica sin root (spec 019), pero por **semántica** y no por
+bloqueo: en el arranque de cada sesión Debian se publica en
+`files/proc-stat-overlay/cpuinfo` un snapshot estático = copia **verbatim** del
+`/proc/cpuinfo` host (legible por el UID de la app) más una línea
+`model name : <SoC>` (prioridad `Build.SOC_MODEL` API 31+, degradación a
+`Build.HARDWARE`; sin nombre utilizable o si la lectura falla, no hay bind y queda la vía
+nativa). El bind `-b <snapshot>:/proc/cpuinfo` se añade al mismo punto que los de spec 010
+(justo tras `-b /proc`); al resolver btop el nombre antes del fallback, el listing denegado
+deja de ejecutarse (batería y sensores ya degradan sin morir por diseño de btop). Sin
+muestreo en background: cpuinfo es estático por arranque del kernel.
+Ver `specs/019-cpuinfo-overlay-btop/`.
