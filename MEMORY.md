@@ -1,8 +1,18 @@
 # MEMORY.md — Terminal
 ## Estado actual
-- Rama `3.0`. Cerradas 001–016; 2.1.0 publicada.
-- **Spec 017 CERRADA (2026-10-25): ajustes de X11 dentro de la app.** "Ajustes
-  de X11" en el grupo Acerca de de `SettingsScreen` (`onX11Click`) → destino
+- Rama `3.0`. Cerradas 001–017.
+- **Spec 018 (2026-10-25) implementada, PENDIENTE verificación en
+  dispositivo:** warning `can't sanitize binding "/linkerconfig"` eliminado.
+  Causa: en `new_binding()` de proot, `realpath2(tracee->reconf.tracee, ...)`
+  corre como `realpath(3)` crudo (esa ref SIEMPRE NULL en fase CLI) y la
+  kernel niega el stat (EACCES, termux/proot#254) → binding descartado en
+  silencio → guest sin config de linker (CANNOT LINK libnativeloader). Fix:
+  espejo del hack de `canon.c` en la fase de arranque (`app/src/main/cpp/
+  proot/path/binding.c`, exact-match `/linkerconfig` + `-EACCES`). Si tras
+  instalar la pestaña X11 sigue con CANNOT LINK dentro del guest, es SELinux
+  del propio tracee y la vía soportada sigue siendo spawn lado app
+  (spec 014 Enmienda B).
+- Spec 017 cerrada (2026-10-25): ajustes de X11 en `SettingsScreen` → destino
   `X11` en `SettingsComposeActivity` → `X11SettingsScreen`
   (Salida/Puntero/Teclado). SOLO persiste vía `Prefs` de lorie
   (`LorieApp.getPrefs`); lógica en `X11SettingsPolicy` puro con tests. Verificado
