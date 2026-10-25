@@ -494,6 +494,19 @@ Binding *new_binding(Tracee *tracee, const char *host, const char *guest, bool m
 		status = 0;
 	} else {
 		status = realpath2(tracee->reconf.tracee, binding->host.path, host, true);
+		/* At CLI-configuration time tracee->reconf.tracee is NULL, so
+		 * realpath2() runs a plain realpath(3) from proot itself (app
+		 * uid, untrusted_app SELinux): on some devices (see
+		 * termux/proot#254) the kernel denies stat'ing /linkerconfig
+		 * with EACCES, and the binding would be silently dropped --
+		 * losing the linker namespace config that /system/bin/app_process
+		 * needs inside the guest (CANNOT LINK libnativeloader.so).
+		 * Mirror the substitute_binding_stat() hack in path/canon.c:
+		 * accept the literal host path for that exact location. */
+		if (status == -EACCES && strcmp(host, "/linkerconfig") == 0) {
+			strcpy(binding->host.path, host);
+			status = 0;
+		}
 		if (status < 0) {
 			if (must_exist && getenv("PROOT_IGNORE_MISSING_BINDINGS") == NULL)
 				note(tracee, WARNING, INTERNAL, "can't sanitize binding \"%s\": %s",

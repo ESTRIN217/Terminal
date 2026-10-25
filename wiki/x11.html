@@ -90,10 +90,15 @@
                         El botón usa el mismo mecanismo que los comandos de abajo; están para
                         casos especiales (arrancar a mano, diagnóstico, otro display con la app
                         cerrada). Nota probada en dispositivo: ejecutar <code>app_process</code>
-                        <em>dentro</em> del guest proot no sirve — el uid de la app no llega a
-                        leer <code>/linkerconfig</code> (<em>can't sanitize binding:
-                        Permission denied</em>) y el exec muere con <em>CANNOT LINK
-                        EXECUTABLE</em>. Ejecútalos siempre fuera del contenedor.
+                        <em>dentro</em> del guest proot puede fallar con
+                        <em>CANNOT LINK EXECUTABLE</em>. En versiones del fork
+                        anteriores a la spec 018, proot descartaba el binding
+                        <code>/linkerconfig</code> al no poder canonicalizarlo
+                        (<em>can't sanitize binding: Permission denied</em>);
+                        eso ya está corregido (el binding sobrevive), pero si
+                        tu dispositivo sigue negando la lectura al proceso
+                        guest, el exec morirá igual: en ese caso ejecútalos
+                        siempre fuera del contenedor.
                     </p>
                     <pre><code>CLASSPATH=$(/system/bin/pm path --user 0 com.estrin217.terminal | head -1 | cut -d: -f2) \
   /system/bin/app_process / --nice-name=termux-x11 com.termux.x11.CmdEntryPoint :0</code></pre>
