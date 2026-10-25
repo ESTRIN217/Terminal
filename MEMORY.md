@@ -1,6 +1,18 @@
 # MEMORY.md — Terminal
 ## Estado actual
 - Rama `3.0`. Cerradas 001–016; 2.1.0 publicada.
+- **Spec 017 CERRADA (2026-10-25): ajustes de X11 dentro de la app.** "Ajustes
+  de X11" en el grupo Acerca de de `SettingsScreen` (`onX11Click`) → destino
+  `X11` en `SettingsComposeActivity` → `X11SettingsScreen`
+  (Salida/Puntero/Teclado). SOLO persiste vía `Prefs` de lorie
+  (`LorieApp.getPrefs`); lógica en `X11SettingsPolicy` puro con tests. Verificado
+  en dispositivo: RF-1/8/9, cambio de `touchMode` refleja en pestaña conectada
+  sin reiniciar. Enmienda lorie: `IntPreference.put(int)` (`PrefsProto`,
+  commit `9e0c832`, pin actualizado). Fuera para iteraciones posteriores:
+  ekbar completo + `extra_keys_config`, `userActions`.
+  - Espejados en policy (mantener en sync con lorie `arrays.xml`):
+    filtering bilinear/nearest, 5 orientaciones, touch 1/2/3; las 24
+    resoluciones exactas se leen en runtime vía `getValues()`.
 - **Spec 016 CERRADA (2026-10-24):** teclado en pestañas X11 verificado en
   dispositivo: HW keys, enter/borrar del IME y barra extra keys inyectan vía
   lorie `InputEventSender` reutilizado, y touch queda sin regresión. La pestaña
