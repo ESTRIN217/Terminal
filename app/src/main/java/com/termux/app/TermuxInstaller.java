@@ -15,6 +15,7 @@ import com.termux.shared.termux.file.TermuxFileUtils;
 import com.termux.shared.interact.MessageDialogUtils;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.markdown.MarkdownUtils;
+import com.termux.shared.errors.Errno;
 import com.termux.shared.errors.Error;
 import com.termux.shared.android.PackageUtils;
 import com.termux.shared.termux.TermuxConstants;
@@ -94,82 +95,116 @@ final class TermuxInstaller {
      * @return Returns the {@link Error} if installation failed, otherwise {@code null}.
      */
     static Error installProotIfNeeded(final Context context) {
-        File prootBin = new File(TermuxConstants.PROOT_BIN_PATH);
-        if (prootBin.isFile() && prootBin.canExecute() && prootBin.length() > 0) {
-            Logger.logDebug(LOG_TAG, "proot already installed at \"" + TermuxConstants.PROOT_BIN_PATH + "\".");
-            return null;
-        }
-
-        Logger.logInfo(LOG_TAG, "Installing proot from assets to \"" + TermuxConstants.PROOT_BIN_PATH + "\".");
-
-        Error error = TermuxFileUtils.isTermuxAppBinDirectoryAccessible(true, true);
-        if (error != null) return error;
-
-        try (java.io.InputStream in = context.getAssets().open(TermuxConstants.PROOT_ASSET_PATH);
-             java.io.OutputStream out = new java.io.FileOutputStream(prootBin)) {
-            byte[] buffer = new byte[32768];
-            int readBytes;
-            while ((readBytes = in.read(buffer)) != -1)
-                out.write(buffer, 0, readBytes);
-        } catch (Exception e) {
-            return new Error("Failed to copy proot binary to \"" + TermuxConstants.PROOT_BIN_PATH + "\".", e);
-        }
-
-        try {
-            android.system.Os.chmod(prootBin.getAbsolutePath(), 0700);
-        } catch (Exception e) {
-            return new Error("Failed to chmod 0700 proot binary at \"" + TermuxConstants.PROOT_BIN_PATH + "\".", e);
-        }
-
-        if (!prootBin.canExecute())
-            return new Error("proot binary at \"" + TermuxConstants.PROOT_BIN_PATH + "\" is not executable after install.");
-
-        Logger.logInfo(LOG_TAG, "proot installed successfully.");
-        return null;
+        return installEmbeddedBinaryIfNeeded(context, TermuxConstants.PROOT_BIN_PATH,
+            TermuxConstants.PROOT_ASSET_PATH, "proot");
     }
 
     /**
-     * Installs the bundled VirGL server binary on first use (spec 013, RF-1/RF-9),
-     * exactly the {@link #installProotIfNeeded} convention: copy from assets,
-     * chmod 0700, verify executability. Missing asset (old APK / ABI mismatch)
-     * yields an Error object — never a thrown exception (RF-9).
+     * Installs the bundled VirGL server binary on first use (spec 013, RF-1/RF-9).
+     * Missing asset (old APK / ABI mismatch) yields an Error object — never a
+     * thrown exception (RF-9).
      *
      * @param context The Android {@link Context} whose assets carry the binary.
      * @return Returns {@code null} on success (convention of the repo), or an {@link Error}.
      */
     static Error installVirglIfNeeded(final Context context) {
-        File virglBin = new File(TermuxConstants.VIRGL_BIN_PATH);
-        if (virglBin.isFile() && virglBin.canExecute() && virglBin.length() > 0) {
-            Logger.logDebug(LOG_TAG, "VirGL server already installed at \"" + TermuxConstants.VIRGL_BIN_PATH + "\".");
-            return null;
-        }
+        return installEmbeddedBinaryIfNeeded(context, TermuxConstants.VIRGL_BIN_PATH,
+            TermuxConstants.VIRGL_ASSET_PATH, "VirGL server");
+    }
 
-        Logger.logInfo(LOG_TAG, "Installing VirGL server from assets to \"" + TermuxConstants.VIRGL_BIN_PATH + "\".");
+    /**
+     * Install (or upgrade) an embedded asset binary, shared by
+     * {@link #installProotIfNeeded} and {@link #installVirglIfNeeded}
+     * (spec 018, Enmienda A, RF-05): copies from assets, chmod 0700, verifies
+     * executability. A previously installed binary is kept only when its length
+     * matches the current asset, so APK updates actually replace embedded
+     * binaries instead of silently keeping stale copies forever.
+     *
+     * @param context The Android {@link Context} whose assets carry the binary.
+     * @param binPath Absolute install destination path of the binary.
+     * @param assetPath Assets-relative path of the bundled binary.
+     * @param label Human-readable name for logs.
+     * @return Returns {@code null} on success (convention of the repo), or an {@link Error}.
+     */
+    static Error installEmbeddedBinaryIfNeeded(final Context context, final String binPath,
+                                               final String assetPath, final String label) {
+        File bin = new File(binPath);
+        if (bin.isFile() && bin.canExecute()) {
+            long assetLength = getAssetLength(context, assetPath);
+            if (assetLength < 0) {
+                Error error = Errno.ERRNO_FAILED.getError(
+                    "Failed to read the bundled \"" + label + "\" asset \"" + assetPath + "\"; keeping the installed binary");
+                Logger.logErrorExtended(LOG_TAG, "Failed\n" + error);
+                return null;
+            }
+            if (!binaryNeedsUpgrade(bin.length(), assetLength)) {
+                Logger.logDebug(LOG_TAG, label + " already installed and current at \"" + binPath + "\".");
+                return null;
+            }
+            Logger.logInfo(LOG_TAG, "Upgrading " + label + " from assets to \"" + binPath + "\".");
+        } else {
+            Logger.logInfo(LOG_TAG, "Installing " + label + " from assets to \"" + binPath + "\".");
+        }
 
         Error error = TermuxFileUtils.isTermuxAppBinDirectoryAccessible(true, true);
         if (error != null) return error;
 
-        try (java.io.InputStream in = context.getAssets().open(TermuxConstants.VIRGL_ASSET_PATH);
-             java.io.OutputStream out = new java.io.FileOutputStream(virglBin)) {
+        try (java.io.InputStream in = context.getAssets().open(assetPath);
+             java.io.OutputStream out = new java.io.FileOutputStream(bin)) {
             byte[] buffer = new byte[32768];
             int readBytes;
             while ((readBytes = in.read(buffer)) != -1)
                 out.write(buffer, 0, readBytes);
         } catch (Exception e) {
-            return new Error("Failed to copy VirGL binary to \"" + TermuxConstants.VIRGL_BIN_PATH + "\".", e);
+            return new Error("Failed to copy " + label + " binary to \"" + binPath + "\".", e);
         }
 
         try {
-            android.system.Os.chmod(virglBin.getAbsolutePath(), 0700);
+            android.system.Os.chmod(bin.getAbsolutePath(), 0700);
         } catch (Exception e) {
-            return new Error("Failed to chmod 0700 VirGL binary at \"" + TermuxConstants.VIRGL_BIN_PATH + "\".", e);
+            return new Error("Failed to chmod 0700 " + label + " binary at \"" + binPath + "\".", e);
         }
 
-        if (!virglBin.canExecute())
-            return new Error("VirGL binary at \"" + TermuxConstants.VIRGL_BIN_PATH + "\" is not executable after install.");
+        if (!bin.canExecute())
+            return new Error(label + " binary at \"" + binPath + "\" is not executable after install.");
 
-        Logger.logInfo(LOG_TAG, "VirGL server installed successfully.");
+        Logger.logInfo(LOG_TAG, label + " installed successfully.");
         return null;
+    }
+
+    /**
+     * Whether an installed embedded binary must be replaced by the bundled
+     * asset (spec 018, Enmienda A, RF-05, pure).
+     *
+     * @param installedLength Length of the binary currently installed on disk.
+     * @param assetLength     Length of the current asset (unmeasurable means upgrade).
+     * @return {@code true} when the install copy must be (re)written.
+     */
+    static boolean binaryNeedsUpgrade(long installedLength, long assetLength) {
+        if (assetLength <= 0)
+            return true;
+        return installedLength != assetLength;
+    }
+
+    /**
+     * Total byte length of a bundled asset by streaming it (spec 018, Enmienda A).
+     *
+     * @param context   The Android {@link Context} whose assets carry the file.
+     * @param assetPath Assets-relative path.
+     * @return The length in bytes, or {@code -1} when the asset cannot be read.
+     */
+    private static long getAssetLength(final Context context, final String assetPath) {
+        try (java.io.InputStream in = context.getAssets().open(assetPath)) {
+            byte[] buffer = new byte[32768];
+            long length = 0;
+            int readBytes;
+            while ((readBytes = in.read(buffer)) != -1)
+                length += readBytes;
+            return length;
+        } catch (Exception e) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to size asset \"" + assetPath + "\"\n" + e.getMessage());
+            return -1;
+        }
     }
 
     public static void showBootstrapErrorDialog(Activity activity, Runnable whenDone, String message) {

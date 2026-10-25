@@ -4,12 +4,9 @@ import com.termux.shared.termux.TermuxConstants
 import com.termux.shared.termux.shell.command.environment.ProotShellEnvironment
 
 /**
- * Pure helpers to build the companion X server launch command shown to the user in
- * the "no server" state of the X11 tabs (spec 014 RF-8).
- *
- * The companion process cannot be spawned from the app directly: the X server
- * needs `app_process` with the APK itself on the classpath (same UID/process
- * family), so the tab offers a command to paste in a terminal session instead.
+ * Pure helpers to spawn the companion X server from the app process, wired by
+ * [X11CompanionSpawner] (spec 014, enmienda B; spec 018 Enmienda A removed the
+ * paste-ready command flow and the guest wrapper).
  *
  * Deterministic and UI-free so it runs in plain JUnit (see X11CompanionCommandTest).
  */
@@ -18,7 +15,7 @@ object X11CompanionCommand {
     /** Display argument: optional colon, 1-4 digits, optional fractional `.digits`. */
     private val DISPLAY_REGEX = Regex("^:?([0-9]{1,4})(\\.[0-9]{1,4})?$")
 
-    /** Tags are single shell-safe tokens; spaces would break the paste-ready command. */
+    /** Tags are single shell-safe tokens; spaces would break the spawn argv. */
     private val TAG_REGEX = Regex("^[A-Za-z0-9._:-]+$")
 
     /** Entry-point class shipped by the lorie library (independent of the app id). */
@@ -26,9 +23,6 @@ object X11CompanionCommand {
 
     /** Absolute path of the Android app_process binary. */
     private const val APP_PROCESS_BINARY = "/system/bin/app_process"
-
-    /** Fixed prefix of the launcher command. */
-    private const val APP_PROCESS = "$APP_PROCESS_BINARY /"
 
     /**
      * Builds the argv list to spawn the companion X server directly from the
@@ -68,64 +62,6 @@ object X11CompanionCommand {
             env[ProotShellEnvironment.ENV_TMPDIR] = tmpDirPath
         }
         return env
-    }
-
-    /**
-     * Builds the guest-loader command for the wrapper script installed in the
-     * Debian rootfs (spec 014, enmienda A): the user just runs
-     * `termux-x11 <display> [-tag <tag>]`.
-     *
-     * @param displayArg X display like ":0", "1" (colon is added) or ":1.5"
-     * @param tag optional document tag; "" or blank means no `-tag` flag
-     * @return paste-ready guest command, or null when any input is invalid
-     */
-    fun buildGuestCommand(displayArg: String, tag: String?): String? {
-        val display = normalizeDisplay(displayArg) ?: return null
-        val trimmedTag = tag?.trim().orEmpty()
-        if (trimmedTag.isNotEmpty() && (trimmedTag.startsWith("-") || !TAG_REGEX.matches(trimmedTag))) return null
-        val tagPart = if (trimmedTag.isEmpty()) "" else " -tag $trimmedTag"
-        val wrapper = java.io.File(TermuxConstants.TERMUX_X11.X11_GUEST_WRAPPER_GUEST_PATH).name
-        return "$wrapper $display$tagPart"
-    }
-
-    /**
-     * Chooses the command shown by the X11 tab overlay (spec 014, enmienda A, RF-8):
-     * the short guest loader command when the wrapper script exists on the host
-     * (rootfs ready), otherwise the absolute-path app_process one-liner.
-     *
-     * @param hasGuestWrapper whether {@link TermuxConstants.TERMUX_X11#X11_GUEST_WRAPPER_HOST_PATH} exists
-     * @param applicationId installed package id (only used by the fallback)
-     * @param displayArg X display
-     * @param tag optional document tag
-     * @return paste-ready command, or null when any input is invalid
-     */
-    fun chooseLaunchCommand(hasGuestWrapper: Boolean, applicationId: String, displayArg: String, tag: String?): String? {
-        return if (hasGuestWrapper)
-            buildGuestCommand(displayArg, tag)
-        else
-            buildLaunchCommand(applicationId, displayArg, tag)
-    }
-
-    /**
-     * Builds the shell command that starts the companion X server.
-     *
-     * @param applicationId installed package id (resolved by the caller)
-     * @param displayArg X display like ":0", "1" (colon is added) or ":1.5"
-     * @param tag optional document tag; "" or blank means no `-tag` flag
-     * @return paste-ready command, or null when any input is invalid
-     */
-    fun buildLaunchCommand(applicationId: String, displayArg: String, tag: String?): String? {
-        if (applicationId.isBlank()) return null
-        val display = normalizeDisplay(displayArg) ?: return null
-        val trimmedTag = tag?.trim().orEmpty()
-        // A leading '-' would read as another flag in the paste-ready command.
-        if (trimmedTag.isNotEmpty() && (trimmedTag.startsWith("-") || !TAG_REGEX.matches(trimmedTag))) return null
-
-        val tagPart = if (trimmedTag.isEmpty()) "" else " -tag $trimmedTag"
-        val pmPath = TermuxConstants.TERMUX_X11.X11_COMPANION_PM_PATH
-        val classpath = "\$($pmPath path --user 0 $applicationId | head -1 | cut -d: -f2)"
-        val niceName = TermuxConstants.TERMUX_X11.X11_COMPANION_PROCESS_NAME
-        return "CLASSPATH=$classpath $APP_PROCESS --nice-name=$niceName $CMD_ENTRY_POINT_CLASS $display$tagPart"
     }
 
     /**

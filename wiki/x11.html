@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Servidor X11 (pestañas X11) — Wiki de Terminal</title>
-    <meta name="description" content="Cómo arrancar el servidor X acompañante (companion) para las pestañas X11 de Terminal: comando copy-paste, etiquetas y casos proot.">
+    <meta name="description" content="Cómo arrancar el servidor X acompañante (companion) para las pestañas X11 de Terminal: botón de la pestaña, etiquetas y casos proot.">
     <meta name="color-scheme" content="dark">
     <link rel="canonical" href="https://terminal-gnulinux-docs.web.app/x11.html">
     <link rel="icon" href="https://terminal-gnulinux.web.app/img/icon-192.png" type="image/png">
@@ -56,10 +56,11 @@
                         <p>
                             Las pestañas X11 muestran la pantalla de un servidor X que corre
                             <strong>fuera</strong> de la interfaz de Terminal, en su propio proceso.
-                            La app no puede arrancar ese proceso por sí sola (necesita el APK
-                            en el classpath de <code>app_process</code>, dentro del mismo UID), así
-                            que te da un comando listo para copiar y pegar en una sesión de
-                            terminal: el <em>companion</em>.
+                            La app lo arranca por ti: el botón de la pestaña ejecuta el
+                            <strong>companion</strong> (el servidor X acompañante). Versiones
+                            anteriores mostraban un comando para copiar y pegar; ya no existe:
+                            en el guest Debian ese arranque está bloqueado por el kernel del
+                            dispositivo, así que el companion siempre se inicia desde la app.
                         </p>
                     </div>
 
@@ -68,43 +69,22 @@
                         En el menú lateral (drawer) toca <strong>X11</strong>. Se abre una pestaña nueva
                         (icono de escritorio) con la barra de teclas extra habituales del terminal.
                         Mientras no haya servidor, la pestaña muestra el estado
-                        <em>«No X server is running»</em> con el comando del companion y un botón
-                        <strong>Copiar comando</strong>.
+                        <em>«No X server is running»</em> con un botón
+                        <strong>Iniciar el servidor X</strong>.
                     </p>
 
                     <h2>Arrancar el companion</h2>
                     <p>
-                        La forma principal es <strong>el botón «Iniciar el servidor X»</strong>
-                        que muestra la pestaña X11 cuando no hay servidor: la app ejecuta el
-                        companion por su cuenta (exec directo de <code>app_process</code> con el
-                        APK en el <code>CLASSPATH</code>, como hace el ecosistema Termux) y el
-                        servidor se anuncia a la app por broadcast. Se puede pulsar de nuevo
-                        sin miedo: un servidor vivo se re-anuncia, no se pelea por el socket.
+                        Pulsa <strong>el botón «Iniciar el servidor X»</strong> que muestra la pestaña
+                        X11 cuando no hay servidor: la app ejecuta el companion por su cuenta (exec
+                        directo de <code>app_process</code> con el APK en el <code>CLASSPATH</code>,
+                        como hace el ecosistema Termux) y el servidor se anuncia a la app por
+                        broadcast. Se puede pulsar de nuevo sin miedo: un servidor vivo se
+                        re-anuncia, no se pelea por el socket.
                     </p>
                     <ul>
                         <li><code>:0</code> es el número de display. Puedes poner otro (<code>:1</code>); la pestaña se reconecta sola al servidor que aparece.</li>
                         <li>Los keymaps XKB salen de <code>xkb-data</code> del propio rootfs (la app detecta <code>/usr/share/X11/xkb</code>); si no está instalado: <code>apt install xkb-data</code>.</li>
-                    </ul>
-                    <h3>Vía avanzada</h3>
-                    <p>
-                        El botón usa el mismo mecanismo que los comandos de abajo; están para
-                        casos especiales (arrancar a mano, diagnóstico, otro display con la app
-                        cerrada). Nota probada en dispositivo: ejecutar <code>app_process</code>
-                        <em>dentro</em> del guest proot puede fallar con
-                        <em>CANNOT LINK EXECUTABLE</em>. En versiones del fork
-                        anteriores a la spec 018, proot descartaba el binding
-                        <code>/linkerconfig</code> al no poder canonicalizarlo
-                        (<em>can't sanitize binding: Permission denied</em>);
-                        eso ya está corregido (el binding sobrevive), pero si
-                        tu dispositivo sigue negando la lectura al proceso
-                        guest, el exec morirá igual: en ese caso ejecútalos
-                        siempre fuera del contenedor.
-                    </p>
-                    <pre><code>CLASSPATH=$(/system/bin/pm path --user 0 com.estrin217.terminal | head -1 | cut -d: -f2) \
-  /system/bin/app_process / --nice-name=termux-x11 com.termux.x11.CmdEntryPoint :0</code></pre>
-                    <ul>
-                        <li><code>pm path</code> calcula la ruta del APK <strong>instalado</strong> (no rompe ninguna actualización del fork).</li>
-                        <li><code>app_process</code> lanza <code>com.termux.x11.CmdEntryPoint</code> como proceso con el mismo UID que la app.</li>
                     </ul>
                     <p>
                         Cuando el comando arranca, el proceso anuncia el display a la app por
@@ -145,8 +125,8 @@
 
                     <h2>Cerrar y aclaraciones</h2>
                     <ul>
-                        <li>Cerrar la pestaña X11 no detiene el servidor: vive en su propio proceso hasta que mates el proceso o escribas en él. Para reproducir ventanas nuevas, pega el comando de nuevo.</li>
-                        <li>Si la pestaña dice <em>«Disconnected from the X server»</em>, el companion murió o se detuvo; cópialo y arranca otra vez.</li>
+                        <li>Cerrar la pestaña X11 no detiene el servidor: vive en su propio proceso hasta que mates el proceso o escribas en él. Para reproducir ventanas nuevas, vuelve a pulsar el botón.</li>
+                        <li>Si la pestaña dice <em>«Disconnected from the X server»</em>, el companion murió o se detuvo: vuelve a pulsar el botón para arrancarlo otra vez.</li>
                         <li>Si un build de este fork no trae la librería nativa (<code>libXlorie</code>), la pestaña avisa: instala el APK arm64-v8a de <a href="https://github.com/ESTRIN217/Terminal/releases">Releases</a>.</li>
                         <li>Este es el integrado del fork ESTRIN217 de <a href="https://github.com/ESTRIN217/Terminal">Terminal</a> sobre <a href="https://github.com/termux/termux-x11">termux-x11</a>; sin afiliación con el equipo de Termux ni con X.Org.</li>
                     </ul>

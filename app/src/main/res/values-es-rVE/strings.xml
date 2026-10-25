@@ -109,13 +109,11 @@
         <string name="action_open_x11">X11</string>
         <string name="x11_session_default_name">X11</string>
         <string name="x11_no_server_title">No hay servidor X en ejecución</string>
-        <string name="x11_no_server_body">Pulsa «Iniciar el servidor X» para lanzar el companion desde la app, o pega el comando de abajo en una sesión de terminal:</string>
+        <string name="x11_no_server_body">Pulsa «Iniciar el servidor X» para lanzar el companion desde la app.</string>
         <string name="x11_no_server_hint">El servicio arrancado así vive en su propio proceso; puedes cerrar esta pestaña cuando quieras sin detenerlo.</string>
         <string name="x11_start_server">Iniciar el servidor X</string>
         <string name="x11_start_server_failed">No se pudo iniciar el servidor X: %1$s</string>
         <string name="x11_start_server_sent">Companion en ejecución; esperando el display…</string>
-        <string name="x11_copy_command">Copiar comando</string>
-        <string name="x11_command_copied">Comando copiado al portapapeles</string>
         <string name="x11_waiting_for_server">Esperando el servidor X…</string>
         <string name="x11_library_missing_title">El soporte X11 no está disponible en esta versión</string>
         <string name="x11_library_missing_body">Este APK no incluye la librería nativa del servidor X (libXlorie) para este dispositivo. Instala una build de Terminal para arm64-v8a.</string>

@@ -155,12 +155,13 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         // Run again in case service is already started and onCreate() is not called
         runStartForeground();
 
-        // Spec 014 (enmienda A): keep the guest termux-x11 wrapper script in the
-        // Debian rootfs current (idempotent, content-compared). The companion
-        // guest command then only needs the injected TERMUX_X11_APK env var.
-        Error wrapperError = TermuxX11GuestLoaderLibrary.ensureWrapperScript(this);
-        if (wrapperError != null)
-            Logger.logErrorExtended(LOG_TAG, "Failed to ensure termux-x11 guest wrapper\n" + wrapperError);
+        // Spec 018 (Enmienda A, RF-07): the guest termux-x11 wrapper (spec 014,
+        // enmienda A) is retired — the companion only starts from the app
+        // (X11CompanionSpawner). Remove any copy left by an older build so a
+        // stale script cannot be executed inside the guest.
+        Error wrapperCleanupError = TermuxX11GuestLoaderLibrary.removeGuestWrapperIfPresent();
+        if (wrapperCleanupError != null)
+            Logger.logErrorExtended(LOG_TAG, "Failed to remove the termux-x11 guest wrapper\n" + wrapperCleanupError);
 
         String action = null;
         if (intent != null) {

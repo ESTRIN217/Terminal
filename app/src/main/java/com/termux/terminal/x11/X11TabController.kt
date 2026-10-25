@@ -3,7 +3,6 @@ package com.termux.terminal.x11
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.SharedPreferences
-import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -12,7 +11,6 @@ import android.os.RemoteException
 import android.view.KeyEvent
 import com.termux.shared.errors.Error
 import com.termux.shared.logger.Logger
-import com.termux.shared.termux.TermuxConstants
 import com.termux.x11.ICmdEntryInterface
 import com.termux.x11.LorieView
 import com.termux.x11.Prefs
@@ -113,25 +111,6 @@ class X11TabController(
         val v = view ?: return
         if (Looper.myLooper() == Looper.getMainLooper()) block(v) else mainHandler.post { block(v) }
     }
-
-    /**
-     * Paste-ready companion launch command for the "no server" banner
-     * (spec 014, enmienda A): prefers the guest loader command (`termux-x11 ...`)
-     * when the wrapper script exists in the rootfs, and falls back to the
-     * absolute-path app_process one-liner.
-     * @see X11CompanionCommand.chooseLaunchCommand
-     */
-    fun companionCommand(display: String = ":0"): String? =
-        X11CompanionCommand.chooseLaunchCommand(
-            guestWrapperExists(),
-            resolveApplicationId(context),
-            display,
-            tag.ifEmpty { null }
-        )
-
-    /** Host check for the idempotent guest wrapper written on app start. */
-    private fun guestWrapperExists(): Boolean =
-        java.io.File(TermuxConstants.TERMUX_X11.X11_GUEST_WRAPPER_HOST_PATH).isFile()
 
     /**
      * Start the companion X server from the app itself (spec 014, enmienda B).
@@ -390,18 +369,5 @@ class X11TabController(
     companion object {
         private const val LOG_TAG = "X11TabController"
         private const val CONNECT_RETRY_MS = 250L
-
-        /**
-         * Application id used by the companion command; the shared-UID placeholder
-         * resolution makes `packageName` the fork's install id.
-         */
-        fun resolveApplicationId(context: Context): String {
-            return try {
-                val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                packageInfo.packageName
-            } catch (e: PackageManager.NameNotFoundException) {
-                context.packageName
-            }
-        }
     }
 }

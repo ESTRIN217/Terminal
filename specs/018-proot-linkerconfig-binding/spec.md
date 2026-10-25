@@ -1,6 +1,7 @@
 # Spec 018 — Binding `/linkerconfig` superviviente en proot
 
-Estado: implementada (pendiente de verificación en dispositivo, 2026-10-25).
+Estado: enmienda A implementada (2026-10-25) — pendiente verificación en
+dispositivo (APK nuevo instalado → RF-05 al abrir sesión nueva).
 
 ## Contexto y objetivo
 
@@ -108,3 +109,50 @@ localizado.
 ## Dudas abiertas
 
 - Ninguna.
+
+## Enmienda A — binarios embebidos no se actualizan + retirada de la vía guest (2026-10-25)
+
+Verificado en dispositivo: el warning `can't sanitize binding` seguía saliendo
+tras instalar el APK nuevo. Causa real: `TermuxInstaller.installProotIfNeeded`
+solo copia `proot` si el binario **no existe**; al actualizar la APK, el
+binario viejo (con el bug de la causa raíz) sobrevive en
+`$PREFIX/bin/proot`, de modo que ningún fix embebido llega nunca al
+dispositivo hasta borrado manual de datos. El mismo patrón existe para
+`virgl_test_server`. Adicionalmente, el usuario decide retirar la vía guest del
+companion (Comando B): en su dispositivo el tracee guest tampoco puede leer
+`/linkerconfig` (SELinux), de modo que ejecutar `termux-x11`/`app_process`
+dentro del guest solo genera ruido (`WARNING: linker ...`,
+`CANNOT LINK EXECUTABLE`). La vía soportada (spec 014 Enmienda B) es el spawn
+desde la app. La vía pastable (Comando A del overlay) se retira con ella:
+no hay ningún contexto donde funcione.
+
+- **RF-05.** CUANDO la app se instala y el binario embebido (`proot`,
+  `virgl_test_server`) difiere del asset del APK (comparación de tamaño),
+  ENTONCES el instalador lo sobrescribe con el del APK. SI coincide, no se
+  toca. *Verificable:* una actualización de APK con `proot` cambiado sustituye
+  el binario sin acción del usuario; el warning de can't sanitize desaparece
+  al abrir nueva sesión.
+- **RF-06.** EL SISTEMA no muestra en el overlay "no server" de la pestaña X11
+  ni comando copiable ni botón de copiar; solo el título, el cuerpo y el botón
+  «Iniciar el servidor X» (spawn lado app). *Verificable:* `grep` de strings de
+  copia fuera de historial y captura del overlay.
+- **RF-07.** EL SISTEMA ya no escribe el wrapper guest `/usr/bin/termux-x11` en
+  el rootfs y lo elimina si una instalación anterior lo dejó, de forma
+  idempotente, en cada arranque de `TermuxService`. *Verificable:* no existe
+  `<rootfs>/usr/bin/termux-x11` tras abrir una sesión.
+- **RF-08.** EL SISTEMA deja de inyectar `TERMUX_X11_APK` en el entorno del
+  guest (su único consumidor era el wrapper retirado). *Verificable:* el
+  entorno del guest no contiene la variable; resto byte a byte igual.
+- **RF-09.** EL SISTEMA mantiene los binds `-b /apex`, `-b /linkerconfig`,
+  `-b /data/app`, `-b /system` (decisión del usuario: sin cambio).
+- **RF-10.** La doc (`wiki/x11.html`) ya no describe el comando copiable ni el
+  arranque desde el guest como mecanismos vigentes. *Verificable:* lectura de
+  la página.
+
+Decisión sobre el binario embebido: comparación de tamaño asset↔instalado.
+Alternativa descartada: hash (necesitaría mantener semilla de build) y
+re-copiar siempre (escritura innecesaria en cada arranque). Fuera de alcance
+(spec 014 queda como historial): nada; este documento (018) gobierna los RF
+nuevos. `TermuxX11GuestLoaderLibrary` se reduce a las partes usadas
+(`ENV_X11_APK` pasa a eliminarse junto con la inyección; `ENV_X11_LIBDIR` y
+`applyApkPathEnv` se conservan porque los usa el spawn lado app).

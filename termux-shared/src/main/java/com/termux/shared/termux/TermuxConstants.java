@@ -1501,14 +1501,11 @@ public final class TermuxConstants {
         /** Nice name given to the companion X server process launched via app_process. */
         public static final String X11_COMPANION_PROCESS_NAME = "termux-x11"; // Default: "termux-x11"
 
-        /** Absolute path of the Android {@code pm} tool used to resolve the companion classpath; absolute so the paste command also works inside the proot guest with {@code /system} bound (spec 014, RF-8). */
-        public static final String X11_COMPANION_PM_PATH = "/system/bin/pm"; // Default: "/system/bin/pm"
+        /** Companion spawn environment variable holding the app's extracted native library dir (spec 014, enmienda B). */
+        public static final String ENV_X11_LIBDIR = "TERMUX_X11_LIBDIR"; // Default: "TERMUX_X11_LIBDIR"
 
-        /** Host path of the idempotent guest wrapper script written into the Debian rootfs (spec 014, enmienda A). */
+        /** Host path of the guest wrapper script written by older builds into the Debian rootfs; kept for the idempotent cleanup (spec 018, Enmienda A, RF-07). */
         public static final String X11_GUEST_WRAPPER_HOST_PATH = DEBIAN_ROOTFS_DIR_PATH + "/usr/bin/termux-x11"; // Default: "$PREFIX/debian/usr/bin/termux-x11"
-
-        /** Path of the wrapper script as seen from inside the guest (spec 014, enmienda A). */
-        public static final String X11_GUEST_WRAPPER_GUEST_PATH = "/usr/bin/termux-x11"; // Default: "/usr/bin/termux-x11"
 
         /** Fallback display name used by the companion command when none is passed. */
         public static final String X11_DEFAULT_DISPLAY = ":0"; // Default: ":0"

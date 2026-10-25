@@ -1,17 +1,24 @@
 # MEMORY.md — Terminal
 ## Estado actual
 - Rama `3.0`. Cerradas 001–017.
-- **Spec 018 (2026-10-25) implementada, PENDIENTE verificación en
-  dispositivo:** warning `can't sanitize binding "/linkerconfig"` eliminado.
-  Causa: en `new_binding()` de proot, `realpath2(tracee->reconf.tracee, ...)`
-  corre como `realpath(3)` crudo (esa ref SIEMPRE NULL en fase CLI) y la
-  kernel niega el stat (EACCES, termux/proot#254) → binding descartado en
-  silencio → guest sin config de linker (CANNOT LINK libnativeloader). Fix:
-  espejo del hack de `canon.c` en la fase de arranque (`app/src/main/cpp/
-  proot/path/binding.c`, exact-match `/linkerconfig` + `-EACCES`). Si tras
-  instalar la pestaña X11 sigue con CANNOT LINK dentro del guest, es SELinux
-  del propio tracee y la vía soportada sigue siendo spawn lado app
-  (spec 014 Enmienda B).
+- **Spec 018 (2026-10-25) implementada + Enmienda A, PENDIENTE verific.
+  dispositivo:** el warning `can't sanitize binding "/linkerconfig"` seguía
+  tras instalar el APK porque el REINSTalador no actualizaba binarios
+  embebidos: `installProotIfNeeded` copiaba solo si el binario no existía →
+  el proot viejo (con la causa del warning: binding descartado en fase
+  CLI, ver abajo) sobrevivía a toda actualización de APK. Fix RF-05:
+  `installEmbeddedBinaryIfNeeded` compara longitud asset↔instalado (proot Y
+  virgl); helper puro `binaryNeedsUpgrade` con test. La vía guest del
+  companion está RETIRADA (RF-06..08): sin comando copiable ni botón copiar
+  en el overlay ("no server" solo botón Iniciar), sin wrapper
+  `<rootfs>/usr/bin/termux-x11` (eliminación idempotente en `TermuxService`),
+  sin `TERMUX_X11_APK` en env guest, constantes `X11_GUEST_WRAPPER_GUEST_PATH`
+  y `X11_COMPANION_PM_PATH` borradas. Companion SIEMPRE vía app
+  (`X11CompanionSpawner`); binds -b /apex /linkerconfig /data/app /system se
+  quedan (decisión usuario). Causa proot del warning: `realpath2(traíba
+  ref NULL en CLI)` → realpath(3) crudo → EACCES (termux/proot#254) →
+  binding descartado; fix: espejo del hack de canon.c en `new_binding()`
+  (binding.c).
 - Spec 017 cerrada (2026-10-25): ajustes de X11 en `SettingsScreen` → destino
   `X11` en `SettingsComposeActivity` → `X11SettingsScreen`
   (Salida/Puntero/Teclado). SOLO persiste vía `Prefs` de lorie
@@ -56,11 +63,13 @@
   el guard VirGL (socket) es excepción por coste de driver.
 - lorie: al quitar símbolos Java de lorie, grep del espejo en `cpp/`
   (JNI abort: caso `MainActivity` retirado, hooks vía `LorieView.Client`).
-- `app_process` dentro del proot guest no funciona (ESTRIN Unisoc/A12):
-  companion se inicia desde la app (`X11CompanionSpawner` + CLASSPATH +
-  `TERMUX_X11_LIBDIR`); `TMPDIR=<rootfs>/tmp` activa keymap XKB chroot.
-- Loader guest: env `TERMUX_X11_APK` + wrapper idempotente
-  `files/debian/usr/bin/termux-x11` (reescrito en `TermuxService`).
+- `app_process` dentro del proot guest no funciona (ESTRIN Unisoc/A12) y la
+  vía guest está retirada (spec 018 A): companion SOLO desde la app
+  (`X11CompanionSpawner` + CLASSPATH + `TERMUX_X11_LIBDIR`);
+  `TMPDIR=<rootfs>/tmp` activa keymap XKB chroot.
+- Loader guest: RETIRADO (spec 018 A): no wrapper, sin `TERMUX_X11_APK`.
+- Binarios embebidos (proot/virgl): el instalador ahora ACTUALIZA si el asset
+  difiere en tamaño (antes solo copiaba si no existía → stale forever).
 - Host aarch64: aidl/aapt2 x86_64 rotos; submódulos anidados `--init
   --recursive` antes de nativo; parches xserver sin commit, no limpiar.
 - `BUILD SUCCESSFUL` no garantiza APK utilizable: unzip (libXlorie.so,

@@ -16,7 +16,6 @@ import com.termux.shared.termux.proot.GpuDetectionLibrary;
 import com.termux.shared.termux.proot.LlvmpipeThreadsLibrary;
 import com.termux.shared.termux.proot.VirglLibrary;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
-import com.termux.shared.termux.x11.TermuxX11GuestLoaderLibrary;
 
 import java.nio.charset.Charset;
 import java.io.File;
@@ -536,10 +535,9 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
         // apex-hosted libs (libnativeloader.so, libart.so) — CANNOT LINK EXECUTABLE.
         command.add("-b");
         command.add("/linkerconfig");
-        // APK install tree (spec 014, enmienda A): `pm path` output and the
-        // TERMUX_X11_APK classpath must be resolvable inside the guest, otherwise
-        // proot would translate /data/app/* into the rootfs and the companion
-        // could not load its APK dex.
+        // APK install tree (spec 014, enmienda A): `/data/app` keeps `pm path`
+        // output resolvable from the guest for manual diagnosis; the companion
+        // itself now always spawns from the app side.
         command.add("-b");
         command.add("/data/app");
         command.add("-b");
@@ -631,17 +629,8 @@ public class ProotShellEnvironment extends AndroidShellEnvironment {
                 getLlvmpipeThreadsCount(currentPackageContext));
         }
 
-        // Spec 014 (enmienda A): host APK path for the guest termux-x11 companion
-        // wrapper (its CLASSPATH). Computed per command so app updates are picked
-        // up automatically; skipped when the path cannot be resolved (never
-        // breaks existing sessions).
-        try {
-            TermuxX11GuestLoaderLibrary.applyApkPathEnv(environment,
-                currentPackageContext.getApplicationInfo().sourceDir);
-        } catch (Exception e) {
-            Logger.logErrorExtended(LOG_TAG,
-                "Failed to resolve application APK path for " + TermuxX11GuestLoaderLibrary.ENV_X11_APK + "\n" + e.toString());
-        }
+        // The removed companion APK classpath var (spec 014 enmienda A: TERMUX_X11_APK)
+        // went away with the guest wrapper (spec 018, Enmienda A, RF-08).
 
         // termux-exec conflicts with proot: never propagate these. LD_PRELOAD
         // must also stay out of the host proot process environment (the host

@@ -16,3 +16,24 @@
   RF-01, RF-02
   - Hecho cuando: la sección del warning ya no lo describe como limitación
     vigente (pendiente re-etiquetar fino según lo observado en dispositivo).
+
+## Enmienda A
+
+- [x] **T5.** `TermuxInstaller`: actualización de `proot`/`virgl_test_server`
+  cuando el asset difiere en tamaño del binario instalado; helper puro con
+  test JUnit (rojo→verde). RF-05
+  - Hecho cuando: `./gradlew test` en verde y la lógica de upgrade cubierta.
+- [x] **T6.** Overlay X11 sin comando ni botón de copiar; strings ×3
+  ajustadas. RF-06
+  - Hecho cuando: `./gradlew test` en verde; sin referencias en main/test a
+    `x11_copy_command`, `x11_command_copied`, `buildGuestCommand`,
+    `buildLaunchCommand`, `chooseLaunchCommand` ni `companionCommand`.
+- [x] **T7.** `TermuxService` deja de escribir el wrapper y lo elimina
+  (idempotente); `TermuxX11GuestLoaderLibrary` reducido; se retira la
+  inyección `TERMUX_X11_APK`; constantes huérfanas fuera. RF-07, RF-08
+  - Hecho cuando: `TermuxX11GuestLoaderLibraryTest` ajustado y verde;
+    `./gradlew test` global verde.
+- [x] **T8.** Wiki (RF-10), spec (estado), `MEMORY.md`, commits
+  Convencionales. RF-10
+  - Hecho cuando: página sin referencias al comando copiable/guest;
+    memoria actualizada.

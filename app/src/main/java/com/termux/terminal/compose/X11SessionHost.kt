@@ -1,22 +1,16 @@
 package com.termux.terminal.compose
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.view.MotionEvent
 import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -25,7 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.termux.R
 import com.termux.terminal.x11.X11ConnectionState
@@ -115,7 +108,6 @@ private fun installTouchForwarding(view: LorieView) {
 @Composable
 private fun NoServerOverlay(state: X11ConnectionState, controller: X11TabController) {
     val context = LocalContext.current
-    val command = remember(state) { controller.companionCommand() } ?: ""
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -140,17 +132,6 @@ private fun NoServerOverlay(state: X11ConnectionState, controller: X11TabControl
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp)
             )
-            Box(
-                modifier = Modifier
-                    .padding(top = 6.dp, bottom = 12.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                    .padding(12.dp)
-            ) {
-                Text(
-                    text = command,
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace)
-                )
-            }
             Button(onClick = {
                 val error = controller.startCompanion()
                 if (error == null) {
@@ -163,12 +144,6 @@ private fun NoServerOverlay(state: X11ConnectionState, controller: X11TabControl
             }) {
                 Text(stringResource(R.string.x11_start_server))
             }
-            Button(onClick = {
-                copyToClipboard(context, command)
-                Toast.makeText(context, context.getString(R.string.x11_command_copied), Toast.LENGTH_SHORT).show()
-            }) {
-                Text(stringResource(R.string.x11_copy_command))
-            }
             Text(
                 text = stringResource(R.string.x11_no_server_hint),
                 style = MaterialTheme.typography.bodySmall,
@@ -176,9 +151,4 @@ private fun NoServerOverlay(state: X11ConnectionState, controller: X11TabControl
             )
         }
     }
-}
-
-private fun copyToClipboard(context: Context, text: String) {
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    clipboard.setPrimaryClip(ClipData.newPlainText("termux-x11", text))
 }
