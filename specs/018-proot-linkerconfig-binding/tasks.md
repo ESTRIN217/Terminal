@@ -8,7 +8,7 @@
   RF-02, RF-04
   - Hecho cuando: `./gradlew test` exitosa y el asset `proot` re-generado
     (1539896 B, 2026-10-25 08:05, antes 1539848 B).
-- [ ] **T3.** Verificación en dispositivo: sesión sin warning, `ls
+- [x] **T3.** Verificación en dispositivo: sesión sin warning, `ls
   /linkerconfig` en guest, resultado de `termux-x11 :0` documentado. RF-02
   - Hecho cuando: captura/log del resultado anotado en spec (estado) y
     `MEMORY.md` actualizado.

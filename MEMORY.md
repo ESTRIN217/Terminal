@@ -1,24 +1,22 @@
 # MEMORY.md — Terminal
 ## Estado actual
-- Rama `3.0`. Cerradas 001–017.
-- **Spec 018 (2026-10-25) implementada + Enmienda A, PENDIENTE verific.
-  dispositivo:** el warning `can't sanitize binding "/linkerconfig"` seguía
-  tras instalar el APK porque el REINSTalador no actualizaba binarios
-  embebidos: `installProotIfNeeded` copiaba solo si el binario no existía →
-  el proot viejo (con la causa del warning: binding descartado en fase
-  CLI, ver abajo) sobrevivía a toda actualización de APK. Fix RF-05:
-  `installEmbeddedBinaryIfNeeded` compara longitud asset↔instalado (proot Y
-  virgl); helper puro `binaryNeedsUpgrade` con test. La vía guest del
-  companion está RETIRADA (RF-06..08): sin comando copiable ni botón copiar
-  en el overlay ("no server" solo botón Iniciar), sin wrapper
-  `<rootfs>/usr/bin/termux-x11` (eliminación idempotente en `TermuxService`),
-  sin `TERMUX_X11_APK` en env guest, constantes `X11_GUEST_WRAPPER_GUEST_PATH`
-  y `X11_COMPANION_PM_PATH` borradas. Companion SIEMPRE vía app
-  (`X11CompanionSpawner`); binds -b /apex /linkerconfig /data/app /system se
-  quedan (decisión usuario). Causa proot del warning: `realpath2(traíba
-  ref NULL en CLI)` → realpath(3) crudo → EACCES (termux/proot#254) →
-  binding descartado; fix: espejo del hack de canon.c en `new_binding()`
-  (binding.c).
+- Rama `3.0`. Cerradas 001–018 (2.1.0 publicada).
+- **Spec 018 CERRADA (2026-10-25), verificada en dispositivo:** warning
+  `can't sanitize binding "/linkerconfig"` eliminado y vía guest del companion
+  retirada. Resumen:
+  - Proot: `new_binding()` acepta `/linkerconfig` con `EACCES` en fase CLI
+    (mirroring canon.c, termux/proot#254).
+  - Instalador: binarios embebidos (proot/virgl) se ACTUALIZAN si difieren
+    en tamaño del asset (antes solo copiaba si no existía → stale forever;
+    por eso el primer fix "no llegaba"). Helper puro `binaryNeedsUpgrade`.
+  - Overlay "no server" X11: solo botón «Iniciar el servidor X»; sin comando
+    copiable (strings ×3 ajustadas).
+  - Wrapper guest `/usr/bin/termux-x11` no se escribe y se limpia de raíces
+    viejas en `TermuxService`; sin `TERMUX_X11_APK` en env guest;
+    constantes `X11_GUEST_WRAPPER_GUEST_PATH`/`X11_COMPANION_PM_PATH`
+    borradas. Companion SIEMPRE vía app (`X11CompanionSpawner`).
+  - Binds `-b /apex /linkerconfig /data/app /system` se quedan (decisión
+    usuario).
 - Spec 017 cerrada (2026-10-25): ajustes de X11 en `SettingsScreen` → destino
   `X11` en `SettingsComposeActivity` → `X11SettingsScreen`
   (Salida/Puntero/Teclado). SOLO persiste vía `Prefs` de lorie

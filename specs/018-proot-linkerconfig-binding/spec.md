@@ -1,7 +1,9 @@
 # Spec 018 — Binding `/linkerconfig` superviviente en proot
 
-Estado: enmienda A implementada (2026-10-25) — pendiente verificación en
-dispositivo (APK nuevo instalado → RF-05 al abrir sesión nueva).
+Estado: implementada y verificada en dispositivo (2026-10-25): sesión Debian
+sin `can't sanitize binding "/linkerconfig"`, `ls /linkerconfig` lista
+contenido en el guest y el overlay "no server" solo muestra el botón de
+arranque.
 
 ## Contexto y objetivo
 
