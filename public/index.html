@@ -321,10 +321,15 @@
                     <article class="card">
                         <h3>Estadísticas de CPU</h3>
                         <p>
-                            Desde Android 8, SELinux deniega a las apps <code>untrusted_app</code> leer
-                            <code>/proc/stat</code>, así que <code>btop</code> y <code>htop</code> no muestran
-                            estadísticas de CPU en dispositivos stock con SELinux enforcing. Sin root o
-                            SELinux permissive no hay workaround.
+                            En dispositivos con SELinux del fabricante, la app sirve lecturas
+                            de <code>/proc/stat</code>, <code>/proc/cpuinfo</code> y
+                            <code>/proc/uptime</code> por <em>snapshots</em> en la sesión Debian,
+                            así que <code>htop</code> y <code>btop</code> funcionan sin root.
+                            Lo que queda de SELinux es el tamaño mínimo que <code>btop</code> pide
+                            por su cuenta: una terminal de al menos 80 columnas × 24 líneas; si
+                            es más estrecha muestra <code>Terminal size too small</code> — gira el
+                            dispositivo o reduce la letra. Detalles en la
+                            <a href="https://terminal-gnulinux-docs.web.app/limitaciones.html">wiki</a>.
                         </p>
                     </article>
                 </div>

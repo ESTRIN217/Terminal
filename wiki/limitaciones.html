@@ -195,9 +195,9 @@
                             la opción si algo sale mal (el detalle queda en el log de la app).
                             Es mutuamente excluyente con la vía Adreno/KGSL: para cambiar de una
                             a otra hay que pasar por «desactivada».</li>
-                        <li>Abre la <a href="x11.html">pestaña X11</a> de la app (el companion se
-                            arranca desde la propia app; el comando manual del handbook es solo
-                            el plan B) y deja el display vivo.</li>
+                        <li>Abre la <a href="x11.html">pestaña X11</a> de la app (el companion
+                            se arranca siempre desde la propia app; el guest no puede hacerlo) y
+                            deja el display vivo.</li>
                         <li>En la sesión Debian, las variables del entorno de la vía se inyectan
                             <strong>solo cuando el socket del servidor existe</strong>
                             (<code>/tmp/virgl_test</code>; haz <code>ls -l /tmp/virgl_test</code> para

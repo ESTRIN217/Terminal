@@ -61,6 +61,11 @@ Versión actual: Ver el [CHANGELOG](CHANGELOG.md) o las release.
   selección en la topbar, compresión **zip/tar.xz/7z** (con contraseña en `.7z`),
   propiedades en dos pestañas (permisos POSIX + SELinux) y edición de archivos con
   `nano`/`vim`.
+- **Aplicaciones gráficas sin root** — pestañas X11 integradas: el servidor X
+  companion se lanza desde la propia app para el Debian/proot (con `DISPLAY` ya
+  exportado), el teclado y las teclas extra llegan al guest con la semántica de la
+  app standalone, y hay ajustes dedicados (resolución, orientación, touch) para las
+  pestañas. Receta en la wiki.
 - **Refresco a 90/120 Hz**, con opción de forzar 60 Hz para ahorrar batería.
 - **Atribución de recursos** según el hardware del dispositivo (scrollback, parpadeo del
   cursor y renderer por defecto).
@@ -124,45 +129,20 @@ automático. Publica el texto completo al abrir un issue; los issues con
 
 ### Limitaciones conocidas (SELinux OEM)
 
-En algunos dispositivos, la política SELinux del fabricante impide a la app enumerar
-`/dev`, `/dev/pts` y `/sys`, por lo que `ls /dev` puede fallar con `Permission denied`
-dentro de la sesión Debian. No es un bug: el acceso a dispositivos concretos
-(`/dev/null`, `/dev/tty`, ...) sigue funcionando. Detalles en
-[`docs/proot-debian-arm64-plan.md`](docs/proot-debian-arm64-plan.md) (sección 7).
+- La política SELinux de algunos fabricantes impide a la app enumerar `/dev`,
+  `/dev/pts` y `/sys`, así que `ls /dev` puede fallar con `Permission denied` dentro
+  de la sesión Debian. El acceso a dispositivos concretos (`/dev/null`, `/dev/tty`…)
+  sigue funcionando.
+- Las lecturas de `/proc/stat` (Android≥8), `/proc/cpuinfo` (sin `model name`) y
+  `/proc/uptime` que bloquea SELinux están resueltas sin root: la app sirve
+  *snapshots* de procfs por binds de proot durante la sesión, así que `htop` y `btop`
+  funcionan en dispositivos stock (specs 010 y 019). Residual: `btop` exige por su
+  propia configuración una terminal de al menos **80 columnas × 24 líneas**; si es
+  más estrecha muestra `Terminal size too small` — gira el dispositivo o reduce la
+  letra.
 
-Del mismo modo, desde Android 8 (API 26) SELinux deniega a las apps `untrusted_app`
-leer `/proc/stat`, así que los monitores de CPU (`btop`, `htop`) morirían con
-`Cannot open /proc/stat: Permission denied`. Resuelto sin root (spec 010): durante
-las sesiones Debian la app sondea si el dispositivo realmente bloquea cada fuente
-(`/proc/stat`, `/proc/meminfo`, `/proc/loadavg`) y, por cada bloqueada, añade un bind
-de proot `-b <snapshot>:<fichero>` alimentado cada segundo con los datos que Android
-sí permite ver (procesos propios de la sesión → carga de CPU, `SystemClock` →
-`btime`, `ActivityManager.MemoryInfo` → RAM, `loadavg` real cuando es legible —
-lo que no es carga propia se reporta como idle, sin muestras fijas). Si el
-dispositivo sí deja leer los ficheros originales (root, SELinux permissive), no se
-escribe ningún snapshot y se usa la vía nativa. Sin sesiones activas, el muestreo
-se para. Detalles de datos en [`docs/proot-debian-arm64-plan.md`](docs/proot-debian-arm64-plan.md)
-(sección 7) y [`specs/010-procstat-htop/`](specs/010-procstat-htop/).
-
-En dispositivos que además deniegan enumerar `/sys`, `btop` fallaba a su arranque
-(`ERROR: Exception in Shared::init() -> ... [/sys/devices]`): sin la línea
-`model name` (que los kernels arm64 de Android no emiten en `/proc/cpuinfo`), btop cae
-a un fallback que lista `/sys/devices`. Resuelto sin root con la misma técnica de
-snapshot (spec 019): en el arranque de cada sesión Debian se bindea
-`-b <snapshot>:/proc/cpuinfo` con una copia verbatim del fichero real más una línea
-`model name` con el SoC del dispositivo. Si el invitado ya tiene `model name` (o no
-hay nombre utilizable), no se escribe bind alguno y se usa la vía nativa.
-
-Tras probar `btop` en dispositivo, cayó también en `/proc/uptime` (`Failed to get
-uptime`), de la misma familia restringida de procfs que `/proc/stat`; la enmienda RF-9
-de la spec 019 lo sirve como snapshot vivo más del mismo sampler (uptime exacto de
-`SystemClock.elapsedRealtime()`, avanzando cada tick), bindeado solo cuando el
-dispositivo bloquea su lectura directa.
-
-Nota de uso: con los overlays, `btop` arranca sin errores del sistema, pero exige por su
-propia configuración un mínimo de **80 columnas y 24 líneas**. En una terminal estrecha
-muestra `Terminal size too small: Width = 72 (…)`; no es un fallo del rootfs: rota el
-dispositivo a apaisado o reduce el tamaño de letra de la terminal hasta cubrir 80×24.
+Detalles técnicos y receta de VirGL en la wiki:
+[`terminal-gnulinux-docs.web.app/limitaciones.html`](https://terminal-gnulinux-docs.web.app/limitaciones.html).
 
 ## Gráficos y GPU (specs 011/012/013)
 

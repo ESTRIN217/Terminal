@@ -20,6 +20,49 @@ y no está afiliado al equipo de Termux.
   del teclado virtual y la barra de teclas extra inyectan vía el procesador de
   teclas del standalone (lorie `InputEventSender` reutilizado), con macros de
   modificadores, paste del portapapeles y zoom del renderer.
+- **Pestañas X11 con el companion lanzado desde la app** (spec 014): entrada X11 en
+  el drawer con pestaña de escritorio; el estado *«No X server is running»* arranca el
+  companion ejecutando `app_process` directamente (APK en `CLASSPATH`) y el servidor
+  se anuncia a la pestaña por broadcast; los sockets viven en el `TMPDIR` del rootfs
+  (keymaps XKB de `xkb-data`) y los extras/teclado/touch usan el pipeline de entrada
+  de lorie.
+- **Aceleración GPU vía VirGL** (spec 013): segunda vía sin root agnóstica del
+  fabricante para GPUs sin `KGSL` (Mali, PowerVR, Adreno sin KGSL, gráficas
+  integradas genéricas): `virgl_test_server` compilado en el pipeline del fork y embebido en el APK, activado
+  desde Ajustes → «Estado GPU» → «Aceleración GPU vía VirGL»; el socket por sesión
+  se limpia al cerrarla (reversible). Ver ruta y validación en la wiki.
+- **Ajustes X11 en Compose** (spec 017): pantalla `Ajustes → «Ajustes X11»` con
+  resolución/escala, filtrado, orientación y modo de touch de las pestañas; persiste
+  en la misma capa de preferencias de lorie (`Prefs`) y los cambios llegan a la
+  pestaña conectada al instante, sin reiniciarla.
+
+### Cambiado
+
+#### Terminal
+- **Companion X11: retirada la vía del *guest*** (spec 018-A): el arranque del servidor X
+  desde Debian/proot ya no existe (el `app_process` del guest está bloqueado por el
+  kernel de los dispositivos objetivo); el companion se lanza **solo desde la app** y la
+  pantalla «No X server» ya no muestra comando copiable, solo el botón
+  «Iniciar el servidor X».
+- **Los binarios embebidos se actualizan con el APK** (spec 018-A): si un
+  proot/virgl test server embebido difiere del asset del APK en tamaño, el instalador
+  lo reemplaza (antes solo lo copiaba si no existía, quedándose la versión antigua).
+
+### Corregido
+
+#### Terminal
+- **`can't sanitize binding "/linkerconfig"`** (spec 018): proot (`new_binding()`)
+  acepta el binding `/linkerconfig` con `EACCES` en fase CLI (espejo de canon.c,
+  termux/proot#254); desaparece el warning al arrancar Debian.
+- **`btop` no arrancaba bajo SELinux en stock** (spec 019): overlays de `/proc/cpuinfo`
+  (snapshot verbatim + línea `model name` desde `SOC_MODEL`) y `/proc/uptime`
+  (snapshot vivo del sampler que avanza por tick) servidos por el mismo punto de binds
+  de `/proc`; btop resuelve la CPU y el uptime sin leer `/sys/devices` (readdir denegado).
+
+### Notas
+- **Limitación conocida:** `btop` exige ≥80 columnas × 24 líneas; en ventanas más
+  estrechas muestra `Terminal size too small` (rotar / reducir fuente).
+
 
 ## [2.1.0] — 2026-10-21
 

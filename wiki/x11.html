@@ -83,7 +83,7 @@
                         re-anuncia, no se pelea por el socket.
                     </p>
                     <ul>
-                        <li><code>:0</code> es el número de display. Puedes poner otro (<code>:1</code>); la pestaña se reconecta sola al servidor que aparece.</li>
+                        <li><code>:0</code> es el display que arranca el botón: la pestaña se conecta sola al servidor que se anuncia por broadcast.</li>
                         <li>Los keymaps XKB salen de <code>xkb-data</code> del propio rootfs (la app detecta <code>/usr/share/X11/xkb</code>); si no está instalado: <code>apt install xkb-data</code>.</li>
                     </ul>
                     <p>
@@ -97,30 +97,37 @@
                         Las sesiones Debian ya vienen con el display exportado
                         (<code>DISPLAY=:0</code>, inyectado por la app de forma
                         predeterminada): con el servidor corriendo, entra en la sesión
-                        Debian y lanza el programa gráfico sin exports previos. Si usas
-                        otro display (p. ej. <code>:1</code> con un servidor etiquetado),
-                        sobrescríbelo en la sesión:
+                        Debian y lanza el programa gráfico sin exports previos. Aun así, un
+                        <code>export DISPLAY=&hellip;</code> en la sesión lo sobrescribe como
+                        siempre; el botón de la pestaña arranca el display <code>:0</code>.
                     </p>
-                    <pre><code>export DISPLAY=:1</code></pre>
                     <p>Algunas notas del entorno:</p>
                     <ul>
                         <li>El servidor atiende las conexiones por el socket del display (<code>:0</code>); no requiere root ni TCP.</li>
                         <li>Si el programa se queja de <code>libGL</code>, por defecto acelera por <em>llvmpipe</em> (software); con la opción <strong>«Aceleración GPU vía VirGL»</strong> activada en Ajustes, la sesión nueva va por la vía VirGL: ver <a href="limitaciones.html">Limitaciones conocidas</a>.</li>
-                        <li>Las teclas extra (CTRL, ESC, etc.) de la pestaña X11 salen de la barra de la app; el teclado físico se manda al servidor tal cual.</li>
+                        <li>El teclado completo de la pestaña llega al servidor X: teclas físicas, enter/borrar del teclado virtual y la barra de teclas extra se inyectan con la misma semántica de la app standalone (macros de modificadores, pegar portapapeles, zoom del visor).</li>
                         <li>El touch del servidor se pasa a las ventanas directamente; la emulación de gestos completa vive en la app standalone de termux-x11, no en esta pestaña.</li>
                     </ul>
 
+                    <h2>Ajustes X11</h2>
+                    <p>
+                        Desde <strong>Ajustes → «Ajustes X11»</strong> puedes cambiar la
+                        resolución (o escala), el filtrado de la pantalla, la orientación
+                        forzada y el modo de touch que usan las pestañas. Los valores
+                        persisten y se aplican a la pestaña conectada al instante, sin
+                        reiniciar el servidor ni la pestaña. La barra de teclas extra y los
+                        ajustes específicos de la app standalone se quedan como están; lo que
+                        ajuste esta sección es el comportamiento de la pestaña integrada.
+                    </p>
+
                     <h2>Varias pantallas: etiquetas (tags)</h2>
                     <p>
-                        Si necesitas dos servers distintos a la vez, etiqueta el companion con
-                        <code>-tag</code>:
-                    </p>
-                    <pre><code>... com.termux.x11.CmdEntryPoint :1 -tag proyecto</code></pre>
-                    <p>
-                        Un servidor sin etiqueta atiende a la primera pestaña X11 sin etiqueta;
-                        un servidor con etiqueta va a la pestaña que la use. Si un servidor con
-                        etiqueta empieza a anunciarse antes de abrir la pestaña y no hay ninguna
-                        pestaña libre, se queda a la espera hasta que esa pestaña exista.
+                        El motor del fork distingue servidores por etiqueta: un servidor sin
+                        etiqueta atiende a la primera pestaña sin etiqueta y uno con etiqueta
+                        a la pestaña que coincida. En esta versión, de todas formas, la
+                        interfaz solo abre pestañas sin etiqueta y el botón arranca el display
+                        <code>:0</code>: la ruta para varias pantallas simultáneas está
+                        reservada para una iteración posterior.
                     </p>
 
                     <h2>Cerrar y aclaraciones</h2>

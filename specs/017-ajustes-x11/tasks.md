@@ -48,7 +48,7 @@ Estado: aprobado (2026-10-25, junto a la spec)
     showIMEWhileExternalConnected, preferScancodes,
     hardwareKbdScancodesWorkaround, filterOutWinkey); cada cambio persiste al
     instante y refleja el valor de la policy; `assembleDebug` OK.
-- [ ] **T7. Acceso desde Ajustes.** RF-1
+- [x] **T7. Acceso desde Ajustes.** RF-1
   - Hecho cuando: `SettingsScreen` muestra la entrada "Ajustes X11"
     (`SettingsListTile` + chevron, junto a "Acerca de") con parámetro
     `onX11Click` con default; `SettingsComposeActivity` añade el destino `X11`
