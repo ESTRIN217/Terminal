@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FileUpload
@@ -78,6 +79,7 @@ fun SettingsScreen(
     onNavigateUp: () -> Unit,
     onAboutClick: () -> Unit,
     onImportFont: () -> Unit = {},
+    onX11Click: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -304,6 +306,13 @@ fun SettingsScreen(
 
             SettingsSectionTitle(title = stringResource(R.string.about_preference_title))
             SettingsCardGroup {
+                SettingsListTile(
+                    leadingIcon = Icons.Default.DesktopWindows,
+                    title = stringResource(R.string.x11_settings_entry_title),
+                    subtitle = stringResource(R.string.x11_settings_entry_desc),
+                    trailingIcon = Icons.Default.ChevronRight,
+                    onClick = onX11Click
+                )
                 SettingsListTile(
                     leadingIcon = Icons.Default.Info,
                     title = stringResource(R.string.about_preference_title),

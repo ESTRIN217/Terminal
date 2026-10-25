@@ -24,11 +24,14 @@ import com.termux.terminal.compose.settings.AboutScreen
 import com.termux.terminal.compose.settings.LicensesScreen
 import com.termux.terminal.compose.settings.SettingsScreen
 import com.termux.terminal.compose.settings.SettingsViewModel
+import com.termux.terminal.compose.settings.X11SettingsScreen
+import com.termux.terminal.compose.settings.X11SettingsViewModel
 
 private enum class SettingsDestination {
     SETTINGS,
     ABOUT,
-    LICENSES
+    LICENSES,
+    X11
 }
 
 /**
@@ -44,6 +47,7 @@ class SettingsComposeActivity : ComponentActivity() {
     }
 
     private lateinit var mViewModel: SettingsViewModel
+    private lateinit var mX11ViewModel: X11SettingsViewModel
     private lateinit var mPreferences: TermuxAppSharedPreferences
 
     /**
@@ -71,6 +75,7 @@ class SettingsComposeActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         mViewModel = ViewModelProvider(this)[SettingsViewModel::class.java]
+        mX11ViewModel = ViewModelProvider(this)[X11SettingsViewModel::class.java]
         mPreferences = TermuxAppSharedPreferences.build(this, true)
 
         setContent {
@@ -87,7 +92,8 @@ class SettingsComposeActivity : ComponentActivity() {
                         viewModel = mViewModel,
                         onNavigateUp = { finish() },
                         onAboutClick = { destination = SettingsDestination.ABOUT },
-                        onImportFont = { mFontPickerLauncher.launch(TerminalFontImporter.PICKER_MIME_TYPES) }
+                        onImportFont = { mFontPickerLauncher.launch(TerminalFontImporter.PICKER_MIME_TYPES) },
+                        onX11Click = { destination = SettingsDestination.X11 }
                     )
                     SettingsDestination.ABOUT -> AboutScreen(
                         onBack = { destination = SettingsDestination.SETTINGS },
@@ -95,6 +101,10 @@ class SettingsComposeActivity : ComponentActivity() {
                     )
                     SettingsDestination.LICENSES -> LicensesScreen(
                         onBack = { destination = SettingsDestination.ABOUT }
+                    )
+                    SettingsDestination.X11 -> X11SettingsScreen(
+                        viewModel = mX11ViewModel,
+                        onNavigateUp = { destination = SettingsDestination.SETTINGS }
                     )
                 }
             }
@@ -104,6 +114,7 @@ class SettingsComposeActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         mViewModel.reload()
+        mX11ViewModel.reload()
         mFontRevision++
     }
 }
