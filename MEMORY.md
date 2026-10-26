@@ -1,69 +1,22 @@
 # MEMORY.md — Terminal
 ## Estado actual
-- Rama `3.0`. Cerradas 001–018 (2.1.0 publicada).
-- Spec 019 **CERRADA (2026-10-25, verificado en dispositivo):** btop arranca en
-  Debian/proot. Dos overlays nuevos servidos desde
-  `ProcStatOverlaySampler.prepareSessionOverlayBinds` (único punto de binds
-  `/proc`; `TermuxService` sin cambios):
-  - cpuinfo: snapshot estático = host verbatim + línea `model name : <SoC>`
-    (`Build.SOC_MODEL` API-guard como `GpuDeviceReader`, degradación
-    `HARDWARE`; sin nombre útil → sin bind). Pura en
-    `ProcCpuInfoOverlayLibrary` (`needsModelNameLine` bug-por-bug: scan de
-    btop = prefijo-de-línea-hasta-`:` + salto a fin de línea tras cada `:`).
-    Sesión solo-cpuinfo no toca sampler ni contadores.
-  - uptime (enmienda RF-9, descubierta en dispositivo; btop caía después en
-    «Failed to get uptime», misma familia bloqueada que `/proc/stat` de spec
-    010): snapshot VIVO del sampler, `renderUptime(elapsedRealtime, ×cores)`,
-    bind solo si el probe directo falla; el valor debe avanzar por tick.
-  Origen del fallo: cpuinfo legible pero sin «model name» → fallback de btop
-  lista `/sys/devices` (readdir SELinux denegado §7) → muere en `Shared::init`;
-  batería/sensores ya blindados upstream. Residual documentado (RF-10): btop
-  pide ≥80×24 columnas («Terminal size too small» con 72) — remedio del
-  usuario (rotar apaisado / reducir letra), no intervenimos. Doc sync: plan
-  doc §7 + README + wiki; CHANGELOG para release.
-  Spec en `specs/019-cpuinfo-overlay-btop/`.
-- **Spec 018 CERRADA (2026-10-25), verificada en dispositivo:** warning
-  `can't sanitize binding "/linkerconfig"` eliminado y vía guest del companion
-  retirada. Resumen:
-  - Proot: `new_binding()` acepta `/linkerconfig` con `EACCES` en fase CLI
-    (mirroring canon.c, termux/proot#254).
-  - Instalador: binarios embebidos (proot/virgl) se ACTUALIZAN si difieren
-    en tamaño del asset (antes solo copiaba si no existía → stale forever;
-    por eso el primer fix "no llegaba"). Helper puro `binaryNeedsUpgrade`.
-  - Overlay "no server" X11: solo botón «Iniciar el servidor X»; sin comando
-    copiable (strings ×3 ajustadas).
-  - Wrapper guest `/usr/bin/termux-x11` no se escribe y se limpia de raíces
-    viejas en `TermuxService`; sin `TERMUX_X11_APK` en env guest;
-    constantes `X11_GUEST_WRAPPER_GUEST_PATH`/`X11_COMPANION_PM_PATH`
-    borradas. Companion SIEMPRE vía app (`X11CompanionSpawner`).
-  - Binds `-b /apex /linkerconfig /data/app /system` se quedan (decisión
-    usuario).
-- Spec 017 cerrada (2026-10-25): ajustes de X11 en `SettingsScreen` → destino
-  `X11` en `SettingsComposeActivity` → `X11SettingsScreen`
-  (Salida/Puntero/Teclado). SOLO persiste vía `Prefs` de lorie
-  (`LorieApp.getPrefs`); lógica en `X11SettingsPolicy` puro con tests. Verificado
-  en dispositivo: RF-1/8/9, cambio de `touchMode` refleja en pestaña conectada
-  sin reiniciar. Enmienda lorie: `IntPreference.put(int)` (`PrefsProto`,
-  commit `9e0c832`, pin actualizado). Fuera para iteraciones posteriores:
-  ekbar completo + `extra_keys_config`, `userActions`.
-  - Espejados en policy (mantener en sync con lorie `arrays.xml`):
-    filtering bilinear/nearest, 5 orientaciones, touch 1/2/3; las 24
-    resoluciones exactas se leen en runtime vía `getValues()`.
-- **Spec 016 CERRADA (2026-10-24):** teclado en pestañas X11 verificado en
-  dispositivo: HW keys, enter/borrar del IME y barra extra keys inyectan vía
-  lorie `InputEventSender` reutilizado, y touch queda sin regresión. La pestaña
-  ya replica el `setOnKeyListener` standalone y `sendExtraKey` refleja la
-  semántica de `TermuxX11ExtraKeys` sin tocar `TouchInputHandler`.
-- **Spec 015 CERRADA (2026-10-24):** guest proot inyecta `DISPLAY=:0`
-  siempre (`X11_DEFAULT_DISPLAY`); residual: export manual como override.
-- Specs 013/014 verificadas en dispositivo; 014 pendientes de verificación fina
-  en más apps (touch/HW/extra keys — con 016 el teclado va por la vía
-  standalone). 013: `glxgears` ≈140 FPS, reversibilidad OK.
+- **v3.0.0 publicada (2026-10-26)**: tag en `74333562`, release con APK universal
+  firmado + `sha256sums`; CI adjunta los `+github-debug` al publicarse. Sitio y wiki
+  desplegados (`update-site.py` + `firebase deploy --only hosting`, dos targets).
+- Rama `3.0` = `master` (ff-merge `74b4ac75 → 74333562`). Specs 010–019 CERRADAS:
+  010/012 overlays llvmpipe multihilo (N=8 def, 1–16), 011 Adreno/KGSL (implementado,
+  validación pendiente de hardware Adreno), 013 VirGL (validado Mali-G57: glxgears
+  ≈140 FPS, glmark2 57), 014/016/017 pestañas X11 + teclado + Ajustes, 015 DISPLAY=:0,
+  018 binding `/linkerconfig` + vía guest retirada, 019 btop cpuinfo/uptime.
+- Residuales aceptados y documentados (wiki `limitaciones.html`): btop ≥80×24,
+  Adreno sin validar en hardware, glxinfo BadMatch rootless, Zink/OpenCL sin vía,
+  Sixel/animaciones no soportadas. 017 fuera de alcance: ekbar completo,
+  `extra_keys_config`, `userActions`.
 
 ## Arquitectura y reglas prácticas
-- `terminal-emulator` → `terminal-view` → `termux-shared` → `app`;
-  `filemanager` → `termux-shared`. No invertir dependencias.
-- Librerías Java puro; Kotlin solo en `app` y `filemanager`.
+- `terminal-emulator` → `terminal-view` → `termux-shared` → `app`; `filemanager` →
+  `termux-shared`. No invertir dependencias. Librerías Java puro; Kotlin solo en `app`
+  y `filemanager`.
 - Lógica determinista en puros con tests JUnit (rojo→verde); UI despacha.
 - Prefs persistidas: añadir claves, no perder las existentes.
 - `Error`/`null` como éxito, `Logger`, capturas específicas.
@@ -72,28 +25,32 @@
   capitalizados; semver.
 
 ## Learnings vigentes
-- Lorie: IMEs entregan enter/borrar vía `InputConnection.sendKeyEvent` →
-  `LorieView.dispatchKeyEvent`; sin `OnKeyListener` se caen (el texto va por
-  `commitText`→text event). Reusar `InputEventSender` (separable de
-  MainActivity con `Consumer<Boolean>` de captura) en vez de duplicar quirks.
-- Extra keys puros: pasos con NOMBRE de tecla (no keycodes Android); el
-  mapeo vive en `PRIMARY_KEY_CODES_FOR_STRINGS` (lorie).
-- Entorno guest: vars inofensivas sin servicio van sin gate (DISPLAY 015);
-  el guard VirGL (socket) es excepción por coste de driver.
-- lorie: al quitar símbolos Java de lorie, grep del espejo en `cpp/`
-  (JNI abort: caso `MainActivity` retirado, hooks vía `LorieView.Client`).
-- `app_process` dentro del proot guest no funciona (ESTRIN Unisoc/A12) y la
-  vía guest está retirada (spec 018 A): companion SOLO desde la app
-  (`X11CompanionSpawner` + CLASSPATH + `TERMUX_X11_LIBDIR`);
-  `TMPDIR=<rootfs>/tmp` activa keymap XKB chroot.
-- Loader guest: RETIRADO (spec 018 A): no wrapper, sin `TERMUX_X11_APK`.
-- Binarios embebidos (proot/virgl): el instalador ahora ACTUALIZA si el asset
-  difiere en tamaño (antes solo copiaba si no existía → stale forever).
-- Host aarch64: aidl/aapt2 x86_64 rotos; submódulos anidados `--init
-  --recursive` antes de nativo; parches xserver sin commit, no limpiar.
-- `BUILD SUCCESSFUL` no garantiza APK utilizable: unzip (libXlorie.so,
-  manifest fusionados en intermediates).
-- VirGL: socket ABSOLUTO `--socket-path <rootfs>/tmp/virgl_test`; mesa
-  stock lee `VTEST_SOCKET_NAME=/tmp/virgl_test` (path crudo, NO la URI);
-  validar con `glxgears`/`glmark2` (`glxinfo` aborta BadMatch rootless).
+- **CI del repo NO inicializa submódulos por defecto**: desde que
+  `settings.gradle.kts` incluye `:termux-x11-lorie`/`:termux-x11-stub`, TODOS los
+  `actions/checkout` que ejecutan Gradle llevan `submodules: recursive` (fix en 4
+  workflows, commit `3ae3fabe`).
+- **`attach_debug_apks_to_release.yml` borra release+tag al fallar** (`--cleanup-tag`)
+  y su checkout usa `ref: ${{ github.ref }}` = el TAG. Consecuencia: el tag de una
+  release debe apuntar a un commit que YA tenga los fixes de CI, o el fallo se come
+  la release (ocurrió con v3.0.0: se re-creó el tag sobre el tip).
+- Submódulo `termux-x11`: fork `ESTRIN217/termux-x11`, pin `9e0c832` subido. Su
+  `origin` iba por HTTPS sin credenciales → cambiado a SSH. Los submódulos anidados
+  (`xserver`, `libx11`…) son upstream con `ignore=dirty`; los parches de xserver van
+  sin commit — no limpiar.
+- `sha256sums` de release: solo el APK universal de release; los `+github-debug` llevan
+  su propio fichero generado por CI.
+- lorie: IMEs entregan enter/borrar vía `InputConnection.sendKeyEvent` →
+  `LorieView.dispatchKeyEvent`; reusar `InputEventSender` en vez de duplicar quirks.
+  Al quitar símbolos Java de lorie, grep del espejo en `cpp/` (JNI abort).
+- Extra keys puros: pasos con NOMBRE de tecla; mapeo en `PRIMARY_KEY_CODES_FOR_STRINGS`.
+- Entorno guest: vars inofensivas sin servicio van sin gate (DISPLAY 015); el guard
+  VirGL (socket) es excepción por coste de driver.
+- `app_process` dentro del proot guest no funciona (ESTRIN Unisoc/A12): companion
+  SOLO desde la app (`X11CompanionSpawner` + CLASSPATH + `TERMUX_X11_LIBDIR`);
+  `TMPDIR=<rootfs>/tmp` activa keymap XKB chroot. Loader guest RETIRADO (018-A).
+- Host aarch64: aidl/aapt2 x86_64 rotos; `BUILD SUCCESSFUL` no garantiza APK
+  utilizable: `unzip -l | grep AndroidManifest.xml` antes de publicar.
+- VirGL: socket ABSOLUTO `--socket-path <rootfs>/tmp/virgl_test`; mesa stock lee
+  `VTEST_SOCKET_NAME=/tmp/virgl_test` (path crudo, NO la URI); validar con
+  `glxgears`/`glmark2` (`glxinfo` aborta BadMatch rootless).
 - Semánticas parecidas no se unifican sin spec; tests en rojo primero.
