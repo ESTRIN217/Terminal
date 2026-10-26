@@ -745,6 +745,23 @@ public final class TermuxConstants {
     /** Local file of the downloaded Debian rootfs tarball. */
     public static final File DEBIAN_ROOTFS_TARBALL_FILE = new File(DEBIAN_ROOTFS_TARBALL_FILE_PATH);
 
+    /** Host path of the USB bridge UNIX domain socket (spec 020). */
+    public static final String USB_BRIDGE_SOCKET_PATH = DEBIAN_ROOTFS_DIR_PATH + "/tmp/terminal_usb.sock";
+    /** Guest path of the USB bridge UNIX domain socket (spec 020). */
+    public static final String USB_BRIDGE_GUEST_SOCKET_PATH = "/tmp/terminal_usb.sock";
+
+    /** Host path of the synthetic USB devices inventory JSON snapshot (spec 020). */
+    public static final String USB_DEVICES_SNAPSHOT_FILE_PATH = DEBIAN_ROOTFS_DIR_PATH + "/tmp/usb_devices.json";
+    /** Guest path of the synthetic USB devices inventory JSON snapshot (spec 020). */
+    public static final String USB_DEVICES_GUEST_SNAPSHOT_FILE_PATH = "/tmp/usb_devices.json";
+
+    /** Guest-relative path of the lsusb wrapper script (spec 020). */
+    public static final String DEBIAN_LSUSB_RELATIVE_PATH = "usr/local/bin/lsusb";
+    /** Guest-relative path of the termux-usb bridge tool (spec 020). */
+    public static final String DEBIAN_TERMUX_USB_RELATIVE_PATH = "usr/local/bin/termux-usb";
+    /** Guest-relative path of the terminal-usb symlink (spec 020). */
+    public static final String DEBIAN_TERMINAL_USB_RELATIVE_PATH = "usr/local/bin/terminal-usb";
+
 
 
     /** Termux app $PREFIX directory path */

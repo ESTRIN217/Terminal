@@ -35,6 +35,7 @@ import com.termux.shared.termux.shell.command.environment.ProotShellEnvironment;
 import com.termux.shared.termux.proot.ProcStatOverlaySampler;
 import com.termux.shared.termux.proot.VirglLibrary;
 import com.termux.app.VirglServerManager;
+import com.termux.app.usb.UsbBridgeServer;
 import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment;
 import com.termux.shared.termux.shell.TermuxShellUtils;
 import com.termux.shared.termux.TermuxConstants;
@@ -315,6 +316,8 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
                     onProotOverlaySessionEnded();
                 // Spec 013: last proot session closed → shared VirGL server stops (NFR-6).
                 refreshVirglServer();
+                // Spec 020: last proot session closed → shared USB bridge server stops.
+                refreshUsbBridgeServer();
             }
         }
 
@@ -698,6 +701,8 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         // Spec 013: session bookkeeping — one shared VirGL server follows the
         // proot sessions (start on first, stop at last; sessions++ on real start).
         refreshVirglServer();
+        // Spec 020: session bookkeeping — USB bridge server follows proot sessions.
+        refreshUsbBridgeServer();
 
         // Remove the execution command from the pending plugin execution commands list since it has
         // now been processed
@@ -743,6 +748,8 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
                 onProotOverlaySessionEnded();
             // Spec 013: a finished proot session may release the VirGL server.
             refreshVirglServer();
+            // Spec 020: a finished proot session may release the USB bridge server.
+            refreshUsbBridgeServer();
 
             // The Compose UI re-seeds its session list from the service when it binds
             // (onServiceConnected), so no explicit session list notification is needed.
@@ -776,6 +783,22 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
             Logger.logErrorExtended(LOG_TAG, "VirGL server state refresh failed\n" + virglError.toString());
         else
             Logger.logDebug(LOG_TAG, "VirGL server refreshed; active proot sessions: " + activeProotSessions);
+    }
+
+    /**
+     * Recomputes the desired state of the USB bridge server from the currently
+     * active proot sessions and applies it (spec 020).
+     */
+    private synchronized void refreshUsbBridgeServer() {
+        int activeProotSessions = 0;
+        for (TermuxSession termuxSession : mShellManager.mTermuxSessions)
+            if (isProotSession(termuxSession))
+                activeProotSessions++;
+        Error usbError = UsbBridgeServer.applySessionCount(this, activeProotSessions);
+        if (usbError != null)
+            Logger.logErrorExtended(LOG_TAG, "USB bridge server state refresh failed\n" + usbError.toString());
+        else
+            Logger.logDebug(LOG_TAG, "USB bridge server refreshed; active proot sessions: " + activeProotSessions);
     }
 
 

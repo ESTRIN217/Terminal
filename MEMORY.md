@@ -3,11 +3,8 @@
 - **v3.0.0 publicada (2026-10-26)**: tag en `74333562`, release con APK universal
   firmado + `sha256sums`; CI adjunta los `+github-debug` al publicarse. Sitio y wiki
   desplegados (`update-site.py` + `firebase deploy --only hosting`, dos targets).
-- Rama `3.0` = `master` (ff-merge `74b4ac75 → 74333562`). Specs 010–019 CERRADAS:
-  010/012 overlays llvmpipe multihilo (N=8 def, 1–16), 011 Adreno/KGSL (implementado,
-  validación pendiente de hardware Adreno), 013 VirGL (validado Mali-G57: glxgears
-  ≈140 FPS, glmark2 57), 014/016/017 pestañas X11 + teclado + Ajustes, 015 DISPLAY=:0,
-  018 binding `/linkerconfig` + vía guest retirada, 019 btop cpuinfo/uptime.
+- Rama `3.0` = `master` (ff-merge `74b4ac75 → 74333562`). Specs 010–020 CERRADAS.
+- **Spec 020 (Soporte USB sin root: lsusb + bridge UsbManager)**: implementada (T1–T6), `./gradlew test` en verde. Puente socket `terminal_usb` + snapshots `/tmp/usb_devices.*` + `lsusb`/`termux-usb` instalados en `/usr/local/bin`.
 - Residuales aceptados y documentados (wiki `limitaciones.html`): btop ≥80×24,
   Adreno sin validar en hardware, glxinfo BadMatch rootless, Zink/OpenCL sin vía,
   Sixel/animaciones no soportadas. 017 fuera de alcance: ekbar completo,
@@ -48,6 +45,12 @@
 - Extra keys puros: pasos con NOMBRE de tecla; mapeo en `PRIMARY_KEY_CODES_FOR_STRINGS`.
 - Entorno guest: vars inofensivas sin servicio van sin gate (DISPLAY 015); el guard
   VirGL (socket) es excepción por coste de driver.
+- **Puente USB (020)**: `LocalServerSocket(String)` de Android SOLO bindea en el
+  namespace abstracto (`@terminal_usb`); los scripts guest conectan con
+  `s.connect(b"\x00terminal_usb")` (bytes con `\0` inicial, Python 3 lo soporta).
+  El socket de filesystem del plano original era inviable por API pública.
+- **pkill/kill de shell**: `pkill -f "<patrón>"` se mata a sí mismo si el patrón
+  literal ya está en la propia cmdline del shell. Usar `kill $(cat pid)`.
 - `app_process` dentro del proot guest no funciona (ESTRIN Unisoc/A12): companion
   SOLO desde la app (`X11CompanionSpawner` + CLASSPATH + `TERMUX_X11_LIBDIR`);
   `TMPDIR=<rootfs>/tmp` activa keymap XKB chroot. Loader guest RETIRADO (018-A).

@@ -75,6 +75,35 @@
                         es plenamente operativa. Sin root o con SELinux permissive no hay workaround.
                     </p>
 
+                    <h2>Dispositivos USB (<code>lsusb</code> y <code>termux-usb</code>) — resuelto sin root</h2>
+                    <p>
+                        En Android sin root, el kernel y la política SELinux de <code>untrusted_app</code>
+                        deniegan el acceso directo a los nodos <code>/dev/bus/usb/</code> y <code>/sys/bus/usb/</code>,
+                        por lo que el comando <code>lsusb</code> estándar de escritorio fallaba con
+                        <code>unable to initialize libusb: -99</code>.
+                    </p>
+                    <p>
+                        Este fork lo resuelve sin root (spec&nbsp;020) integrando el servicio nativo
+                        <code>android.hardware.usb.UsbManager</code> de Android:
+                    </p>
+                    <ul>
+                        <li>
+                            <strong>Listado con <code>lsusb</code>:</strong> La app detecta dinámicamente
+                            la conexión y desconexión de periféricos OTG y sincroniza los snapshots
+                            en <code>/tmp/usb_devices.txt</code>. Ejecutar <code>lsusb</code> lista
+                            los dispositivos físicos conectados en el formato clásico de Linux
+                            (<code>Bus 001 Device 002: ID vid:pid &lt;Fabricante Producto&gt;</code>).
+                        </li>
+                        <li>
+                            <strong>Interacción con <code>termux-usb</code> / <code>terminal-usb</code>:</strong>
+                            Un puente en el host (<code>UsbBridgeServer</code>) permite solicitar
+                            permisos al usuario (<code>termux-usb -r &lt;dispositivo&gt;</code>, disparando el
+                            diálogo de confirmación del sistema Android) y abrir el dispositivo entregando
+                            el descriptor de archivo al comando subordinado
+                            (<code>termux-usb -e &lt;comando&gt; &lt;dispositivo&gt;</code>) vía <code>SCM_RIGHTS</code>.
+                        </li>
+                    </ul>
+
                     <h2>Estadísticas de CPU (<code>/proc/stat</code>) — resuelto con snapshot vivo</h2>
                     <p>
                         Desde Android 8 (API 26), SELinux deniega a las apps <code>untrusted_app</code>

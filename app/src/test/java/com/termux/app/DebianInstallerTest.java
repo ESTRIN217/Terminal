@@ -99,4 +99,28 @@ public class DebianInstallerTest {
         Assert.assertTrue(TermuxConstants.DEBIAN_PS1_SHELL_SCRIPT.contains("\\[\\e[38;5;"));
         Assert.assertFalse(DebianInstaller.isPs1ConfigInstalled());
     }
+
+    @Test
+    public void testUsbToolsConstants_andInstall() throws Exception {
+        Assert.assertEquals("usr/local/bin/lsusb", TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH);
+        Assert.assertEquals("usr/local/bin/termux-usb", TermuxConstants.DEBIAN_TERMUX_USB_RELATIVE_PATH);
+        Assert.assertEquals("usr/local/bin/terminal-usb", TermuxConstants.DEBIAN_TERMINAL_USB_RELATIVE_PATH);
+        Assert.assertFalse(DebianInstaller.isUsbToolsInstalled());
+
+        java.io.File tempRoot = java.io.File.createTempFile("rootfs-test", "");
+        tempRoot.delete();
+        tempRoot.mkdirs();
+        try {
+            com.termux.shared.errors.Error error = DebianInstaller.installUsbTools(tempRoot);
+            Assert.assertNull(error);
+            java.io.File lsusb = new java.io.File(tempRoot, TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH);
+            java.io.File termuxUsb = new java.io.File(tempRoot, TermuxConstants.DEBIAN_TERMUX_USB_RELATIVE_PATH);
+            java.io.File terminalUsb = new java.io.File(tempRoot, TermuxConstants.DEBIAN_TERMINAL_USB_RELATIVE_PATH);
+            Assert.assertTrue(lsusb.isFile());
+            Assert.assertTrue(termuxUsb.isFile());
+            Assert.assertTrue(terminalUsb.exists());
+        } finally {
+            com.termux.shared.file.FileUtils.deleteFile("tempRoot", tempRoot.getAbsolutePath(), true);
+        }
+    }
 }

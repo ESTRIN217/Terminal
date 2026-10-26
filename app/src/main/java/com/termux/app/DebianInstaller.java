@@ -527,6 +527,9 @@ final class DebianInstaller {
         error = writePs1Config(staging);
         if (error != null) return error;
 
+        error = installUsbTools(staging);
+        if (error != null) return error;
+
         error = installLinkfixToRootfs(context, staging);
         if (error != null) return error;
 
@@ -573,6 +576,165 @@ final class DebianInstaller {
             StandardCharsets.UTF_8, TermuxConstants.DEBIAN_PS1_SHELL_SCRIPT + "\n", false);
         if (error != null) return error;
         chmodUnchecked(new File(root, TermuxConstants.DEBIAN_PS1_PROFILE_RELATIVE_PATH).getAbsolutePath(), 0644);
+        return null;
+    }
+
+    public static final String LSUSB_WRAPPER_SCRIPT =
+        "#!/bin/sh\n" +
+        "# lsusb wrapper for Android without root (spec 020)\n" +
+        "if [ -f /tmp/usb_devices.txt ]; then\n" +
+        "    cat /tmp/usb_devices.txt\n" +
+        "    exit 0\n" +
+        "fi\n\n" +
+        "if command -v python3 >/dev/null 2>&1; then\n" +
+        "    python3 -c '\n" +
+        "import socket, json\n" +
+        "try:\n" +
+        "    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)\n" +
+        "    # The Android bridge listens on the Linux abstract UNIX namespace\n" +
+        "    # (AF_UNIX + name with a leading null byte; the UsbBridgeServer binds\n" +
+        "    # \"terminal_usb\" via android.net.LocalServerSocket).\n" +
+        "    s.connect(b\"\\x00terminal_usb\")\n" +
+        "    s.sendall(b\"LIST\\n\")\n" +
+        "    data = s.recv(8192).decode(\"utf-8\")\n" +
+        "    s.close()\n" +
+        "    devs = json.loads(data)\n" +
+        "    print(\"Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub\")\n" +
+        "    for d in devs:\n" +
+        "        desc = (\" \" + d.get(\"manufacturer\", \"\") + \" \" + d.get(\"productName\", \"\")).strip()\n" +
+        "        vid = \"%04x\" % d.get(\"vendorId\", 0)\n" +
+        "        pid = \"%04x\" % d.get(\"productId\", 0)\n" +
+        "        busn = d.get(\"busNumber\", 1)\n" +
+        "        devn = d.get(\"deviceNumber\", 1)\n" +
+        "        line = \"Bus %03d Device %03d: ID %s:%s %s\" % (busn, devn, vid, pid, desc)\n" +
+        "        print(line.rstrip())\n" +
+        "except Exception:\n" +
+        "    print(\"Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub\")\n" +
+        "'\n" +
+        "    exit 0\n" +
+        "fi\n\n" +
+        "echo \"Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub\"\n" +
+        "exit 0\n";
+
+    public static final String TERMUX_USB_BRIDGE_SCRIPT =
+        "#!/usr/bin/env python3\n" +
+        "import sys, os, socket, struct, json\n\n" +
+        "# The Android bridge listens on the Linux abstract UNIX namespace;\n" +
+        "# the guest address is the name with a leading null byte (UsbBridgeServer\n" +
+        "# binds \"terminal_usb\" via android.net.LocalServerSocket).\n" +
+        "BRIDGE_ADDR = b\"\\x00terminal_usb\"\n\n" +
+        "def usage():\n" +
+        "    sys.stderr.write(\"Usage: termux-usb [-l] | [-r /dev/bus/usb/...] | [-e <command> /dev/bus/usb/...]\\n\")\n" +
+        "    sys.exit(1)\n\n" +
+        "def connect_sock():\n" +
+        "    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)\n" +
+        "    try:\n" +
+        "        s.connect(BRIDGE_ADDR)\n" +
+        "    except OSError:\n" +
+        "        sys.stderr.write(\"Error: USB bridge server not reachable; start a session and retry\\n\")\n" +
+        "        sys.exit(1)\n" +
+        "    return s\n\n" +
+        "def main():\n" +
+        "    if len(sys.argv) < 2:\n" +
+        "        usage()\n" +
+        "    flag = sys.argv[1]\n" +
+        "    if flag == \"-l\":\n" +
+        "        s = connect_sock()\n" +
+        "        s.sendall(b\"LIST\\n\")\n" +
+        "        resp = s.recv(8192).decode(\"utf-8\")\n" +
+        "        s.close()\n" +
+        "        try:\n" +
+        "            devs = json.loads(resp)\n" +
+        "            paths = [d[\"path\"] for d in devs if \"path\" in d]\n" +
+        "            print(json.dumps(paths))\n" +
+        "        except Exception:\n" +
+        "            print(\"[]\")\n" +
+        "    elif flag == \"-r\":\n" +
+        "        if len(sys.argv) < 3:\n" +
+        "            usage()\n" +
+        "        dev = sys.argv[2]\n" +
+        "        s = connect_sock()\n" +
+        "        s.sendall(f\"REQUEST {dev}\\n\".encode(\"utf-8\"))\n" +
+        "        resp = s.recv(1024).decode(\"utf-8\").strip()\n" +
+        "        s.close()\n" +
+        "        if resp.startswith(\"OK\"):\n" +
+        "            sys.exit(0)\n" +
+        "        else:\n" +
+        "            sys.stderr.write(resp + \"\\n\")\n" +
+        "            sys.exit(1)\n" +
+        "    elif flag == \"-e\":\n" +
+        "        if len(sys.argv) < 4:\n" +
+        "            usage()\n" +
+        "        cmd = sys.argv[2]\n" +
+        "        dev = sys.argv[3]\n" +
+        "        s = connect_sock()\n" +
+        "        s.sendall(f\"OPEN {dev}\\n\".encode(\"utf-8\"))\n" +
+        "        msg, ancdata, flags, addr = s.recvmsg(1024, socket.CMSG_LEN(struct.calcsize(\"i\")))\n" +
+        "        resp = msg.decode(\"utf-8\").strip()\n" +
+        "        fd = None\n" +
+        "        for cmsg_level, cmsg_type, cmsg_data in ancdata:\n" +
+        "            if cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_RIGHTS:\n" +
+        "                fd = struct.unpack(\"i\", cmsg_data[:struct.calcsize(\"i\")])[0]\n" +
+        "                break\n" +
+        "        if fd is None:\n" +
+        "            sys.stderr.write(\"Error: No file descriptor received. \" + resp + \"\\n\")\n" +
+        "            s.close()\n" +
+        "            sys.exit(1)\n" +
+        "        os.environ[\"TERMUX_USB_FD\"] = str(fd)\n" +
+        "        os.system(cmd)\n" +
+        "        os.close(fd)\n" +
+        "        s.close()\n" +
+        "    else:\n" +
+        "        usage()\n\n" +
+        "if __name__ == \"__main__\":\n" +
+        "    main()\n";
+
+    public static final String TERMINAL_USB_FORWARD_SCRIPT =
+        "#!/bin/sh\n" +
+        "exec /usr/local/bin/termux-usb \"$@\"\n";
+
+    /**
+     * Whether the guest USB tools (lsusb and termux-usb) are installed in the rootfs.
+     */
+    public static boolean isUsbToolsInstalled() {
+        File lsusb = new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/" + TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH);
+        File termuxUsb = new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/" + TermuxConstants.DEBIAN_TERMUX_USB_RELATIVE_PATH);
+        return lsusb.isFile() && termuxUsb.isFile();
+    }
+
+    /**
+     * Install the lsusb and termux-usb tools into /usr/local/bin of the rootfs (spec 020).
+     */
+    public static Error installUsbTools(File root) {
+        File binDir = new File(root, "usr/local/bin");
+        binDir.mkdirs();
+
+        File lsusbFile = new File(root, TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH);
+        Error error = writeScriptFile(lsusbFile, LSUSB_WRAPPER_SCRIPT);
+        if (error != null) return error;
+
+        File termuxUsbFile = new File(root, TermuxConstants.DEBIAN_TERMUX_USB_RELATIVE_PATH);
+        error = writeScriptFile(termuxUsbFile, TERMUX_USB_BRIDGE_SCRIPT);
+        if (error != null) return error;
+
+        File terminalUsbFile = new File(root, TermuxConstants.DEBIAN_TERMINAL_USB_RELATIVE_PATH);
+        error = writeScriptFile(terminalUsbFile, TERMINAL_USB_FORWARD_SCRIPT);
+        if (error != null) return error;
+
+        return null;
+    }
+
+    private static Error writeScriptFile(File file, String content) {
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
+        try (FileOutputStream out = new FileOutputStream(file)) {
+            out.write(content.getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            return new Error("Failed to write script to \"" + file.getAbsolutePath() + "\".", e);
+        }
+        chmodUnchecked(file.getAbsolutePath(), 0755);
         return null;
     }
 
@@ -680,6 +842,10 @@ final class DebianInstaller {
         }
         if (!isPs1ConfigInstalled()) {
             Error error = writePs1Config(root);
+            if (error != null) return error;
+        }
+        if (!isUsbToolsInstalled()) {
+            Error error = installUsbTools(root);
             if (error != null) return error;
         }
         return enforceCriticalPermissions(root);
