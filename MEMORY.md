@@ -33,8 +33,11 @@
   y su checkout usa `ref: ${{ github.ref }}` = el TAG. Consecuencia: el tag de una
   release debe apuntar a un commit que YA tenga los fixes de CI, o el fallo se come
   la release (ocurrió con v3.0.0: se re-creó el tag sobre el tip).
-- Submódulo `termux-x11`: fork `ESTRIN217/termux-x11`, pin `9e0c832` subido. Su
-  `origin` iba por HTTPS sin credenciales → cambiado a SSH. Los submódulos anidados
+- Submódulo `termux-x11`: fork `ESTRIN217/termux-x11`, pin `1e5b56b` subido (README
+  ya documenta su condición de fork: aviso de fork, setup vía Terminal, paquete host
+  `com.estrin217.terminal` en los comandos `am`/CLASSPATH — clases/acciones/comando
+  siguen con nombre upstream). About de GitHub del fork editado vía `gh repo edit`.
+  El `origin` va por SSH. Los submódulos anidados
   (`xserver`, `libx11`…) son upstream con `ignore=dirty`; los parches de xserver van
   sin commit — no limpiar.
 - `sha256sums` de release: solo el APK universal de release; los `+github-debug` llevan
