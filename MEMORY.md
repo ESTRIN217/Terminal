@@ -49,6 +49,8 @@
   namespace abstracto (`@terminal_usb`); los scripts guest conectan con
   `s.connect(b"\x00terminal_usb")` (bytes con `\0` inicial, Python 3 lo soporta).
   El socket de filesystem del plano original era inviable por API pública.
+  El repair refresca tools USB stale/ausentes por byte-compare
+  (`usbToolsNeedRefresh`, patrón `linkfixNeedsRefresh`).
 - **pkill/kill de shell**: `pkill -f "<patrón>"` se mata a sí mismo si el patrón
   literal ya está en la propia cmdline del shell. Usar `kill $(cat pid)`.
 - `app_process` dentro del proot guest no funciona (ESTRIN Unisoc/A12): companion
