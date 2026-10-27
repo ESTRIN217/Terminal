@@ -13,7 +13,13 @@
 - Residuales aceptados y documentados (wiki `limitaciones.html`): btop ≥80×24,
   Adreno sin validar en hardware, glxinfo BadMatch rootless, Zink/OpenCL sin vía,
   Sixel/animaciones no soportadas. 017 fuera de alcance: ekbar completo,
-  `extra_keys_config`, `userActions`.
+  `extra_keys_config`, `userActions`. + **zutty congelado bajo VirGL**
+  (2026-10-26): intermitente en ráfagas de texto; fastfetch es espectador
+  (bloqueado escribiendo al pty, parecía que era él quien colgaba); stack
+  VirGL sano (`glxgears` ~170 FPS con zutty abierto). Decisión del
+  mantenedor: **solo documentar** (`limitaciones.html` #virgl-zutty), sin
+  fix ni spec. Warnings OSC 8 de zutty: NO de fastfetch (su fuente no emite
+  OSC 8), de los dotfiles; inofensivos.
 
 ## Arquitectura y reglas prácticas
 - `terminal-emulator` → `terminal-view` → `termux-shared` → `app`; `filemanager` →

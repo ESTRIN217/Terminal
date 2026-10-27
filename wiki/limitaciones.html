@@ -279,6 +279,63 @@
                         a byte al previo y sin proceso ni socket residuales.
                         Sin promesas de rendimiento en apps reales.
                     </p>
+                    <h3 id="virgl-zutty">zutty bajo VirGL: congelación intermitente (documentada, sin fix)</h3>
+                    <p>
+                        Observado y reproducido en dispositivo (2026-10-26, Mali&nbsp;T606):
+                        con la aceleración VirGL activa, el terminal del invitado
+                        <strong>zutty</strong> se congela de forma esporádica al procesar
+                        ráfagas de texto (p.&nbsp;ej. la salida de <code>fastfetch</code> en el
+                        arranque del shell). La ventana deja de actualizar el contenido y lo que
+                        se ejecuta detrás de ella — fastfetch en este caso — queda bloqueado
+                        escribiendo al pty (<em>parece</em> "fastfetch colgado al 100% de CPU",
+                        pero fastfetch es solo el espectador: no alcanza a volcar más salida
+                        porque zutty dejó de leer).
+                    </p>
+                    <p>
+                        El resto del stack está verificado al mismo tiempo: <code>glxgears</code>
+                        rinde ~170&nbsp;FPS con zutty abierto (el socket vtest y el
+                        cliente <code>virpipe</code> soportan clientes GL concurrentes), la
+                        detección de GPU de fastfetch completa y reporta
+                        <code>Mesa virgl</code>, y el mismo burst que congela a zutty pasa sin
+                        problemas en la pestaña de terminal de la app. La congelación es
+                        sensible al <em>timing</em> (completó sola al variar las variables de
+                        debug de mesa <code>MESA_DEBUG</code>/<code>EGL_LOG_LEVEL</code>), lo que
+                        apunta a una carrera en la renderización GL de zutty sobre la capa de
+                        traducción, no a un dead-lock del servidor ni a un bug de fastfetch.
+                        La cartera sospechosa es la combinación mesa <code>virpipe</code>/
+                        vtest ↔ zutty (el terminal que más estrés GL mete: atlas de fuentes,
+                        texturas por ráfaga), no el pipeline del fork.
+                    </p>
+                    <p>
+                        No se aplicará un fix en este fork por ahora: el bug vive aguas abajo
+                        (zutty/mesa-virpipe). La mitigación <em>por parte del usuario</em> es
+                        cualquiera de estas dos, sin tocar las sesiones del resto del
+                        escritorio:
+                    </p>
+                    <ul>
+                        <li>
+                            <strong>zutty con rasterizador de CPU:</strong> lanzarlo solo a él
+                            sin la vía VirGL
+                            (<code>GALLIUM_DRIVER=llvmpipe zutty</code>); llvmpipe corre
+                            multihilo (ver los "Hilos de llvmpipe" de Ajustes) y el resto de
+                            apps gráficas del invitado mantienen la aceleración.
+                        </li>
+                        <li>
+                            <strong>Otro terminal del invitado</strong> que no sea zutty
+                            (p.&nbsp;ej. <code>xterm</code> o <code>xfce4-terminal</code>):
+                            la congelación no se ha observado fuera de zutty.
+                        </li>
+                    </ul>
+                    <p>
+                        Nota aparte, ligada a este mismo terminal: al arrancar zutty pueden ver
+                        avisos <code>W … (Unimplemented) unhandled OSC: '8;;file:///'</code>.
+                        Son <strong>inofensivos</strong>: zutty no implementó los hipervínculos
+                        OSC&nbsp;8 y los descarta avisando; y no vienen de fastfetch (su fuente
+                        no emite OSC&nbsp;8 para nada) sino de otra herramienta de los
+                        dotfiles propios (los <code>ls</code> modernos, <code>bat</code>,
+                        etc.). Se pueden cazar con <code>bash -x 2&gt;/tmp/x.log</code> y
+                        desactivarlos en su configuración, o simplemente ignorarlos.
+                    </p>
                     <h3>Alternativa sin pestaña X11: VNC dentro del invitado (secundaria)</h3>
                     <p>
                         Si no usas la pestaña X11, un escritorio VNC <em>dentro</em> del Debian
