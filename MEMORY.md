@@ -96,6 +96,9 @@
   El socket de filesystem del plano original era inviable por API pública.
   El repair refresca tools USB stale/ausentes por byte-compare
   (`usbToolsNeedRefresh`, patrón `linkfixNeedsRefresh`).
+- CI del repo en Java 17: `gradle/gradle-daemon-jvm.properties` (toolchain 25,
+  generado por `updateDaemonJvm`) está en `.gitignore` — NO commitarlo; cierra
+  con borrado local si vuelve a aparecer.
 - **pkill/kill de shell**: `pkill -f "<patrón>"` se mata a sí mismo si el patrón
   literal ya está en la propia cmdline del shell. Usar `kill $(cat pid)`.
 - `app_process` dentro del proot guest no funciona (ESTRIN Unisoc/A12): companion
