@@ -105,6 +105,41 @@
                         </li>
                     </ul>
 
+                    <h2>Almacenamiento USB desde el guest (<code>lsblk</code> y <code>terminal-usb-cp</code>)</h2>
+                    <p>
+                        Con un pendrive montado por el framework (p.&nbsp;ej.
+                        <code>/storage/459E-170F</code>), el acceso desde el invitado Debian
+                        funciona <strong>con matices</strong> dictados por SELinux
+                        (spec&nbsp;021, verificado en dispositivo real, 2026-10-27):
+                    </p>
+                    <ul>
+                        <li>
+                            <strong>Inventario de block devices:</strong>
+                            <code>lsblk</code> del invitado no lee el sysfs real del host
+                            (el <code>readdir</code> de <code>/sys/dev/block</code> lo deniega
+                            <code>untrusted_app</code>; misma familia que
+                            <code>/sys/devices</code>). En su lugar lista desde el
+                            <strong>snapshot del bridge</strong> de la app
+                            (<code>/tmp/usb_devices.json</code>, refrescado justo a tiempo en
+                            cada conexión), con un aviso de limitación en la salida.
+                        </li>
+                        <li>
+                            <strong>Ficheros del volumen — el matiz del bind:</strong> el
+                            <code>readdir</code> del catálogo <code>/root/storage</code>
+                            (bind global
+                            <code>-b /storage:$HOME/storage</code>) también está denegado por
+                            SELinux, pero el <strong>acceso directo al hijo del volumen
+                            funciona</strong>:
+                            <code>ls /root/storage/459E-170F</code> lista, y leer y escribir va
+                            bien. Por eso el acceso a ficheros va por el wrapper fino
+                            <code>terminal-usb-cp</code> (<code>list/read/write</code> + <code>cp -n</code>
+                            sin sobrescribir) contra
+                            <code>/root/storage/&lt;ID&gt;/…</code>, no por un listado del catálogo.
+                            Escritura validada con round-trip de 10&nbsp;MiB en el dispositivo real
+                            (md5 verificado).
+                        </li>
+                    </ul>
+
                     <h2>Estadísticas de CPU (<code>/proc/stat</code>) — resuelto con snapshot vivo</h2>
                     <p>
                         Desde Android 8 (API 26), SELinux deniega a las apps <code>untrusted_app</code>
