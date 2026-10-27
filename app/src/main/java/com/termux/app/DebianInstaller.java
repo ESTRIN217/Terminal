@@ -706,9 +706,16 @@ final class DebianInstaller {
      * the {@code bind -b /proc} of the guest): every mountpoint matching
      * {@code /storage/XXXX-YYYY} (where {@code XXXX-YYYY} is the framework
      * volume id, e.g. the pendrive or the internal microSD) yields one row of
-     * {@code type=volume} with {@code size=-} and guest mountpoint
-     * {@code /root/storage/<ID>}, deduplicated against the snapshot
-     * {@code volumeId}s so an already-listed volume is not repeated. The env
+     * {@code type=volume} with the <b>live capacity</b> measured with
+     * {@code os.statvfs} on {@code /root/storage/<ID>} (integer-only, RF-1;
+     * {@code size=-} when the measurement is not possible) and guest mountpoint
+     * {@code /root/storage/<ID>}. Live rows go first; snapshot blocks whose
+     * {@code volumeId} matches a live volume are NOT repeated (the snapshot
+     * only carries hardware identity and its merged rows label every volume
+     * as mass-storage, which would mislabel, e.g., the internal microSD);
+     * snapshot blocks with no volumeId (unmounted pendrive {@code sda}-like
+     * fallback) keep the {@code mass-storage} label with {@code size=-} when
+     * the capacity is unknown/zero. The env
      * overrides {@code USB_SNAPSHOT_PATH_OVERRIDE} / {@code USB_PROC_MOUNTS_OVERRIDE}
      * exist only for JVM functional tests; in production their defaults
      * (the real guest paths) always apply. It always exits 0 and survives a
@@ -729,17 +736,19 @@ final class DebianInstaller {
         "GUEST_STORAGE_ROOT = \"/root/storage\"\n" +
         "HEADER = \"NAME      SIZE    TYPE          MOUNTPOINT\"\n" +
         "NOTICE = (\"lsblk (informational): USB hardware inventory comes from the app USB snapshot,\"\n" +
-        "          \" but mounted volumes are listed live from the guest's /proc/mounts.\")\n" +
+        "          \" but mounted volumes and their sizes are listed live from the guest's\"\n" +
+        "          \" /proc/mounts and the guest bind path.\")\n" +
         "NOTICE_LIVE = (\"/sys/dev/block is not readable by untrusted_app (SELinux),\"\n" +
-        "          \" so hardware sizes are snapshot state, not live kernel state of the host.\")\n\n" +
+        "          \" so this is not live kernel state of the host.\")\n\n" +
         "def fmt_size(raw):\n" +
         "    # Integer-only, floor semantics; no floating point (RF-1).\n" +
+        "    # Unknown/zero capacity prints \"-\" instead of a fake 0B.\n" +
         "    try:\n" +
         "        n = int(raw)\n" +
         "    except Exception:\n" +
         "        n = 0\n" +
-        "    if n < 0:\n" +
-        "        n = 0\n" +
+        "    if n <= 0:\n" +
+        "        return \"-\"\n" +
         "    if n >= 1024 ** 3:\n" +
         "        return \"%dG\" % (n // 1024 ** 3)\n" +
         "    if n >= 1024 ** 2:\n" +
@@ -747,6 +756,13 @@ final class DebianInstaller {
         "    if n >= 1024:\n" +
         "        return \"%dK\" % (n // 1024)\n" +
         "    return \"%dB\" % n\n\n" +
+        "def volume_size(guest_mount):\n" +
+        "    # T8.2 live capacity of a mounted volume via the guest bind path.\n" +
+        "    try:\n" +
+        "        st = os.statvfs(guest_mount)\n" +
+        "        return fmt_size(st.f_frsize * st.f_blocks)\n" +
+        "    except Exception:\n" +
+        "        return \"-\"\n\n" +
         "def collect_blocks():\n" +
         "    # Tolerant read: missing or corrupt snapshot yields no rows, exit 0.\n" +
         "    try:\n" +
@@ -785,24 +801,31 @@ final class DebianInstaller {
         "    return ids\n\n" +
         "def main():\n" +
         "    print(HEADER)\n" +
-        "    blocks = collect_blocks()\n" +
-        "    already_seen = set()\n" +
-        "    for b in blocks:\n" +
+        "    # Live rows first (T8.2): one per mounted /storage/XXXX-YYYY read from\n" +
+        "    # the guest /proc/mounts, WITHOUT clamping a volume to the pendrive\n" +
+        "    # entry (the pendrive and the internal microSD are both external\n" +
+        "    # volumes). Capacity is measured live with statvfs on the guest bind\n" +
+        "    # path; the label is always \"volume\".\n" +
+        "    seen_ids = set()\n" +
+        "    for vid in live_volume_ids():\n" +
+        "        guest_mount = GUEST_STORAGE_ROOT + \"/\" + vid\n" +
+        "        seen_ids.add(vid.lower())\n" +
+        "        print(\"%-10s%-8s%-14s%s\" % (vid[:10], volume_size(guest_mount),\n" +
+        "                                     \"volume\", guest_mount))\n" +
+        "    # Snapshot rows after (T6): only blocks NOT already listed live.\n" +
+        "    # Blocks with a volumeId matching a live volume are dropped (the\n" +
+        "    # snapshot merged rows mislabel every volume as mass-storage, e.g. the\n" +
+        "    # internal microSD inside the hdd pendrive entry). A no-volumeId block\n" +
+        "    # (unmounted pendrive sda-like fallback) keeps its hardware label.\n" +
+        "    for b in collect_blocks():\n" +
         "        vid = b.get(\"volumeId\")\n" +
-        "        if vid:\n" +
-        "            already_seen.add(str(vid).lower())\n" +
+        "        if vid and str(vid).lower() in seen_ids:\n" +
+        "            continue\n" +
         "        name = str(b.get(\"name\"))[:10]\n" +
         "        size = fmt_size(b.get(\"capacityBytes\"))\n" +
         "        kind = \"mass-storage\" if b.get(\"massStorage\") else \"usb\"\n" +
         "        mount = b.get(\"mountpoint\") or \"-\"\n" +
         "        print(\"%-10s%-8s%-14s%s\" % (name, size, kind, mount))\n" +
-        "    # T8.2 live rows: one per mounted /storage/XXXX-YYYY not already listed\n" +
-        "    # by the snapshot, without clamping a volume to the pendrive entry.\n" +
-        "    for vid in live_volume_ids():\n" +
-        "        if vid.lower() in already_seen:\n" +
-        "            continue\n" +
-        "        print(\"%-10s%-8s%-14s%s\" % (vid[:10], \"-\", \"volume\",\n" +
-        "                                     GUEST_STORAGE_ROOT + \"/\" + vid))\n" +
         "    print(NOTICE)\n" +
         "    print(NOTICE_LIVE)\n" +
         "    # RF-2: exit 0 ALWAYS, inventory (possibly empty) + notice.\n" +

@@ -208,8 +208,9 @@ public class DebianInstallerTest {
             // Live rows use the type=volume label and the guest storage bind path
             Assert.assertTrue(script.contains("\"volume\""));
             Assert.assertTrue(script.contains("/root/storage"));
-            // Deduplication: a volume already listed by the snapshot is not repeated
-            Assert.assertTrue(script.contains("already_seen"));
+            // Deduplication: a volume already listed live is not repeated by the
+            // snapshot (T8.2 final: live rows first, snapshot only un-listed)
+            Assert.assertTrue(script.contains("seen_ids"));
         } finally {
             com.termux.shared.file.FileUtils.deleteFile("tempRoot", tempRoot.getAbsolutePath(), true);
         }
@@ -361,21 +362,54 @@ public class DebianInstallerTest {
             int exit = proc.waitFor();
             Assert.assertTrue("lsblk wrapper must always exit 0 (RF-2), out=" + out, exit == 0);
 
-            // Snapshot row: pendrive hardware + its volume
-            Assert.assertTrue(out.contains("mass-storage"));
+            // Live rows come first: BOTH volumes are type=volume rows bound into
+            // the guest, with a "-" size (the fake volume dirs do not exist, so
+            // the statvfs measurement is not possible).
             Assert.assertTrue(out.contains("459E-170F"));
-            Assert.assertTrue(out.contains("/storage/459E-170F"));
-            // Live row: internal microSD, independent of the pendrive entry,
-            // type=volume, size "-" (never a fake 0B), bound into the guest.
+            Assert.assertTrue(out.contains("/root/storage/459E-170F"));
+            Assert.assertTrue(out.contains("-"));
+            // The snapshot block for the pendrive volume is NOT repeated as a
+            // mass-storage row (that would mislabel, e.g., the internal microSD;
+            // the snapshot only carries hardware identity). Its merged row had
+            // volumeId=459E-170F, already covered by the live row.
+            Assert.assertFalse(out.contains("mass-storage"));
+            // Live row: internal microSD, independent of the pendrive entry.
             Assert.assertTrue(out.contains("47A8-1024"));
             Assert.assertTrue(out.contains("volume"));
             Assert.assertTrue(out.contains("/root/storage/47A8-1024"));
-            // Dedup: the pendrive volume is snapshot-listed, not repeated live
-            Assert.assertFalse(out.contains("/root/storage/459E-170F"));
             String[] lines47 = out.split("\n");
             int count47 = 0;
-            for (String line : lines47) if (line.contains("47A8-1024")) count47++;
+            int countBoth = 0;
+            for (String line : lines47) {
+                if (line.contains("47A8-1024")) count47++;
+                if (line.contains("459E-170F")) countBoth++;
+            }
             Assert.assertEquals(1, count47);
+            Assert.assertEquals(1, countBoth);
+            // A hardware row WITHOUT volumeId is still listed with the
+            // mass-storage label: simulate the pendrive unmounted by pointing
+            // the snapshot override to a fallback-only snapshot.
+            java.io.File fakeSnapshotNomp = new java.io.File(workDir, "snapshot_nomp.json");
+            String snapshotJsonNomp = "[{\"name\":\"Generic Flash Disk\",\"blockDevices\":["
+                + "{\"name\":\"sda\",\"capacityBytes\":0,\"massStorage\":true}]}]";
+            java.nio.file.Files.write(fakeSnapshotNomp.toPath(),
+                snapshotJsonNomp.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            java.io.File scriptFile2 = new java.io.File(workDir, "lsblk_wrapper2.py");
+            java.nio.file.Files.write(scriptFile2.toPath(), rawScript.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            ProcessBuilder pb2 = new ProcessBuilder(pythonBin, scriptFile2.getAbsolutePath());
+            pb2.environment().put("USB_SNAPSHOT_PATH_OVERRIDE", fakeSnapshotNomp.getAbsolutePath());
+            pb2.environment().put("USB_PROC_MOUNTS_OVERRIDE", fakeMounts.getAbsolutePath());
+            pb2.redirectErrorStream(true);
+            Process proc2 = pb2.start();
+            String out2 = new String(proc2.getInputStream().readAllBytes(),
+                java.nio.charset.StandardCharsets.UTF_8);
+            int exit2 = proc2.waitFor();
+            Assert.assertTrue("lsblk wrapper must always exit 0 (RF-2), out=" + out2, exit2 == 0);
+            // Unmounted pendrive: sda row with mass-storage label and "-" size.
+            Assert.assertTrue(out2.contains("mass-storage"));
+            Assert.assertTrue(out2.contains("sda"));
+            Assert.assertFalse(out2.contains("0B"));
             // New live note, no lie about it being snapshot-only content
             Assert.assertTrue(out.contains("/proc/mounts"));
         } finally {
