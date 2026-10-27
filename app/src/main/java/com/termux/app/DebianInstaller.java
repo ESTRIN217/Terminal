@@ -694,28 +694,44 @@ final class DebianInstaller {
         "exec /usr/local/bin/termux-usb \"$@\"\n";
 
     /**
-     * Guest {@code lsblk} informational wrapper (spec 021 T7, RF-1/RF-2).
+     * Guest {@code lsblk} informational wrapper (spec 021 T7 + T8.2, RF-1/RF-2).
      *
-     * <p>Self-contained python3 script that inventorises USB mass-storage
-     * pendrives by reading the app snapshot {@link TermuxConstants#USB_DEVICES_GUEST_SNAPSHOT_FILE_PATH}
+     * <p>Self-contained python3 script. USB mass-storage hardware rows come
+     * from the app snapshot {@link TermuxConstants#USB_DEVICES_GUEST_SNAPSHOT_FILE_PATH}
      * (the {@code blockDevices} section added in T6) instead of touching the
      * host's sysfs: Android's {@code untrusted_app} SELinux policy denies
      * {@code /sys/dev/block} access, which is documented as a limitation
-     * (RF-2), never a bug. It always exits 0 and survives a missing or
-     * corrupt snapshot. Integer-only sizing, no floating point (RF-1),
-     * mirroring {@code UsbBlockDeviceFormatLibrary#formatLsblk}.</p>
+     * (RF-2), never a bug. Since T8.2, mounted volumes are additionally listed
+     * <b>live</b> by parsing the guest's own {@code /proc/mounts} (readable via
+     * the {@code bind -b /proc} of the guest): every mountpoint matching
+     * {@code /storage/XXXX-YYYY} (where {@code XXXX-YYYY} is the framework
+     * volume id, e.g. the pendrive or the internal microSD) yields one row of
+     * {@code type=volume} with {@code size=-} and guest mountpoint
+     * {@code /root/storage/<ID>}, deduplicated against the snapshot
+     * {@code volumeId}s so an already-listed volume is not repeated. The env
+     * overrides {@code USB_SNAPSHOT_PATH_OVERRIDE} / {@code USB_PROC_MOUNTS_OVERRIDE}
+     * exist only for JVM functional tests; in production their defaults
+     * (the real guest paths) always apply. It always exits 0 and survives a
+     * missing or corrupt snapshot/mounts. Integer-only sizing, no floating
+     * point (RF-1), mirroring {@code UsbBlockDeviceFormatLibrary#formatLsblk}.</p>
      */
     public static final String LSBLOCK_WRAPPER_SCRIPT =
         "#!/usr/bin/env python3\n" +
         "# lsblk informational wrapper for Android without root (spec 021, RF-1/RF-2).\n" +
-        "# Reads the app USB snapshot; it never reads live kernel state:\n" +
-        "# /sys/dev/block is denied to untrusted_app (SELinux).\n" +
-        "import json, sys\n\n" +
-        "SNAPSHOT_PATH = \"/tmp/usb_devices.json\"\n" +
+        "# USB hardware rows come from the app USB snapshot; mounted volumes are\n" +
+        "# listed live from the guest /proc/mounts (the guest's own proc, readable\n" +
+        "# via its bind): /sys/dev/block of the host is denied to untrusted_app\n" +
+        "# (SELinux), so hardware sizes are snapshot state, not live kernel reads.\n" +
+        "import json, os, re, sys\n\n" +
+        "SNAPSHOT_PATH = os.environ.get(\"USB_SNAPSHOT_PATH_OVERRIDE\", \"/tmp/usb_devices.json\")\n" +
+        "PROC_MOUNTS_PATH = os.environ.get(\"USB_PROC_MOUNTS_OVERRIDE\", \"/proc/mounts\")\n" +
+        "VOLUME_MOUNT_RE = re.compile(r\"^/storage/([0-9A-Fa-f]{4}-[0-9A-Fa-f]{4})$\")\n" +
+        "GUEST_STORAGE_ROOT = \"/root/storage\"\n" +
         "HEADER = \"NAME      SIZE    TYPE          MOUNTPOINT\"\n" +
-        "NOTICE = (\"lsblk (informational): inventory comes from the app USB snapshot;\"\n" +
-        "          \" /sys/dev/block is not readable by untrusted_app (SELinux),\"\n" +
-        "          \" so this is not live kernel state of the host.\")\n\n" +
+        "NOTICE = (\"lsblk (informational): USB hardware inventory comes from the app USB snapshot,\"\n" +
+        "          \" but mounted volumes are listed live from the guest's /proc/mounts.\")\n" +
+        "NOTICE_LIVE = (\"/sys/dev/block is not readable by untrusted_app (SELinux),\"\n" +
+        "          \" so hardware sizes are snapshot state, not live kernel state of the host.\")\n\n" +
         "def fmt_size(raw):\n" +
         "    # Integer-only, floor semantics; no floating point (RF-1).\n" +
         "    try:\n" +
@@ -748,32 +764,70 @@ final class DebianInstaller {
         "            if isinstance(b, dict) and b.get(\"name\"):\n" +
         "                blocks.append(b)\n" +
         "    return blocks\n\n" +
+        "def live_volume_ids():\n" +
+        "    # T8.2: parse the guest /proc/mounts for FUSE volume mountpoints\n" +
+        "    # /storage/XXXX-YYYY (pendrive or internal microSD), deduplicated,\n" +
+        "    # tolerant to missing/corrupt mounts content (empty list, no crash).\n" +
+        "    ids = []\n" +
+        "    seen = set()\n" +
+        "    try:\n" +
+        "        with open(PROC_MOUNTS_PATH, \"r\", encoding=\"utf-8\", errors=\"replace\") as f:\n" +
+        "            for line in f:\n" +
+        "                fields = line.split()\n" +
+        "                if len(fields) < 2:\n" +
+        "                    continue\n" +
+        "                m = VOLUME_MOUNT_RE.match(fields[1])\n" +
+        "                if m and m.group(1) not in seen:\n" +
+        "                    seen.add(m.group(1))\n" +
+        "                    ids.append(m.group(1))\n" +
+        "    except Exception:\n" +
+        "        return []\n" +
+        "    return ids\n\n" +
         "def main():\n" +
         "    print(HEADER)\n" +
-        "    for b in collect_blocks():\n" +
+        "    blocks = collect_blocks()\n" +
+        "    already_seen = set()\n" +
+        "    for b in blocks:\n" +
+        "        vid = b.get(\"volumeId\")\n" +
+        "        if vid:\n" +
+        "            already_seen.add(str(vid).lower())\n" +
         "        name = str(b.get(\"name\"))[:10]\n" +
         "        size = fmt_size(b.get(\"capacityBytes\"))\n" +
         "        kind = \"mass-storage\" if b.get(\"massStorage\") else \"usb\"\n" +
         "        mount = b.get(\"mountpoint\") or \"-\"\n" +
         "        print(\"%-10s%-8s%-14s%s\" % (name, size, kind, mount))\n" +
+        "    # T8.2 live rows: one per mounted /storage/XXXX-YYYY not already listed\n" +
+        "    # by the snapshot, without clamping a volume to the pendrive entry.\n" +
+        "    for vid in live_volume_ids():\n" +
+        "        if vid.lower() in already_seen:\n" +
+        "            continue\n" +
+        "        print(\"%-10s%-8s%-14s%s\" % (vid[:10], \"-\", \"volume\",\n" +
+        "                                     GUEST_STORAGE_ROOT + \"/\" + vid))\n" +
         "    print(NOTICE)\n" +
+        "    print(NOTICE_LIVE)\n" +
         "    # RF-2: exit 0 ALWAYS, inventory (possibly empty) + notice.\n" +
         "    sys.exit(0)\n\n" +
         "if __name__ == \"__main__\":\n" +
         "    main()\n";
 
     /**
-     * Guest {@code terminal-usb-cp} wrapper (spec 021 T8, RF-4 via bind (a)).
+     * Guest {@code terminal-usb-cp} wrapper (spec 021 T8 + T8.2, RF-4 via
+     * bind (a)).
      *
-     * <p>Thin python3 wrapper over {@code cp}/{@code ls} against the volume the
-     * Android framework mounts under {@code /storage/XXXX-YYYY}, bind-mounted
-     * into the guest at {@code /root/storage} by the existing
+     * <p>Thin python3 wrapper over {@code cp}/{@code ls} against the volume
+     * the Android framework mounts under {@code /storage/XXXX-YYYY},
+     * bind-mounted into the guest at {@code /root/storage} by the existing
      * {@code -b /storage:$HOME/storage} bind of {@code ProotShellEnvironment}
      * (the RF-5 usability experiment closed positive with this existing bind,
-     * so no per-volume {@code -b} is needed). Before reading the snapshot it
-     * pings the USB bridge (LIST over the abstract-namespace socket, answer
-     * discarded, failure-tolerant), forcing the just-in-time snapshot refresh
-     * of the RF-6 amendment, so results use fresh mountpoints.</p>
+     * so no per-volume {@code -b} is needed). Since T8.2 the volume list is
+     * read <b>live</b> from the guest's own {@code /proc/mounts} (every
+     * mountpoint matching {@code /storage/XXXX-YYYY}, e.g. the pendrive or
+     * the internal microSD): the app snapshot is no longer consulted at all,
+     * and with it the bridge ping was removed too. The ping-forced JIT
+     * refresh of the snapshot (RF-6 amendment) still happens on every
+     * bridge connection, now only originated by the 020 tools
+     * {@code terminal-usb}/{@code termux-usb}; the ping existed solely so the
+     * snapshot would hold fresh mountpoints, which T8.2 no longer needs.</p>
      *
      * <p>No silent overwrite: destination pre-existence check plus
      * {@code cp -n}; when the destination exists the tool reports it on stderr
@@ -784,40 +838,33 @@ final class DebianInstaller {
      */
     public static final String TERMINAL_USB_CP_WRAPPER_SCRIPT =
         "#!/usr/bin/env python3\n" +
-        "# terminal-usb-cp: copy/list files of the Android-mounted pendrive\n" +
-        "# volume (spec 021, RF-4 via the /root/storage proot bind).\n" +
-        "import json, os, socket, subprocess, sys\n\n" +
+        "# terminal-usb-cp: copy/list files of the Android-mounted USB/SD\n" +
+        "# volume (spec 021, RF-4 via the /root/storage proot bind); volumes\n" +
+        "# are discovered live from the guest /proc/mounts (spec 021 T8.2).\n" +
+        "import os, re, subprocess, sys\n\n" +
         "STORAGE_ROOT = \"/root/storage\"\n" +
-        "SNAPSHOT_PATH = \"/tmp/usb_devices.json\"\n" +
-        "BRIDGE_ADDR = b\"\\x00terminal_usb\"\n" +
+        "PROC_MOUNTS_PATH = \"/proc/mounts\"\n" +
+        "VOLUME_MOUNT_RE = re.compile(r\"^/storage/([0-9A-Fa-f]{4}-[0-9A-Fa-f]{4})$\")\n" +
         "EXIT_EXISTED = 3  # destination existed; nothing was overwritten\n\n" +
-        "def ping_bridge():\n" +
-        "    # JIT refresh (spec 021 RF-6 amendment): every accepted connection\n" +
-        "    # to the bridge re-writes the snapshot; discard the answer.\n" +
-        "    try:\n" +
-        "        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)\n" +
-        "        s.connect(BRIDGE_ADDR)\n" +
-        "        s.sendall(b\"LIST\\n\")\n" +
-        "        s.recv(8192)\n" +
-        "        s.close()\n" +
-        "    except Exception:\n" +
-        "        pass\n\n" +
-        "def volume_ids_from_snapshot():\n" +
+        "def volume_ids():\n" +
+        "    # T8.2: live discovery from the guest /proc/mounts (pendrive or\n" +
+        "    # internal microSD); tolerant to unreadable content (empty list).\n" +
         "    ids = []\n" +
+        "    seen = set()\n" +
         "    try:\n" +
-        "        with open(SNAPSHOT_PATH, \"rb\") as f:\n" +
-        "            entries = json.loads(f.read().decode(\"utf-8\"))\n" +
-        "        if isinstance(entries, list):\n" +
-        "            for e in entries:\n" +
-        "                if not isinstance(e, dict):\n" +
+        "        with open(PROC_MOUNTS_PATH, \"r\", encoding=\"utf-8\", errors=\"replace\") as f:\n" +
+        "            for line in f:\n" +
+        "                fields = line.split()\n" +
+        "                if len(fields) < 2:\n" +
         "                    continue\n" +
-        "                for b in e.get(\"blockDevices\") or []:\n" +
-        "                    if isinstance(b, dict) and b.get(\"volumeId\"):\n" +
-        "                        if b[\"volumeId\"] not in ids:\n" +
-        "                            ids.append(str(b[\"volumeId\"]))\n" +
+        "                m = VOLUME_MOUNT_RE.match(fields[1])\n" +
+        "                if m and m.group(1) not in seen:\n" +
+        "                    seen.add(m.group(1))\n" +
+        "                    ids.append(m.group(1))\n" +
         "    except Exception:\n" +
         "        pass\n" +
-        "    return ids\n\n" +
+        "    return ids\n" +
+        "\n" +
         "def looks_like_volume_id(arg):\n" +
         "    # XXXX-YYYY framework volume id (spec 021 snapshot shape).\n" +
         "    a = str(arg).strip()\n" +
@@ -826,7 +873,7 @@ final class DebianInstaller {
         "    return all(ch.isdigit() or ch in \"abcdefABCDEF\" for ch in a[:4] + a[5:])\n\n" +
         "def resolve_volume(args):\n" +
         "    # Separate an optional positional volume-id selector from path args.\n" +
-        "    ids = volume_ids_from_snapshot()\n" +
+        "    ids = volume_ids()\n" +
         "    if args and looks_like_volume_id(args[0]):\n" +
         "        return str(args.pop(0)).strip(), args\n" +
         "    if len(ids) == 1:\n" +
@@ -875,11 +922,10 @@ final class DebianInstaller {
         "    cmd = argv.pop(0)\n" +
         "    if cmd not in (\"list\", \"read\", \"write\"):\n" +
         "        usage()\n" +
-        "    ping_bridge()\n" +
         "    volume_id, rest = resolve_volume(argv)\n" +
         "    if volume_id is None:\n" +
-        "        sys.stderr.write(\"Error: no mounted USB volume in \" + SNAPSHOT_PATH +\n" +
-        "                         \"; plug the pendrive and retry\\n\")\n" +
+        "        sys.stderr.write(\"Error: no mounted USB/SD volume (from \" + PROC_MOUNTS_PATH +\n" +
+        "                         \"); plug the pendrive and retry\\n\")\n" +
         "        sys.exit(2)\n" +
         "    if cmd == \"list\":\n" +
         "        rel = rest[0] if rest else \"/\"\n" +

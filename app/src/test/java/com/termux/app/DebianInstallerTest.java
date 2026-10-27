@@ -201,6 +201,15 @@ public class DebianInstallerTest {
             Assert.assertTrue(script.contains("sys.exit(0)"));
             // Tolerant parse: survives non-existent or malformed JSON without crashing
             Assert.assertTrue(script.contains("except Exception"));
+            // T8.2: mounted volumes are listed LIVE parsing the guest /proc/mounts
+            // (pendrive AND internal microSD show up correctly and independently).
+            Assert.assertTrue(script.contains("/proc/mounts"));
+            Assert.assertTrue(script.contains("VOLUME_MOUNT_RE"));
+            // Live rows use the type=volume label and the guest storage bind path
+            Assert.assertTrue(script.contains("\"volume\""));
+            Assert.assertTrue(script.contains("/root/storage"));
+            // Deduplication: a volume already listed by the snapshot is not repeated
+            Assert.assertTrue(script.contains("already_seen"));
         } finally {
             com.termux.shared.file.FileUtils.deleteFile("tempRoot", tempRoot.getAbsolutePath(), true);
         }
@@ -251,10 +260,13 @@ public class DebianInstallerTest {
             String script = new String(diskBytes, java.nio.charset.StandardCharsets.UTF_8);
             // Self-contained python3 wrapper (same pattern as the lsblk wrapper)
             Assert.assertTrue(script.startsWith("#!/usr/bin/env python3"));
-            // JIT refresh: pings the bridge (abstract namespace, spec 020) before
-            // reading the snapshot, so the host re-writes it with fresh mountpoints.
-            Assert.assertTrue(script.contains("\\x00terminal_usb"));
-            Assert.assertTrue(script.contains("LIST"));
+            // T8.2: volume discovery is LIVE from the guest /proc/mounts; the
+            // bridge ping and the JSON fallback were removed (simplicity).
+            Assert.assertTrue(script.contains("/proc/mounts"));
+            Assert.assertTrue(script.contains("VOLUME_MOUNT_RE"));
+            Assert.assertFalse(script.contains("ping_bridge"));
+            Assert.assertFalse(script.contains("\\x00terminal_usb"));
+            Assert.assertFalse(script.contains("usb_devices.json"));
             // RF-4 subcommands
             Assert.assertTrue(script.contains("\"list\""));
             Assert.assertTrue(script.contains("\"read\""));
@@ -293,8 +305,94 @@ public class DebianInstallerTest {
         }
     }
 
-    private static String the020ToolName(int i) {
-        switch (i) {
+    /**
+     * T8.2 functional smoke of the generated {@code lsblk} guest wrapper: run the
+     * generated python3 against a fake snapshot and a fake guest /proc/mounts
+     * (the scripts honour env-path overrides so the test never touches real
+     * /tmp or /proc, mirroring the on-device smoke style).
+     */
+    @Test
+    public void testLsblkWrapper_functionalWithFakeGuestProcMounts() throws Exception {
+        String pythonBin = System.getenv("PYTHON3_BIN");
+        if (pythonBin == null) pythonBin = "python3";
+        org.junit.Assume.assumeTrue(pythonBin != null && looksLikeExecutable(pythonBin));
+
+        java.io.File tempRoot = java.io.File.createTempFile("rootfs-test", "");
+        tempRoot.delete();
+        tempRoot.mkdirs();
+        java.io.File workDir = java.io.File.createTempFile("lsblk-smoke", "");
+        workDir.delete();
+        workDir.mkdirs();
+        try {
+            com.termux.shared.errors.Error error = DebianInstaller.installUsbTools(tempRoot);
+            Assert.assertNull(error);
+            String rawScript = new String(
+                java.nio.file.Files.readAllBytes(new java.io.File(tempRoot,
+                    TermuxConstants.DEBIAN_LSBLOCK_RELATIVE_PATH).toPath()),
+                java.nio.charset.StandardCharsets.UTF_8);
+
+            // Fake guest snapshot: pendrive sda with volume 459E-170F (microSD absent)
+            java.io.File fakeSnapshot = new java.io.File(workDir, "snapshot.json");
+            String snapshotJson = "[{\"name\":\"Generic Flash Disk\",\"blockDevices\":["
+                + "{\"name\":\"sda\",\"capacityBytes\":3909091328,\"massStorage\":true,"
+                + "\"volumeId\":\"459E-170F\",\"mountpoint\":\"/storage/459E-170F\"}]}]";
+            java.nio.file.Files.write(fakeSnapshot.toPath(),
+                snapshotJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            // Fake guest /proc/mounts: pendrive + internal microSD (no snapshot row)
+            java.io.File fakeMounts = new java.io.File(workDir, "proc_mounts");
+            java.nio.file.Files.write(fakeMounts.toPath(),
+                ("/dev/fuse /storage/459E-170F fuse rw,.... 0 0\n"
+                    + "/dev/fuse /storage/emulated/0 fuse rw,.... 0 0\n"
+                    + "/dev/fuse /storage/47A8-1024 fuse rw,.... 0 0\n"
+                    + "/dev/block /data fuse datasync,.... 0 0\n")
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            java.io.File scriptFile = new java.io.File(workDir, "lsblk_wrapper.py");
+            java.nio.file.Files.write(scriptFile.toPath(), rawScript.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            ProcessBuilder pb = new ProcessBuilder(pythonBin, scriptFile.getAbsolutePath());
+            pb.environment().put("USB_SNAPSHOT_PATH_OVERRIDE", fakeSnapshot.getAbsolutePath());
+            pb.environment().put("USB_PROC_MOUNTS_OVERRIDE", fakeMounts.getAbsolutePath());
+            pb.redirectErrorStream(true);
+            Process proc = pb.start();
+            String out = new String(proc.getInputStream().readAllBytes(),
+                java.nio.charset.StandardCharsets.UTF_8);
+            int exit = proc.waitFor();
+            Assert.assertTrue("lsblk wrapper must always exit 0 (RF-2), out=" + out, exit == 0);
+
+            // Snapshot row: pendrive hardware + its volume
+            Assert.assertTrue(out.contains("mass-storage"));
+            Assert.assertTrue(out.contains("459E-170F"));
+            Assert.assertTrue(out.contains("/storage/459E-170F"));
+            // Live row: internal microSD, independent of the pendrive entry,
+            // type=volume, size "-" (never a fake 0B), bound into the guest.
+            Assert.assertTrue(out.contains("47A8-1024"));
+            Assert.assertTrue(out.contains("volume"));
+            Assert.assertTrue(out.contains("/root/storage/47A8-1024"));
+            // Dedup: the pendrive volume is snapshot-listed, not repeated live
+            Assert.assertFalse(out.contains("/root/storage/459E-170F"));
+            String[] lines47 = out.split("\n");
+            int count47 = 0;
+            for (String line : lines47) if (line.contains("47A8-1024")) count47++;
+            Assert.assertEquals(1, count47);
+            // New live note, no lie about it being snapshot-only content
+            Assert.assertTrue(out.contains("/proc/mounts"));
+        } finally {
+            com.termux.shared.file.FileUtils.deleteFile("tempRoot", tempRoot.getAbsolutePath(), true);
+            com.termux.shared.file.FileUtils.deleteFile("workDir", workDir.getAbsolutePath(), true);
+        }
+    }
+
+    private static boolean looksLikeExecutable(String bin) {
+        try {
+            return new ProcessBuilder(bin, "-c", "import sys").start().waitFor() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static String the020ToolName(int i) {        switch (i) {
             case 0: return TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH;
             case 1: return TermuxConstants.DEBIAN_TERMUX_USB_RELATIVE_PATH;
             default: return TermuxConstants.DEBIAN_TERMINAL_USB_RELATIVE_PATH;

@@ -207,3 +207,24 @@ Verificados en guest Debian por el mantenedor con un pendrive Generic Flash Disk
   El shape JSON de T6/T4 no cambia: `blockDevices[].volumeId`/`mountpoint` se
   rellenan igual y el wrapper `terminal-usb-cp` sigue componiendo
   `/root/storage/<ID>/`.
+- **Defecto detectado en dispositivo (2026-10-27, fix T8.2 — microSD interna):**
+  además del pendrive, el dispositivo tiene una microSD interna montada por el
+  framework como FUSE `/storage/<ID>` (p. ej. `47A8-1024`). El snapshot JSON solo
+  cuelga los volúmenes bajo entradas USB mass-storage
+  (`mergeBlockDevicesIntoJson`), así que (i) la tabla de `lsblk` mostraba la
+  microSD como si colgara del pendrive y (ii) con microSD-sola (sin pendrive) no
+  aparecía nada. El `/proc/mounts` del **guest** es legible (bind `bind -b /proc`
+  ya existente; verificado en dispositivo: contiene `/storage/459E-170F` y
+  `/storage/47A8-1024`). Decisión T8.2: las herramientas guest leen los
+  volúmenes **en vivo** parseando `/proc/mounts` del guest (patrón estricto
+  `/storage/XXXX-YYYY`); el snapshot queda solo para las filas de hardware USB
+  (nombre/capacidad) de `lsblk`, que ahora deduplican contra los `volumeId` del
+  snapshot para no repetir. El mapeo no clava el volumen al pendrive: con varios
+  volúmenes se retratan como filas separadas `type=volume` (`size=-`, montado en
+  `/root/storage/<ID>`). En `terminal-usb-cp` el descubrimiento de volúmenes
+  pasa a ser en vivo de `/proc/mounts` y se **elimina** el ping al bridge y el
+  fallback al snapshot: el refresh JIT del snapshot (RF-6 enmienda) sigue
+  ocurriendo en cada conexión al bridge, ahora solo originado por las tools 020
+  (`terminal-usb`/`termux-usb`); el ping existía solo para asegurar mountpoints
+  frescos en el snapshot, algo que T8.2 ya no necesita. Subcomandos, exit codes
+  y anti-`..` intactos.

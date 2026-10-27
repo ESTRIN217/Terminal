@@ -51,6 +51,15 @@ negativo, la spec se reescopa (RF-4/RF-5 fuera) y las tareas T5+ no se marcan.
     parte JIT del snapshot fue refactorizada en `writeSnapshotFiles` (testable, ambos ficheros).
     Verificación guest: `terminal-usb-cp read/write` con fichero ≥10 MB sin corrupción.
 
+- [x] **T8.2. Fix en dispositivo: herramientas guest leen volúmenes en vivo del
+      `/proc/mounts` del guest.** RF-1, RF-4
+  - Hecho cuando: `lsblk` añade filas en vivo (`type=volume`, `size=-`,
+    `/root/storage/<ID>`) parseando `/proc/mounts` del guest con deduplicado
+    contra el snapshot (microSD visible, sin colgarla del pendrive); y
+    `terminal-usb-cp` descubre volúmenes en vivo de `/proc/mounts` (se elimina
+    el ping y el fallback al snapshot; exit codes y anti-`..` intactos);
+    smoke funcional JVM del python3 generado contra `/proc/mounts` fake.
+
 - [x] **T8.1. Fix en dispositivo: fuente de mountpoints = `/proc/mounts`.** RF-1, RF-6
   - Hecho cuando (defecto detectado al instalar el build de T8): SELinux deniega el
     `readdir` de `/storage` (untrusted_app) de modo que `File("/storage").list()`
