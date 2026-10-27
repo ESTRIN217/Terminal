@@ -1,6 +1,6 @@
 # Spec 021 — Almacenamiento USB: detección informativa de pendrives (lsblk-like) y acceso a ficheros vía SAF
 
-Estado: **borrador**
+Estado: **en implementación (factibilidad cerrada, T8 vía bind)**
 
 ## Contexto y objetivo
 
@@ -164,3 +164,32 @@ descartado en el dispositivo y la spec se **reescopa** a RF-1 + documentación d
 ## Dudas abiertas
 
 - Ninguna por ahora (objeto de prueba: el mismo dispositivo ESTRIN Unisoc/A12 de la 020).
+
+## Resultados de factibilidad (2026-10-27, dispositivo real)
+
+Verificados en guest Debian por el mantenedor con un pendrive Generic Flash Disk
+(058f:6387) montado por el framework como volúmen `459E-170F`:
+
+- **F3/T1 — el framework SÍ monta el pendrive:** volúmen visible como
+  `/storage/459E-170F`. Positivo.
+- **F2/T2 — el acceso desde el guest funciona con matices:** `readdir` sobre el
+  catálogo `/root/storage` lo niega SELinux (igual que `/sys/dev/block`), pero el
+  **acceso directo al hijo del volumen funciona**: `ls /root/storage/459E-170F`
+  lista, lectura OK, escritura OK (dd 10 MiB round-trip limpio, md5 verificado).
+  El bind de /storage ya existía en `ProotShellEnvironment`
+  (`-b /storage:$HOME/storage`); no se requería parche.
+- **F1/T3 — experimento de `-b /storage/XXXX-YYYY:/root/usb`:** RESUELTO por
+  infraestructura ya existente — el bind global `-b /storage:/root/storage`
+  cumple el objetivo RF-5 (acceso transparente desde el guest) sin bind
+  adicional: **la vía elegida para T8 es (a): `terminal-usb-cp` wrapper fino**
+  sobre `cp`/`mv` contra `/root/storage/<ID>/...`. El puente de ficheros
+  (RF-4 v.b) queda descartado; la constante `USB_FILE_BRIDGE_ABSTRACT_ADDRESS`
+  no se usa (se conserva documentada como referencia del camino descartado).
+- **Hueco detectado (temporalidad del snapshot):** el snapshot se escribe en
+  ATTACHED/DETACHED, pero el framework monta el volumen DESPUÉS del attach, por
+  lo que en el JSON capturado en attach aparecía `blockDevices` con `sda` sin
+  `volumeId`/`mountpoint`. Enmienda a RF-6: `handleClient` de `UsbBridgeServer`
+  refrescará el snapshot en **cada conexión al bridge** (just-in-time), y el
+  wrapper `lsblk` hará un ping al bridge (subcomando list del tool 020) antes de
+  leer el snapshot, garantizando mountpoints frescos sin listeners nuevos
+  (ACTION_MEDIA_MOUNTED está restringido en Android moderno).
