@@ -161,8 +161,87 @@ public class DebianInstallerTest {
             java.io.File backup = new java.io.File(tempRoot, TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH + ".bak");
             java.nio.file.Files.move(lsusb.toPath(), backup.toPath());
             Assert.assertTrue(DebianInstaller.usbToolsNeedRefresh(tempRoot));
+
+            // Missing lsblk (spec 021 T7) must also trigger the refresh
+            java.io.File lsblk = new java.io.File(tempRoot, TermuxConstants.DEBIAN_LSBLOCK_RELATIVE_PATH);
+            java.nio.file.Files.move(lsblk.toPath(), new java.io.File(tempRoot, TermuxConstants.DEBIAN_LSBLOCK_RELATIVE_PATH + ".bak").toPath());
+            Assert.assertTrue(DebianInstaller.usbToolsNeedRefresh(tempRoot));
+            error = DebianInstaller.installUsbTools(tempRoot);
+            Assert.assertNull(error);
+            Assert.assertFalse(DebianInstaller.usbToolsNeedRefresh(tempRoot));
         } finally {
             com.termux.shared.file.FileUtils.deleteFile("tempRoot", tempRoot.getAbsolutePath(), true);
+        }
+    }
+
+    @Test
+    public void testInstallUsbTools_installsLsblkWrapper() throws Exception {
+        java.io.File tempRoot = java.io.File.createTempFile("rootfs-test", "");
+        tempRoot.delete();
+        tempRoot.mkdirs();
+        try {
+            com.termux.shared.errors.Error error = DebianInstaller.installUsbTools(tempRoot);
+            Assert.assertNull(error);
+            java.io.File lsblk = new java.io.File(tempRoot, TermuxConstants.DEBIAN_LSBLOCK_RELATIVE_PATH);
+            Assert.assertTrue(lsblk.isFile());
+            byte[] diskBytes = java.nio.file.Files.readAllBytes(lsblk.toPath());
+            Assert.assertTrue(diskBytes.length > 0);
+            // Executable-ish: 0755 is applied by installUsbTools; in the JVM
+            // unit-test environment the chmod is stubbed, so the shebang acts as
+            // the self-contained executable marker, byte-compared on device.
+            String script = new String(diskBytes, java.nio.charset.StandardCharsets.UTF_8);
+            Assert.assertTrue(script.startsWith("#!/usr/bin/env python3"));
+            // RF-1: reads the 021 snapshot (blockDevices section of /tmp/usb_devices.json)
+            Assert.assertTrue(script.contains(TermuxConstants.USB_DEVICES_GUEST_SNAPSHOT_FILE_PATH));
+            Assert.assertTrue(script.contains("blockDevices"));
+            // RF-2: the SELinux/sysfs limitation notice, exactly as the spec says
+            Assert.assertTrue(script.contains("sys/dev/block"));
+            Assert.assertTrue(script.contains("SELinux"));
+            // RF-2: exit 0 ALWAYS, even for a missing or corrupt snapshot
+            Assert.assertTrue(script.contains("sys.exit(0)"));
+            // Tolerant parse: survives non-existent or malformed JSON without crashing
+            Assert.assertTrue(script.contains("except Exception"));
+        } finally {
+            com.termux.shared.file.FileUtils.deleteFile("tempRoot", tempRoot.getAbsolutePath(), true);
+        }
+    }
+
+    @Test
+    public void testUsbToolsRefresh_020ToolsUnchangedByLsblk() throws Exception {
+        java.io.File tempRoot = java.io.File.createTempFile("rootfs-test", "");
+        tempRoot.delete();
+        tempRoot.mkdirs();
+        try {
+            com.termux.shared.errors.Error error = DebianInstaller.installUsbTools(tempRoot);
+            Assert.assertNull(error);
+            Assert.assertFalse(DebianInstaller.usbToolsNeedRefresh(tempRoot));
+            byte[][] before = {
+                java.nio.file.Files.readAllBytes(new java.io.File(tempRoot, TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH).toPath()),
+                java.nio.file.Files.readAllBytes(new java.io.File(tempRoot, TermuxConstants.DEBIAN_TERMUX_USB_RELATIVE_PATH).toPath()),
+                java.nio.file.Files.readAllBytes(new java.io.File(tempRoot, TermuxConstants.DEBIAN_TERMINAL_USB_RELATIVE_PATH).toPath()),
+            };
+            // Reinstalling (refresh path) must keep the 020 tools byte-identical
+            error = DebianInstaller.installUsbTools(tempRoot);
+            Assert.assertNull(error);
+            byte[][] after = {
+                java.nio.file.Files.readAllBytes(new java.io.File(tempRoot, TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH).toPath()),
+                java.nio.file.Files.readAllBytes(new java.io.File(tempRoot, TermuxConstants.DEBIAN_TERMUX_USB_RELATIVE_PATH).toPath()),
+                java.nio.file.Files.readAllBytes(new java.io.File(tempRoot, TermuxConstants.DEBIAN_TERMINAL_USB_RELATIVE_PATH).toPath()),
+            };
+            for (int i = 0; i < before.length; i++) {
+                Assert.assertArrayEquals(the020ToolName(i), before[i], after[i]);
+            }
+            Assert.assertFalse(DebianInstaller.usbToolsNeedRefresh(tempRoot));
+        } finally {
+            com.termux.shared.file.FileUtils.deleteFile("tempRoot", tempRoot.getAbsolutePath(), true);
+        }
+    }
+
+    private static String the020ToolName(int i) {
+        switch (i) {
+            case 0: return TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH;
+            case 1: return TermuxConstants.DEBIAN_TERMUX_USB_RELATIVE_PATH;
+            default: return TermuxConstants.DEBIAN_TERMINAL_USB_RELATIVE_PATH;
         }
     }
 }

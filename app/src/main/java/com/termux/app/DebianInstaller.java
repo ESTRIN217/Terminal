@@ -694,6 +694,75 @@ final class DebianInstaller {
         "exec /usr/local/bin/termux-usb \"$@\"\n";
 
     /**
+     * Guest {@code lsblk} informational wrapper (spec 021 T7, RF-1/RF-2).
+     *
+     * <p>Self-contained python3 script that inventorises USB mass-storage
+     * pendrives by reading the app snapshot {@link TermuxConstants#USB_DEVICES_GUEST_SNAPSHOT_FILE_PATH}
+     * (the {@code blockDevices} section added in T6) instead of touching the
+     * host's sysfs: Android's {@code untrusted_app} SELinux policy denies
+     * {@code /sys/dev/block} access, which is documented as a limitation
+     * (RF-2), never a bug. It always exits 0 and survives a missing or
+     * corrupt snapshot. Integer-only sizing, no floating point (RF-1),
+     * mirroring {@code UsbBlockDeviceFormatLibrary#formatLsblk}.</p>
+     */
+    public static final String LSBLOCK_WRAPPER_SCRIPT =
+        "#!/usr/bin/env python3\n" +
+        "# lsblk informational wrapper for Android without root (spec 021, RF-1/RF-2).\n" +
+        "# Reads the app USB snapshot; it never reads live kernel state:\n" +
+        "# /sys/dev/block is denied to untrusted_app (SELinux).\n" +
+        "import json, sys\n\n" +
+        "SNAPSHOT_PATH = \"/tmp/usb_devices.json\"\n" +
+        "HEADER = \"NAME      SIZE    TYPE          MOUNTPOINT\"\n" +
+        "NOTICE = (\"lsblk (informational): inventory comes from the app USB snapshot;\"\n" +
+        "          \" /sys/dev/block is not readable by untrusted_app (SELinux),\"\n" +
+        "          \" so this is not live kernel state of the host.\")\n\n" +
+        "def fmt_size(raw):\n" +
+        "    # Integer-only, floor semantics; no floating point (RF-1).\n" +
+        "    try:\n" +
+        "        n = int(raw)\n" +
+        "    except Exception:\n" +
+        "        n = 0\n" +
+        "    if n < 0:\n" +
+        "        n = 0\n" +
+        "    if n >= 1024 ** 3:\n" +
+        "        return \"%dG\" % (n // 1024 ** 3)\n" +
+        "    if n >= 1024 ** 2:\n" +
+        "        return \"%dM\" % (n // 1024 ** 2)\n" +
+        "    if n >= 1024:\n" +
+        "        return \"%dK\" % (n // 1024)\n" +
+        "    return \"%dB\" % n\n\n" +
+        "def collect_blocks():\n" +
+        "    # Tolerant read: missing or corrupt snapshot yields no rows, exit 0.\n" +
+        "    try:\n" +
+        "        with open(SNAPSHOT_PATH, \"rb\") as f:\n" +
+        "            entries = json.loads(f.read().decode(\"utf-8\"))\n" +
+        "    except Exception:\n" +
+        "        return []\n" +
+        "    blocks = []\n" +
+        "    if not isinstance(entries, list):\n" +
+        "        return blocks\n" +
+        "    for entry in entries:\n" +
+        "        if not isinstance(entry, dict):\n" +
+        "            continue\n" +
+        "        for b in entry.get(\"blockDevices\") or []:\n" +
+        "            if isinstance(b, dict) and b.get(\"name\"):\n" +
+        "                blocks.append(b)\n" +
+        "    return blocks\n\n" +
+        "def main():\n" +
+        "    print(HEADER)\n" +
+        "    for b in collect_blocks():\n" +
+        "        name = str(b.get(\"name\"))[:10]\n" +
+        "        size = fmt_size(b.get(\"capacityBytes\"))\n" +
+        "        kind = \"mass-storage\" if b.get(\"massStorage\") else \"usb\"\n" +
+        "        mount = b.get(\"mountpoint\") or \"-\"\n" +
+        "        print(\"%-10s%-8s%-14s%s\" % (name, size, kind, mount))\n" +
+        "    print(NOTICE)\n" +
+        "    # RF-2: exit 0 ALWAYS, inventory (possibly empty) + notice.\n" +
+        "    sys.exit(0)\n\n" +
+        "if __name__ == \"__main__\":\n" +
+        "    main()\n";
+
+    /**
      * Whether the guest USB tools (lsusb and termux-usb) are installed in the rootfs.
      */
     public static boolean isUsbToolsInstalled() {
@@ -718,7 +787,11 @@ final class DebianInstaller {
     static boolean usbToolsNeedRefresh(File root) {
         return !fileContentMatches(new File(root, TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH), LSUSB_WRAPPER_SCRIPT)
             || !fileContentMatches(new File(root, TermuxConstants.DEBIAN_TERMUX_USB_RELATIVE_PATH), TERMUX_USB_BRIDGE_SCRIPT)
-            || !fileContentMatches(new File(root, TermuxConstants.DEBIAN_TERMINAL_USB_RELATIVE_PATH), TERMINAL_USB_FORWARD_SCRIPT);
+            || !fileContentMatches(new File(root, TermuxConstants.DEBIAN_TERMINAL_USB_RELATIVE_PATH), TERMINAL_USB_FORWARD_SCRIPT)
+            // Spec 021 T7 (RF-3): a pre-021 rootfs (or one missing the lsblk
+            // wrapper of this build) must also be refreshed, without touching
+            // the already-installed 020 tools unless they differ too.
+            || !fileContentMatches(new File(root, TermuxConstants.DEBIAN_LSBLOCK_RELATIVE_PATH), LSBLOCK_WRAPPER_SCRIPT);
     }
 
     private static boolean fileContentMatches(File file, String expected) {
@@ -735,7 +808,8 @@ final class DebianInstaller {
     }
 
     /**
-     * Install the lsusb and termux-usb tools into /usr/local/bin of the rootfs (spec 020).
+     * Install the lsusb and termux-usb tools plus the informational lsblk
+     * wrapper (spec 021) into /usr/local/bin of the rootfs (spec 020/021).
      */
     public static Error installUsbTools(File root) {
         File binDir = new File(root, "usr/local/bin");
@@ -751,6 +825,12 @@ final class DebianInstaller {
 
         File terminalUsbFile = new File(root, TermuxConstants.DEBIAN_TERMINAL_USB_RELATIVE_PATH);
         error = writeScriptFile(terminalUsbFile, TERMINAL_USB_FORWARD_SCRIPT);
+        if (error != null) return error;
+
+        // Spec 021 T7 (RF-1/RF-3): the informational lsblk wrapper is part of
+        // the same 0755, byte-compared installation path as the 020 tools.
+        File lsblkFile = new File(root, TermuxConstants.DEBIAN_LSBLOCK_RELATIVE_PATH);
+        error = writeScriptFile(lsblkFile, LSBLOCK_WRAPPER_SCRIPT);
         if (error != null) return error;
 
         return null;

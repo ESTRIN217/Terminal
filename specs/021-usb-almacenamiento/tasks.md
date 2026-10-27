@@ -34,7 +34,7 @@ negativo, la spec se reescopa (RF-4/RF-5 fuera) y las tareas T5+ no se marcan.
     block devices (volúmenes + flag mass-storage) usando la librería pura; JSON validado
     con round-trip en `app` test.
 
-- [ ] **T7. Wrapper guest `lsblk` instalado vía `usbToolsNeedRefresh`.** RF-1, RF-2, RF-3
+- [x] **T7. Wrapper guest `lsblk` instalado vía `usbToolsNeedRefresh`.** RF-1, RF-2, RF-3
   - Hecho cuando: `DebianInstaller` instale `usr/local/bin/lsblk` (0755, byte-compare) que
     lea el snapshot, imprima tabla + aviso, exit 0, y conserve intactos los tools de la 020
     (`lsusb`/`termux-usb`/`terminal-usb`).
