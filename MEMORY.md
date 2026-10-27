@@ -21,6 +21,21 @@
   fix ni spec. Warnings OSC 8 de zutty: NO de fastfetch (su fuente no emite
   OSC 8), de los dotfiles; inofensivos.
 
+## Spec 021 en curso (2026-10-27)
+- **Almacenamiento USB: detección + ficheros vía SAF.** T4–T7 COMPLETAS
+  (commits `c7e9c902`…`395a5f00`): `UsbBlockDeviceFormatLibrary` (pura + tests),
+  constantes 021 en `TermuxConstants` (incl. `USB_FILE_BRIDGE_ABSTRACT_ADDRESS =
+  "terminal_usb_files"`, namespace abstracto por fidelidad al patrón 020),
+  sección `blockDevices` aditiva en snapshot de `UsbBridgeServer` (shape de la
+  librería, capacityBytes=0 de momento), wrapper guest `usr/local/bin/lsblk`
+  instalado vía `usbToolsNeedRefresh` (sale tabla lsblk-ish del snapshot +
+  aviso SELinux, exit 0 siempre). `./gradlew test` verde en todo el repo.
+- **PENDIENTE:** T1–T3 de factibilidad en dispositivo físico (¿framework monta
+  el pendrive? ¿acceso `/storage/XXXX-YYYY` con targetSdk 28? ¿bind proot
+  `-b /storage…:/root/usb`?) gating T8 (ficheros vía bind/puente) y el reescopo
+  de la spec. T9 (wiki/limitaciones) al final. `lsblk` SYNUE sysfs real SIEMPRE
+  (SELinux untrusted_app) — no volver a intentar fix.
+
 ## Arquitectura y reglas prácticas
 - `terminal-emulator` → `terminal-view` → `termux-shared` → `app`; `filemanager` →
   `termux-shared`. No invertir dependencias. Librerías Java puro; Kotlin solo en `app`
