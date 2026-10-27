@@ -41,19 +41,23 @@
 
 ## Spec 021 en curso (2026-10-27)
 
-- **Almacenamiento USB: detección + ficheros vía SAF.** T4–T7 COMPLETAS
-  (commits `c7e9c902`…`395a5f00`): `UsbBlockDeviceFormatLibrary` (pura + tests),
-  constantes 021 en `TermuxConstants` (incl. `USB_FILE_BRIDGE_ABSTRACT_ADDRESS =
-  "terminal_usb_files"`, namespace abstracto por fidelidad al patrón 020),
-  sección `blockDevices` aditiva en snapshot de `UsbBridgeServer` (shape de la
-  librería, capacityBytes=0 de momento), wrapper guest `usr/local/bin/lsblk`
-  instalado vía `usbToolsNeedRefresh` (sale tabla lsblk-ish del snapshot +
-  aviso SELinux, exit 0 siempre). `./gradlew test` verde en todo el repo.
-- **PENDIENTE:** T1–T3 de factibilidad en dispositivo físico (¿framework monta
-  el pendrive? ¿acceso `/storage/XXXX-YYYY` con targetSdk 28? ¿bind proot
-  `-b /storage…:/root/usb`?) gating T8 (ficheros vía bind/puente) y el reescopo
-  de la spec. T9 (wiki/limitaciones) al final. `lsblk` SYNUE sysfs real SIEMPRE
-  (SELinux untrusted_app) — no volver a intentar fix.
+- **Almacenamiento USB: detección + ficheros vía bind.** T1–T8 COMPLETAS:
+  factibilidad positivas en dispositivo (framework SÍ monta → volumen
+  `459E-170F`; bind `-b /storage:$HOME/storage` ya existente: `readdir` del
+  catálogo denegado por SELinux pero acceso directo al `<ID>` funciona, lectura
+  + escritura round-trip 10 MiB limpios). So:
+  `UsbBlockDeviceFormatLibrary` + tests, constantes 021, sección `blockDevices`
+  aditiva en snapshot, wrappers guest `lsblk` (informativo, exit 0, aviso
+  SELinux) y `terminal-usb-cp` (`list/read/write`; exit 3 destino existía; ping
+  al bridge antes de leer) instalados vía `usbToolsNeedRefresh`; refresco JIT
+  del snapshot en cada conexión al bridge (el framework monta DESPUÉS del
+  attach — no usar ACTION_MEDIA_MOUNTED, restringido). Wiki `limitaciones.html`
+  ampliada (commit `4f2e2d8e`). `./gradlew test` verde.
+- **PENDIENTE T9:** verificación en dispositivo del wrapper `terminal-usb-cp`
+  (list/read ≥10 MB/write idempotencia en pendrive real, tras `app:assembleDebug`)
+  y `lsblk` con mountpoint volumeId fresco. `USB_FILE_BRIDGE_ABSTRACT_ADDRESS`
+  sin uso (puente de ficheros descartado por F1+; se conserva documentada).
+  `lsblk` NO leerá sysfs real NUNCA (SELinux untrusted_app) — no reintentar fix.
 
 ## Arquitectura y reglas prácticas
 - `terminal-emulator` → `terminal-view` → `termux-shared` → `app`; `filemanager` →
