@@ -53,7 +53,11 @@
   del snapshot en cada conexión al bridge (el framework monta DESPUÉS del
   attach — no usar ACTION_MEDIA_MOUNTED, restringido). Wiki `limitaciones.html`
   ampliada (commit `4f2e2d8e`). `./gradlew test` verde.
-- **PENDIENTE T9:** verificación en dispositivo del wrapper `terminal-usb-cp`
+- **PENDIENTE T9:** verificación en dispositivo del wrapper `terminal-usb-cp` listo
+  en vivo (T8.2, commit `6231f601`): volúmenes USB **y microSD interna**
+  (`/storage/<ID>` FUSE) se listan en vivo desde `/proc/mounts` del guest
+  (pendrive = snapshot; volumen microSD-sola también aparece; quitar el ping del
+  bridge — innecesario; los exit codes 2/3 y anti-`..` intactos).
   (list/read ≥10 MB/write idempotencia en pendrive real, tras `app:assembleDebug`)
   y `lsblk` con mountpoint volumeId fresco. `USB_FILE_BRIDGE_ABSTRACT_ADDRESS`
   sin uso (puente de ficheros descartado por F1+; se conserva documentada).
