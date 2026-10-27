@@ -29,7 +29,7 @@ negativo, la spec se reescopa (RF-4/RF-5 fuera) y las tareas T5+ no se marcan.
     `usr/local/bin/terminal-usb-cp`) y endpoint del puente de ficheros sin tocar las
     constantes de la 020.
 
-- [ ] **T6. Snapshot extendido en `UsbBridgeServer` (sección block devices).** RF-1, RF-6
+- [x] **T6. Snapshot extendido en `UsbBridgeServer` (sección block devices).** RF-1, RF-6
   - Hecho cuando: ATTACHED/DETACHED actualicen `/tmp/usb_devices.json` con la sección
     block devices (volúmenes + flag mass-storage) usando la librería pura; JSON validado
     con round-trip en `app` test.
