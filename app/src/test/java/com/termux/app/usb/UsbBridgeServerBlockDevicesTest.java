@@ -201,29 +201,59 @@ public class UsbBridgeServerBlockDevicesTest {
     }
 
     @Test
-    public void testListMountedVolumeIdsFiltersInvalidAndReturnsPaths() throws Exception {
-        File root = Files.createTempDirectory("storage-root").toFile();
+    public void testListMountedVolumeIdsParsesProcMountsContent() throws Exception {
+        // RF-6 enmienda (defecto en dispositivo 2026-10-27): el readdir de
+        // /storage lo niega SELinux en untrusted_app, pero /proc/mounts es
+        // legible y contiene los volúmenes FUSE montados. La fuente de
+        // mountpoints pasa a ser /proc/mounts (paso un fichero para poder
+        // testear en JVM; en producción es /proc/mounts global).
+        File mounts = Files.createTempFile("proc-mounts", ".test").toFile();
         try {
-            new File(root, "1A2B-3C4D").mkdirs();
-            new File(root, "emulated").mkdirs();
-            new File(root, "self").mkdirs();
-            new File(root, "afile.txt").createNewFile();
+            java.nio.file.Files.write(mounts.toPath(), (
+                "/dev/fuse /storage/459E-170F fuse rw,nosuid,nodev 0 0\n"
+                    + "/dev/fuse /storage/47A8-1024 fuse rw 0 0\n"
+                    + "/dev/fuse /storage/emulated fuse rw 0 0\n")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
-            List<String> ids = UsbBridgeServer.listMountedVolumeIds(root.getAbsolutePath());
-            assertEquals(
-                Collections.singletonList(root.getAbsolutePath() + "/1A2B-3C4D"), ids);
+            List<String> volumes = UsbBridgeServer.listMountedVolumeIds(
+                mounts.getAbsolutePath());
+            assertEquals(java.util.Arrays.asList(
+                "/storage/459E-170F", "/storage/47A8-1024"), volumes);
         } finally {
-            for (File f : root.listFiles()) {
-                org.junit.Assert.assertTrue(f.delete());
-            }
-            org.junit.Assert.assertTrue(root.delete());
+            assertTrue(mounts.delete());
         }
     }
 
     @Test
-    public void testListMountedVolumeIdsMissingRoot() {
+    public void testMergeBlockDevicesFromProcMountsVolumes() {
+        // Integración de extremo a extremo del pipeline RF-6: /proc/mounts →
+        // parser puro → merge en el snapshot con volumeId/mountpoint rellenos
+        // (sin /storage/emulated, que no es un pendrive).
+        String mounts = ""
+            + "/dev/fuse /storage/459E-170F fuse rw,nosuid,nodev 0 0\n"
+            + "/dev/fuse /storage/emulated fuse rw 0 0\n";
+        List<String> volumes =
+            UsbBlockDeviceFormatLibrary.extractVolumeMountpoints(mounts);
+
+        String json = UsbBridgeServer.mergeBlockDevicesIntoJson(
+            Collections.singletonList(msDevice(0x08)), null, volumes);
+
+        String section = extractBlockDevices(json, 0);
+        org.junit.Assert.assertNotNull(section);
+        List<UsbBlockDeviceFormatLibrary.UsbBlockDevice> blocks =
+            UsbBlockDeviceFormatLibrary.fromJson(section);
+        assertEquals(1, blocks.size());
+        UsbBlockDeviceFormatLibrary.UsbBlockDevice b = blocks.get(0);
+        assertEquals("459E-170F", b.name);
+        assertEquals("459E-170F", b.volumeId);
+        assertEquals("/storage/459E-170F", b.mountpoint);
+        assertTrue(b.massStorage);
+    }
+
+    @Test
+    public void testListMountedVolumeIdsMissingFileReturnsEmpty() {
         List<String> ids = UsbBridgeServer.listMountedVolumeIds(
-            "/nonexistent/storage/root/for/tests");
+            "/nonexistent/proc/mounts/for/tests");
         assertTrue(ids.isEmpty());
     }
 

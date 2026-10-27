@@ -193,3 +193,17 @@ Verificados en guest Debian por el mantenedor con un pendrive Generic Flash Disk
   wrapper `lsblk` hará un ping al bridge (subcomando list del tool 020) antes de
   leer el snapshot, garantizando mountpoints frescos sin listeners nuevos
   (ACTION_MEDIA_MOUNTED está restringido en Android moderno).
+- **Defecto detectado en dispositivo (2026-10-27, fix T8.1):** la fuente de
+  mountpoints de T6/T8 (`File("/storage").list()`) fallaba en el dispositivo:
+  SELinux `untrusted_app` deniega el `readdir` de `/storage` (mismo patrón que
+  `/sys/dev/block`), por lo que `terminal-usb-cp list` decía *"no mounted USB
+  volume"* con el pendrive bien montado. En cambio, `/proc/mounts` (global, no
+  `/proc/<pid>`) es legible y contiene las líneas FUSE del volumen
+  (`/dev/fuse /storage/459E-170F fuse rw,...`), excluyendo el emulado
+  `/storage/emulated`. **Enmienda a RF-6:** la fuente de mountpoints pasa a ser
+  el contenido de `/proc/mounts`, parseado por una función pura
+  (`UsbBlockDeviceFormatLibrary.extractVolumeMountpoints`: patrón estricto
+  `/storage/XXXX-YYYY`, sin duplicados, ordenado; `emulated` no nunca machea).
+  El shape JSON de T6/T4 no cambia: `blockDevices[].volumeId`/`mountpoint` se
+  rellenan igual y el wrapper `terminal-usb-cp` sigue componiendo
+  `/root/storage/<ID>/`.

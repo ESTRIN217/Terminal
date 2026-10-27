@@ -51,6 +51,17 @@ negativo, la spec se reescopa (RF-4/RF-5 fuera) y las tareas T5+ no se marcan.
     parte JIT del snapshot fue refactorizada en `writeSnapshotFiles` (testable, ambos ficheros).
     Verificación guest: `terminal-usb-cp read/write` con fichero ≥10 MB sin corrupción.
 
+- [x] **T8.1. Fix en dispositivo: fuente de mountpoints = `/proc/mounts`.** RF-1, RF-6
+  - Hecho cuando (defecto detectado al instalar el build de T8): SELinux deniega el
+    `readdir` de `/storage` (untrusted_app) de modo que `File("/storage").list()`
+    devolvía una lista vacía con el volumen montado. Fix red→verde: función pura
+    `UsbBlockDeviceFormatLibrary.extractVolumeMountpoints(mountsContent)` (patrón
+    `/storage/XXXX-YYYY`, sin duplicados, ordenado, `emulated` excluido, tolerante a
+    espacios/options de montinfo) con tests JUnit, y `UsbBridgeServer.listMountedVolumeIds`
+    pasa a leer `/proc/mounts` (fichero global) con catch `IOException` → lista vacía +
+    log, delegando todo el parseo en la librería (cero regex en el server). Shape
+    JSON T6/T4 intacto (`volumeId`/`mountpoint` rellenos).
+
 - [ ] **T9. Documentación en wiki (limitaciones + guía) y validación global.** RF-2, RF-5
   - Hecho cuando: `wiki/limitaciones.html` documente SELinux/sysfs (sin fix) y el resultado
     del experimento del bind; documentación de uso de `lsblk` y `terminal-usb-cp` en español;

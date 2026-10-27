@@ -205,7 +205,8 @@ public final class UsbBridgeServer {
     public static synchronized void updateDeviceSnapshot(@NonNull Context context) {
         List<UsbDeviceInfo> devices = enumerateDevices(context);
         Map<String, int[]> interfaceClassesByPath = enumerateInterfaceClasses(context);
-        List<String> mountedVolumePaths = listMountedVolumeIds(STORAGE_ROOT_PATH);
+        List<String> mountedVolumePaths = listMountedVolumeIds(
+            PROC_MOUNTS_PATH);
         writeSnapshotFiles(devices, interfaceClassesByPath, mountedVolumePaths,
             new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/tmp"));
     }
@@ -242,7 +243,14 @@ public final class UsbBridgeServer {
         writeStringToFile(new File(tmpDir, "usb_devices.txt"), txt.toString());
     }
 
-    /** Mount root of public storage volumes under Android (RF-6). */
+    /**
+     * Global mounts source for the mounted-volume enlistment (RF-6 amendment):
+     * readable by untrusted_app even when the {@code readdir} of {@code /storage}
+     * is denied by SELinux. Global file, never {@code /proc/<pid>}.
+     */
+    private static final String PROC_MOUNTS_PATH = "/proc/mounts";
+
+    /** Mount root of public storage volumes under Android (kept as documentation). */
     private static final String STORAGE_ROOT_PATH = "/storage";
 
     /** First lsblk-ish fallback volume name enumerated for a non-mounted pendrive (RF-1). */
@@ -322,36 +330,40 @@ public final class UsbBridgeServer {
     }
 
     /**
-     * Enlist the mass-storage-relevant storage volumes currently mounted by
-     * the Android framework (RF-6). Pure-file-based enlistment: mounted
-     * public volumes show up as directories named {@code XXXX-YYYY} under
-     * the mount root; the pure library classifies/validates each candidate.
+     * Enlist the mass-storage-relevant storage volumes currently mounted by the
+     * Android framework (RF-6 amendment, device defect 2026-10-27): SELinux
+     * {@code untrusted_app} denies {@code readdir} of {@code /storage} (like it
+     * denies {@code /sys/dev/block}), so listing directory children is not a
+     * viable source. {@code /proc/mounts} <em>is</em> readable and contains the
+     * mounted FUSE volume lines, so it is the source; the parsing itself is
+     * delegated to the pure library ({@link
+     * UsbBlockDeviceFormatLibrary#extractVolumeMountpoints}) — this server keeps
+     * zero regex logic.
      *
-     * @param storageRootPath the framework mount root (typically {@code /storage}).
-     * @return mountpoints like {@code /storage/XXXX-YYYY}, possibly empty.
+     * @param mountsFilePath path of the mounts file to read; in production this
+     *        is the global {@code /proc/mounts} (never {@code /proc/<pid>}), and
+     *        JVM tests pass a temp file with representative content.
+     * @return sorted, deduplicated mountpoints like {@code /storage/459E-170F};
+     *         possibly empty (also when the file cannot be opened).
      */
     @NonNull
-    static List<String> listMountedVolumeIds(@NonNull String storageRootPath) {
-        List<String> result = new ArrayList<>();
+    static List<String> listMountedVolumeIds(@Nullable String mountsFilePath) {
+        if (mountsFilePath == null) return new ArrayList<>();
         try {
-            File[] children = new File(storageRootPath).listFiles();
-            if (children == null) return result;
-            List<File> sorted = new ArrayList<>();
-            Collections.addAll(sorted, children);
-            Collections.sort(sorted);
-            for (File child : sorted) {
-                if (child == null) continue;
-                if (!child.isDirectory()) continue;
-                String volumeId = UsbBlockDeviceFormatLibrary.parseVolumeId(child.getName());
-                if (volumeId != null) {
-                    result.add(storageRootPath + "/" + child.getName());
+            StringBuilder sb = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                new java.io.FileInputStream(mountsFilePath), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line).append('\n');
                 }
             }
-        } catch (Exception e) {
-            Logger.logDebug(LOG_TAG, "Failed to list mounted volumes under "
-                + storageRootPath + ": " + e.getMessage());
+            return UsbBlockDeviceFormatLibrary.extractVolumeMountpoints(sb.toString());
+        } catch (IOException e) {
+            Logger.logDebug(LOG_TAG,
+                "Failed to read mounted volumes from " + mountsFilePath + ": " + e.getMessage());
+            return new ArrayList<>();
         }
-        return result;
     }
 
     /**

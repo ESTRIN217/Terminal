@@ -5,6 +5,7 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -143,6 +144,77 @@ public class UsbBlockDeviceFormatLibraryTest {
     @Test
     public void testParseVolumeId_normalizesCasing() {
         Assert.assertEquals("1A2B-3C4D", UsbBlockDeviceFormatLibrary.parseVolumeId("/storage/1a2b-3c4d"));
+    }
+
+    // ------------------------------------------------------------------
+    // extractVolumeMountpoints — /proc/mounts parseo (RF-6 enmienda 021)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testExtractVolumeMountpoints_procMountsSample() {
+        String mounts = ""
+            + "/dev/fuse /storage/459E-170F fuse rw,nosuid,nodev,allow_uid=1 0 0\n"
+            + "/dev/fuse /storage/47A8-1024 fuse rw,nosuid,nodev,allow_uid=1 0 0\n"
+            + "/dev/fuse /storage/emulated fuse rw,nosuid,nodev,noexec 0 0\n"
+            + "tmpfs /dev tmpfs rw,seclabel,nosuid,relatime 0 0\n";
+        List<String> mountsList =
+            UsbBlockDeviceFormatLibrary.extractVolumeMountpoints(mounts);
+        Assert.assertEquals(Arrays.asList("/storage/459E-170F", "/storage/47A8-1024"), mountsList);
+    }
+
+    @Test
+    public void testExtractVolumeMountpoints_excludesEmulatedAndInvalid() {
+        String mounts = ""
+            + "/dev/fuse /storage/emulated/0 fuse rw 0 0\n"
+            + "/dev/fuse /storage/emulated fuse rw 0 0\n"
+            + "/dev/block/vold/public:179_1 /storage/not-a-volume vfat rw 0 0\n"
+            + "/dev/fuse /storage/ABCD-234 fuse rw 0 0\n"   // 3 chars tail
+            + "/dev/fuse /storage/AB-3C4D fuse rw 0 0\n";   // 2 chars head
+        List<String> mountsList =
+            UsbBlockDeviceFormatLibrary.extractVolumeMountpoints(mounts);
+        Assert.assertTrue(mountsList.isEmpty());
+    }
+
+    @Test
+    public void testExtractVolumeMountpoints_acceptsLowerAndMixedCase() {
+        String mounts = ""
+            + "/dev/fuse /storage/1a2b-3c4d fuse rw 0 0\n"
+            + "/dev/fuse /storage/0dC4-f9Ab exfat rw 0 0\n";
+        List<String> mountsList =
+            UsbBlockDeviceFormatLibrary.extractVolumeMountpoints(mounts);
+        Assert.assertEquals(2, mountsList.size());
+        Assert.assertEquals(Arrays.asList("/storage/0dC4-f9Ab", "/storage/1a2b-3c4d"), mountsList);
+    }
+
+    @Test
+    public void testExtractVolumeMountpoints_deduplicates() {
+        String mounts = ""
+            + "/dev/fuse /storage/459E-170F fuse rw 0 0\n"
+            + "/dev/fuse /storage/459E-170F fuse ro 0 0\n"
+            + "/dev/block/vold /storage/459E-170F vfat rw 0 0\n";
+        List<String> mountsList =
+            UsbBlockDeviceFormatLibrary.extractVolumeMountpoints(mounts);
+        Assert.assertEquals(Collections.singletonList("/storage/459E-170F"), mountsList);
+    }
+
+    @Test
+    public void testExtractVolumeMountpoints_emptyAndNullInput() {
+        Assert.assertTrue(UsbBlockDeviceFormatLibrary.extractVolumeMountpoints(null).isEmpty());
+        Assert.assertTrue(UsbBlockDeviceFormatLibrary.extractVolumeMountpoints("").isEmpty());
+        Assert.assertTrue(UsbBlockDeviceFormatLibrary
+            .extractVolumeMountpoints("\n  \n").isEmpty());
+        Assert.assertTrue(UsbBlockDeviceFormatLibrary
+            .extractVolumeMountpoints("onlyonefield").isEmpty());
+    }
+
+    @Test
+    public void testExtractVolumeMountpoints_sorted() {
+        String mounts = ""
+            + "/dev/fuse /storage/47A8-1024 fuse rw 0 0\n"
+            + "/dev/fuse /storage/459E-170F fuse rw 0 0\n";
+        List<String> mountsList =
+            UsbBlockDeviceFormatLibrary.extractVolumeMountpoints(mounts);
+        Assert.assertEquals(Arrays.asList("/storage/459E-170F", "/storage/47A8-1024"), mountsList);
     }
 
     // ------------------------------------------------------------------

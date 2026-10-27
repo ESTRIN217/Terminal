@@ -44,6 +44,14 @@ public final class UsbBlockDeviceFormatLibrary {
         Pattern.compile("^[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}$");
 
     /**
+     * Mountpoint pattern for framework-mounted external storage volumes under
+     * {@code /storage/XXXX-YYYY} (RF-6). Deliberately narrows to the external
+     * volume shape: {@code /storage/emulated*} and any other path never match.
+     */
+    private static final Pattern EXTERNAL_VOLUME_MOUNTPOINT_PATTERN =
+        Pattern.compile("^/storage/[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}$");
+
+    /**
      * Characters kept verbatim by {@link #encodePathForBridge}. RFC 3986 unreserved
      * characters plus {@code /} (paths) so full file routes stay human-readable.
      */
@@ -99,6 +107,34 @@ public final class UsbBlockDeviceFormatLibrary {
             if (c == USB_CLASS_MASS_STORAGE) return true;
         }
         return false;
+    }
+
+    /**
+     * Extract the standardized, deduplicated, sorted list of framework mountpoints
+     * of external storage volumes ({@code /storage/XXXX-YYYY}) from the raw text
+     * of {@code /proc/mounts} (RF-6 amendment). Pure function: takes the file
+     * content, never opens anything. Only the second field of each
+     * mountinfo/mounts line is considered, so fstab options and scattered spaces
+     * are tolerated; {@code /storage/emulated} and any other path never match.
+     *
+     * @param mountsContent full {@code /proc/mounts} text; may be {@code null}.
+     * @return sorted, deduplicated mountpoints such as {@code /storage/459E-170F}.
+     */
+    @NonNull
+    public static List<String> extractVolumeMountpoints(@Nullable String mountsContent) {
+        List<String> result = new ArrayList<>();
+        if (mountsContent == null || mountsContent.isEmpty()) return result;
+        for (String rawLine : mountsContent.split("\n")) {
+            String line = rawLine.trim();
+            if (line.isEmpty()) continue;
+            String[] fields = line.split("\\s+");
+            if (fields.length < 2) continue;
+            String mountpoint = fields[1];
+            if (!EXTERNAL_VOLUME_MOUNTPOINT_PATTERN.matcher(mountpoint).matches()) continue;
+            if (!result.contains(mountpoint)) result.add(mountpoint);
+        }
+        Collections.sort(result);
+        return result;
     }
 
     /**
