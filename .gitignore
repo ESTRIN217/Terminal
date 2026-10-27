@@ -23,6 +23,7 @@ local.properties
 
 # Gradle generated files
 .gradle/
+gradle/gradle-daemon-jvm.properties
 .kotlin/
 
 # Signing files
