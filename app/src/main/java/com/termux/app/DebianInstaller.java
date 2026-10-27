@@ -703,6 +703,38 @@ final class DebianInstaller {
     }
 
     /**
+     * Whether any guest USB tool is missing or differs from the content bundled
+     * in the current build.
+     *
+     * <p>The scripts are only written on install, so an already-installed
+     * rootfs would keep a stale script (e.g. one pre-dating the abstract
+     * socket fix, spec 020) forever. Byte comparison makes the idempotent
+     * repair refresh a stale script exactly once per updated APK — the same
+     * pattern as {@link #linkfixNeedsRefresh(Context, File)}.</p>
+     *
+     * @param root The staging or live rootfs directory {@link File}.
+     * @return Returns {@code true} when a tool is missing or its content differs.
+     */
+    static boolean usbToolsNeedRefresh(File root) {
+        return !fileContentMatches(new File(root, TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH), LSUSB_WRAPPER_SCRIPT)
+            || !fileContentMatches(new File(root, TermuxConstants.DEBIAN_TERMUX_USB_RELATIVE_PATH), TERMUX_USB_BRIDGE_SCRIPT)
+            || !fileContentMatches(new File(root, TermuxConstants.DEBIAN_TERMINAL_USB_RELATIVE_PATH), TERMINAL_USB_FORWARD_SCRIPT);
+    }
+
+    private static boolean fileContentMatches(File file, String expected) {
+        if (!file.isFile())
+            return false;
+        byte[] diskBytes;
+        byte[] expectedBytes = expected.getBytes(StandardCharsets.UTF_8);
+        try (FileInputStream in = new FileInputStream(file)) {
+            diskBytes = in.readAllBytes();
+        } catch (IOException e) {
+            return false;
+        }
+        return java.util.Arrays.equals(diskBytes, expectedBytes);
+    }
+
+    /**
      * Install the lsusb and termux-usb tools into /usr/local/bin of the rootfs (spec 020).
      */
     public static Error installUsbTools(File root) {
@@ -844,7 +876,7 @@ final class DebianInstaller {
             Error error = writePs1Config(root);
             if (error != null) return error;
         }
-        if (!isUsbToolsInstalled()) {
+        if (usbToolsNeedRefresh(root)) {
             Error error = installUsbTools(root);
             if (error != null) return error;
         }

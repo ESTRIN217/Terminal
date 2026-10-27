@@ -119,6 +119,43 @@ public class DebianInstallerTest {
             Assert.assertTrue(lsusb.isFile());
             Assert.assertTrue(termuxUsb.isFile());
             Assert.assertTrue(terminalUsb.exists());
+            // Regression (spec 020): the guest clients reach the bridge over the
+            // Android abstract UNIX namespace, not a filesystem socket path.
+            String script = new String(java.nio.file.Files.readAllBytes(termuxUsb.toPath()),
+                java.nio.charset.StandardCharsets.UTF_8);
+            Assert.assertTrue(script.contains("BRIDGE_ADDR = b\"\\x00terminal_usb\""));
+            Assert.assertFalse(script.contains("/tmp/terminal_usb.sock"));
+        } finally {
+            com.termux.shared.file.FileUtils.deleteFile("tempRoot", tempRoot.getAbsolutePath(), true);
+        }
+    }
+
+    @Test
+    public void testUsbToolsRefresh_detectsStaleOrMissing() throws Exception {
+        java.io.File tempRoot = java.io.File.createTempFile("rootfs-test", "");
+        tempRoot.delete();
+        tempRoot.mkdirs();
+        try {
+            com.termux.shared.errors.Error error = DebianInstaller.installUsbTools(tempRoot);
+            Assert.assertNull(error);
+            Assert.assertFalse(DebianInstaller.usbToolsNeedRefresh(tempRoot));
+
+            // Stale content (e. g. the pre-fix filesystem path) must be detected
+            java.io.File termuxUsb = new java.io.File(tempRoot, TermuxConstants.DEBIAN_TERMUX_USB_RELATIVE_PATH);
+            java.nio.file.Files.write(termuxUsb.toPath(),
+                "#!/usr/bin/env python3\nSOCK_PATH = \"/tmp/terminal_usb.sock\"\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            Assert.assertTrue(DebianInstaller.usbToolsNeedRefresh(tempRoot));
+
+            // Refresh fixes it (idempotent repair semantics, like linkfixNeedsRefresh)
+            error = DebianInstaller.installUsbTools(tempRoot);
+            Assert.assertNull(error);
+            Assert.assertFalse(DebianInstaller.usbToolsNeedRefresh(tempRoot));
+
+            // Missing file must be detected too
+            java.io.File lsusb = new java.io.File(tempRoot, TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH);
+            java.io.File backup = new java.io.File(tempRoot, TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH + ".bak");
+            java.nio.file.Files.move(lsusb.toPath(), backup.toPath());
+            Assert.assertTrue(DebianInstaller.usbToolsNeedRefresh(tempRoot));
         } finally {
             com.termux.shared.file.FileUtils.deleteFile("tempRoot", tempRoot.getAbsolutePath(), true);
         }
