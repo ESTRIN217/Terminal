@@ -41,23 +41,19 @@
 
 ## Spec 021 en curso (2026-10-27)
 
-- **Almacenamiento USB: detección + ficheros vía bind.** T1–T8 COMPLETAS:
-  factibilidad positivas en dispositivo (framework SÍ monta → volumen
-  `459E-170F`; bind `-b /storage:$HOME/storage` ya existente: `readdir` del
-  catálogo denegado por SELinux pero acceso directo al `<ID>` funciona, lectura
-  + escritura round-trip 10 MiB limpios). So:
-  `UsbBlockDeviceFormatLibrary` + tests, constantes 021, sección `blockDevices`
-  aditiva en snapshot, wrappers guest `lsblk` (informativo, exit 0, aviso
-  SELinux) y `terminal-usb-cp` (`list/read/write`; exit 3 destino existía; ping
-  al bridge antes de leer) instalados vía `usbToolsNeedRefresh`; refresco JIT
-  del snapshot en cada conexión al bridge (el framework monta DESPUÉS del
-  attach — no usar ACTION_MEDIA_MOUNTED, restringido). Wiki `limitaciones.html`
-  ampliada (commit `4f2e2d8e`). `./gradlew test` verde.
-- **PENDIENTE T9:** verificación en dispositivo del wrapper `terminal-usb-cp` listo
-  en vivo (T8.2, commit `6231f601`): volúmenes USB **y microSD interna**
-  (`/storage/<ID>` FUSE) se listan en vivo desde `/proc/mounts` del guest
-  (pendrive = snapshot; volumen microSD-sola también aparece; quitar el ping del
-  bridge — innecesario; los exit codes 2/3 y anti-`..` intactos).
+- **Almacenamiento USB: detección + ficheros vía bind.** T1–T8.2 COMPLETAS
+  (`./gradlew test` verde). Detección en vivo (T8.2): `lsblk` prioriza filas
+  LIVE de `/proc/mounts` del guest (pendrive + microSD interna, `type=volume`,
+  tamaño por `statvfs` sobre `/root/storage/<ID>`, `-` si no medible) + filas
+  del snapshot solo para hardware sin volumen (sda `mass-storage`);
+  `terminal-usb-cp` descubre volúmenes en vivo de `/proc/mounts` (`list/read/
+  write`, selector ID en cualquier posición — fix `6f562e53`, sin ping, exit 3
+  destino existente, anti-`..`). Exit 0 siempre en lsblk.
+- **PENDIENTE T9:** verificación en dispositivo final (build nuevo + logs con
+  el selector ya posición-independiente) y marcar spec 021 implementada.
+  `USB_FILE_BRIDGE_ABSTRACT_ADDRESS` sin uso (puente de ficheros descartado por
+  F1+; se conserva documentada). `lsblk` NO leerá sysfs real NUNCA (SELinux
+  untrusted_app) — no reintentar fix.
   (list/read ≥10 MB/write idempotencia en pendrive real, tras `app:assembleDebug`)
   y `lsblk` con mountpoint volumeId fresco. `USB_FILE_BRIDGE_ABSTRACT_ADDRESS`
   sin uso (puente de ficheros descartado por F1+; se conserva documentada).
