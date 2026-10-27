@@ -39,12 +39,16 @@ negativo, la spec se reescopa (RF-4/RF-5 fuera) y las tareas T5+ no se marcan.
     lea el snapshot, imprima tabla + aviso, exit 0, y conserve intactos los tools de la 020
     (`lsusb`/`termux-usb`/`terminal-usb`).
 
-- [ ] **T8. Acceso a ficheros: bind proot o puente de ficheros según F1/F2.** RF-4, RF-5
-  - Hecho cuando: SE cumpla una de estas:
-    (a) F1 positivo: `ProotShellEnvironment` añade `-b /storage/XXXX-YYYY:/root/usb` dinámicamente
-        y `terminal-usb-cp` es un wrapper sobre `cp`;
-    (b) F1/F2 van por puente: `UsbFileBridgeServer` (LIST/GET/PUT/COPY con `ERR: EXISTS`,
-        sin sobrescribir en silencio) + `terminal-usb-cp` cliente del socket abstracto.
+- [x] **T8. Acceso a ficheros: bind proot o puente de ficheros según F1/F2.** RF-4, RF-5
+  - Hecho cuando (vía (a), decidida según factibilidad F1/F3): `handleClient` de
+    `UsbBridgeServer` refresca `updateDeviceSnapshot` just-in-time en cada conexión (RF-6
+    enmienda; idempotencia verificada en test JVM, disparo real en dispositivo), y
+    `DebianInstaller` instaló (0755, byte-compare, `usbToolsNeedRefresh`) el wrapper guest
+    `terminal-usb-cp` (python3): ping al bridge antes de leer el snapshot (refresco JIT),
+    `list/read/write` sobre `/root/storage/<ID>/` vía el bind global `-b /storage`,
+    `cp -n` sin sobrescribir en silencio (exit 3 = destino existía, convención documentada
+    en el commit), y `..` que escapa del volumen rechazado (exit 2). Puedes pensar que la
+    parte JIT del snapshot fue refactorizada en `writeSnapshotFiles` (testable, ambos ficheros).
     Verificación guest: `terminal-usb-cp read/write` con fichero ≥10 MB sin corrupción.
 
 - [ ] **T9. Documentación en wiki (limitaciones + guía) y validación global.** RF-2, RF-5

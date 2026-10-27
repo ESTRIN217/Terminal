@@ -226,4 +226,62 @@ public class UsbBridgeServerBlockDevicesTest {
             "/nonexistent/storage/root/for/tests");
         assertTrue(ids.isEmpty());
     }
+
+    @Test
+    public void testWriteSnapshotFiles_isIdempotentAndEmitsBothFiles() throws Exception {
+        // Spec 021 T8 enmienda RF-6: updateDeviceSnapshot se dispara just-in-time
+        // en cada conexión al bridge (handleClient). La parte observable por
+        // test JVM es que re-escribir el snapshot con las mismas entradas es
+        // idempotente (dos conexiones seguidas no mutan el fichero); el disparo
+        // real desde handleClient se verifica en dispositivo (contexto Android).
+        File tmpDir = Files.createTempDirectory("usb-snapshot-t8").toFile();
+        try {
+            List<UsbDeviceFormatLibrary.UsbDeviceInfo> devices = Collections.singletonList(msDevice(0x08));
+            List<String> volumes = Collections.singletonList("/storage/1A2B-3C4D");
+
+            UsbBridgeServer.writeSnapshotFiles(devices, null, volumes, tmpDir);
+            byte[] json1 = Files.readAllBytes(new File(tmpDir, "usb_devices.json").toPath());
+            byte[] txt1 = Files.readAllBytes(new File(tmpDir, "usb_devices.txt").toPath());
+            assertTrue(json1.length > 0);
+            assertTrue(new String(json1, java.nio.charset.StandardCharsets.UTF_8)
+                .contains("\"blockDevices\""));
+
+            UsbBridgeServer.writeSnapshotFiles(devices, null, volumes, tmpDir);
+            byte[] json2 = Files.readAllBytes(new File(tmpDir, "usb_devices.json").toPath());
+            byte[] txt2 = Files.readAllBytes(new File(tmpDir, "usb_devices.txt").toPath());
+            org.junit.Assert.assertArrayEquals("snapshot rewrite must be idempotent", json1, json2);
+            org.junit.Assert.assertArrayEquals(txt1, txt2);
+        } finally {
+            for (File f : tmpDir.listFiles()) {
+                assertTrue(f.delete());
+            }
+            assertTrue(tmpDir.delete());
+        }
+    }
+
+    @Test
+    public void testWriteSnapshotFiles_releasesDetachedVolume() throws Exception {
+        // El refresco JIT sirve para eso: una conexión tras DETACHED re-pinta
+        // el snapshot sin el volumen, de forma idempotente.
+        File tmpDir = Files.createTempDirectory("usb-snapshot-t8b").toFile();
+        try {
+            List<UsbDeviceFormatLibrary.UsbDeviceInfo> devices = Collections.singletonList(msDevice(0x08));
+            UsbBridgeServer.writeSnapshotFiles(devices, null,
+                Collections.singletonList("/storage/1A2B-3C4D"), tmpDir);
+            byte[] withVolume = Files.readAllBytes(new File(tmpDir, "usb_devices.json").toPath());
+            assertTrue(new String(withVolume, java.nio.charset.StandardCharsets.UTF_8)
+                .contains("1A2B-3C4D"));
+
+            UsbBridgeServer.writeSnapshotFiles(devices, null, Collections.emptyList(), tmpDir);
+            byte[] afterDetach = Files.readAllBytes(new File(tmpDir, "usb_devices.json").toPath());
+            String json = new String(afterDetach, java.nio.charset.StandardCharsets.UTF_8);
+            assertFalse(json.contains("1A2B-3C4D"));
+            assertTrue(json.contains("sda"));
+        } finally {
+            for (File f : tmpDir.listFiles()) {
+                assertTrue(f.delete());
+            }
+            assertTrue(tmpDir.delete());
+        }
+    }
 }

@@ -237,6 +237,62 @@ public class DebianInstallerTest {
         }
     }
 
+    @Test
+    public void testInstallUsbTools_installsTerminalUsbCpWrapper() throws Exception {
+        java.io.File tempRoot = java.io.File.createTempFile("rootfs-test", "");
+        tempRoot.delete();
+        tempRoot.mkdirs();
+        try {
+            com.termux.shared.errors.Error error = DebianInstaller.installUsbTools(tempRoot);
+            Assert.assertNull(error);
+            java.io.File usbCp = new java.io.File(tempRoot, TermuxConstants.DEBIAN_TERMINAL_USB_CP_RELATIVE_PATH);
+            Assert.assertTrue(usbCp.isFile());
+            byte[] diskBytes = java.nio.file.Files.readAllBytes(usbCp.toPath());
+            String script = new String(diskBytes, java.nio.charset.StandardCharsets.UTF_8);
+            // Self-contained python3 wrapper (same pattern as the lsblk wrapper)
+            Assert.assertTrue(script.startsWith("#!/usr/bin/env python3"));
+            // JIT refresh: pings the bridge (abstract namespace, spec 020) before
+            // reading the snapshot, so the host re-writes it with fresh mountpoints.
+            Assert.assertTrue(script.contains("\\x00terminal_usb"));
+            Assert.assertTrue(script.contains("LIST"));
+            // RF-4 subcommands
+            Assert.assertTrue(script.contains("\"list\""));
+            Assert.assertTrue(script.contains("\"read\""));
+            Assert.assertTrue(script.contains("\"write\""));
+            // No silent overwrite: cp -n plus exit 3 when the destination existed
+            Assert.assertTrue(script.contains("cp"));
+            Assert.assertTrue(script.contains("EXIT_EXISTED = 3"));
+            // Path safety: rejects '..' escaping the volume
+            Assert.assertTrue(script.contains(".."));
+        } finally {
+            com.termux.shared.file.FileUtils.deleteFile("tempRoot", tempRoot.getAbsolutePath(), true);
+        }
+    }
+
+    @Test
+    public void testUsbToolsRefresh_detectsMissingOrStaleTerminalUsbCp() throws Exception {
+        java.io.File tempRoot = java.io.File.createTempFile("rootfs-test", "");
+        tempRoot.delete();
+        tempRoot.mkdirs();
+        try {
+            com.termux.shared.errors.Error error = DebianInstaller.installUsbTools(tempRoot);
+            Assert.assertNull(error);
+            Assert.assertFalse(DebianInstaller.usbToolsNeedRefresh(tempRoot));
+
+            java.io.File usbCp = new java.io.File(tempRoot, TermuxConstants.DEBIAN_TERMINAL_USB_CP_RELATIVE_PATH);
+            java.nio.file.Files.move(usbCp.toPath(),
+                new java.io.File(tempRoot, TermuxConstants.DEBIAN_TERMINAL_USB_CP_RELATIVE_PATH + ".bak").toPath());
+            Assert.assertTrue(DebianInstaller.usbToolsNeedRefresh(tempRoot));
+
+            error = DebianInstaller.installUsbTools(tempRoot);
+            Assert.assertNull(error);
+            Assert.assertFalse(DebianInstaller.usbToolsNeedRefresh(tempRoot));
+            Assert.assertTrue(usbCp.isFile());
+        } finally {
+            com.termux.shared.file.FileUtils.deleteFile("tempRoot", tempRoot.getAbsolutePath(), true);
+        }
+    }
+
     private static String the020ToolName(int i) {
         switch (i) {
             case 0: return TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH;

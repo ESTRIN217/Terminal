@@ -206,7 +206,27 @@ public final class UsbBridgeServer {
         List<UsbDeviceInfo> devices = enumerateDevices(context);
         Map<String, int[]> interfaceClassesByPath = enumerateInterfaceClasses(context);
         List<String> mountedVolumePaths = listMountedVolumeIds(STORAGE_ROOT_PATH);
+        writeSnapshotFiles(devices, interfaceClassesByPath, mountedVolumePaths,
+            new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/tmp"));
+    }
 
+    /**
+     * Build and write both snapshot files ({@code usb_devices.json} with the
+     * blockDevices section and {@code usb_devices.txt} lsusb table) into
+     * {@code tmpDir}. Called on ATTACHED/DETACHED (spec 020) and just-in-time at
+     * the start of every accepted bridge connection (spec 021 T8, RF-6
+     * amendment), since the framework mounts the pendrive volume <em>after</em>
+     * the attach broadcast; idempotent rewrites keep the snapshot stable.
+     *
+     * @param devices 020 device inventory.
+     * @param interfaceClassesByPath interface classes per device path; may be {@code null}.
+     * @param mountedVolumePaths mounted volume paths like {@code /storage/XXXX-YYYY}.
+     * @param tmpDir directory to write both files into (created if missing).
+     */
+    static void writeSnapshotFiles(@NonNull List<UsbDeviceInfo> devices,
+                                   @Nullable Map<String, int[]> interfaceClassesByPath,
+                                   @NonNull List<String> mountedVolumePaths,
+                                   @NonNull File tmpDir) {
         String json = mergeBlockDevicesIntoJson(devices, interfaceClassesByPath, mountedVolumePaths);
         StringBuilder txt = new StringBuilder();
         txt.append(UsbDeviceFormatLibrary.formatRootHubLsusbLine(1)).append("\n");
@@ -214,12 +234,11 @@ public final class UsbBridgeServer {
             txt.append(UsbDeviceFormatLibrary.formatLsusbLine(d)).append("\n");
         }
 
-        File tmpDir = new File(TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/tmp");
         if (!tmpDir.exists()) {
             tmpDir.mkdirs();
         }
 
-        writeStringToFile(new File(TermuxConstants.USB_DEVICES_SNAPSHOT_FILE_PATH), json);
+        writeStringToFile(new File(tmpDir, "usb_devices.json"), json);
         writeStringToFile(new File(tmpDir, "usb_devices.txt"), txt.toString());
     }
 
@@ -559,6 +578,19 @@ public final class UsbBridgeServer {
     }
 
     private static void handleClient(@NonNull Context context, @NonNull LocalSocket client) {
+        // Spec 021 T8, RF-6 amendment (just-in-time refresh): the framework
+        // mounts the pendrive volume AFTER the attach broadcast, so the
+        // snapshot written in ATTACHED may still lack volumeId/mountpoint.
+        // Refreshing on every accepted connection keeps the snapshot fresh
+        // without any new listener (ACTION_MEDIA_MOUNTED is restricted on
+        // modern Android). updateDeviceSnapshot is synchronized and idempotent;
+        // failures inside it are tolerated (logged, snapshot untouched).
+        try {
+            updateDeviceSnapshot(context);
+        } catch (Exception e) {
+            Logger.logDebug(LOG_TAG, "JIT snapshot refresh failed: " + e.getMessage());
+        }
+
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(client.getInputStream(), StandardCharsets.UTF_8));
              OutputStream out = client.getOutputStream()) {
 
