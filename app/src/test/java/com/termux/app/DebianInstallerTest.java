@@ -281,6 +281,86 @@ public class DebianInstallerTest {
             com.termux.shared.file.FileUtils.deleteFile("tempRoot", tempRoot.getAbsolutePath(), true);
         }
     }
+    /**
+     * T8.2 functional smoke of the generated {@code terminal-usb-cp} guest
+     * wrapper: run the generated python3 against a fake guest /proc/mounts and
+     * a fake storage bind root, exercising the volume-id selector in both
+     * positions (before and after the subcommand), the no-silent-overwrite
+     * exit 3 and the read-back of the written file.
+     */
+    @Test
+    public void testTerminalUsbCpWrapper_functionalSelectorPositions() throws Exception {
+        String pythonBin = System.getenv("PYTHON3_BIN");
+        if (pythonBin == null) pythonBin = "python3";
+        org.junit.Assume.assumeTrue(pythonBin != null && looksLikeExecutable("python3"));
+
+        java.io.File tempRoot = java.io.File.createTempFile("rootfs-test", "");
+        tempRoot.delete();
+        tempRoot.mkdirs();
+        java.io.File workDir = java.io.File.createTempFile("usbcp-smoke", "");
+        workDir.delete();
+        workDir.mkdirs();
+        java.io.File storageRoot = new java.io.File(workDir, "storage");
+        try {
+            com.termux.shared.errors.Error error = DebianInstaller.installUsbTools(tempRoot);
+            Assert.assertNull(error);
+            String rawScript = new String(
+                java.nio.file.Files.readAllBytes(new java.io.File(tempRoot,
+                    TermuxConstants.DEBIAN_TERMINAL_USB_CP_RELATIVE_PATH).toPath()),
+                java.nio.charset.StandardCharsets.UTF_8);
+
+            java.io.File fakeMounts = new java.io.File(workDir, "proc_mounts");
+            java.nio.file.Files.write(fakeMounts.toPath(),
+                ("/dev/fuse /storage/459E-170F fuse rw,.... 0 0\n"
+                    + "/dev/fuse /storage/47A8-1024 fuse rw,.... 0 0\n")
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            java.io.File volume = new java.io.File(storageRoot, "47A8-1024");
+            Assert.assertTrue(volume.mkdirs());
+
+            java.io.File scriptFile = new java.io.File(workDir, "terminal_usb_cp.py");
+            java.nio.file.Files.write(scriptFile.toPath(), rawScript.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            java.io.File srcFile = new java.io.File(workDir, "a.txt");
+            java.nio.file.Files.write(srcFile.toPath(), "hello usb-cp\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            String[] envNames = {"USB_PROC_MOUNTS_OVERRIDE", "USB_STORAGE_ROOT_OVERRIDE"};
+            String[] envValues = {fakeMounts.getAbsolutePath(), storageRoot.getAbsolutePath()};
+            int[] rc = new int[1];
+
+            runWrapper(scriptFile, pythonBin, envNames, envValues, rc, "47A8-1024", "write", srcFile.getAbsolutePath());
+            Assert.assertEquals("selector before subcommand: write ok", 0, rc[0]);
+            Assert.assertTrue(new java.io.File(volume, "a.txt").isFile());
+
+            runWrapper(scriptFile, pythonBin, envNames, envValues, rc, "write", "47A8-1024", srcFile.getAbsolutePath());
+            Assert.assertEquals("selector after subcommand; destination existed -> exit 3", 3, rc[0]);
+
+            runWrapper(scriptFile, pythonBin, envNames, envValues, rc, "list");
+            Assert.assertEquals("without selector and several volumes -> ambiguity is a usage error", 1, rc[0]);
+
+            String readOut = runWrapper(scriptFile, pythonBin, envNames, envValues, rc, "read", "47A8-1024", "a.txt");
+            Assert.assertEquals("read back ok", 0, rc[0]);
+            Assert.assertTrue("read output carries the file content", readOut.contains("hello usb-cp"));
+        } finally {
+            com.termux.shared.file.FileUtils.deleteFile("tempRoot", tempRoot.getAbsolutePath(), true);
+            com.termux.shared.file.FileUtils.deleteFile("workDir", workDir.getAbsolutePath(), true);
+        }
+    }
+
+    /** Runs the wrapper with the overrides set; returns stdout (rc via param out). */
+    private static String runWrapper(java.io.File scriptFile, String pythonBin,
+                                     String[] envNames, String[] envValues,
+                                     int[] rcOut, String... args) throws Exception {
+        ProcessBuilder pb = new ProcessBuilder(pythonBin, scriptFile.getAbsolutePath());
+        for (String arg : args) pb.command().add(arg);
+        pb.environment().put(envNames[0], envValues[0]);
+        pb.environment().put(envNames[1], envValues[1]);
+        pb.redirectErrorStream(true);
+        Process proc = pb.start();
+        String out = new String(proc.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        rcOut[0] = proc.waitFor();
+        return out;
+    }
 
     @Test
     public void testUsbToolsRefresh_detectsMissingOrStaleTerminalUsbCp() throws Exception {

@@ -865,8 +865,8 @@ final class DebianInstaller {
         "# volume (spec 021, RF-4 via the /root/storage proot bind); volumes\n" +
         "# are discovered live from the guest /proc/mounts (spec 021 T8.2).\n" +
         "import os, re, subprocess, sys\n\n" +
-        "STORAGE_ROOT = \"/root/storage\"\n" +
-        "PROC_MOUNTS_PATH = \"/proc/mounts\"\n" +
+        "STORAGE_ROOT = os.environ.get(\"USB_STORAGE_ROOT_OVERRIDE\", \"/root/storage\")\n" +
+        "PROC_MOUNTS_PATH = os.environ.get(\"USB_PROC_MOUNTS_OVERRIDE\", \"/proc/mounts\")\n" +
         "VOLUME_MOUNT_RE = re.compile(r\"^/storage/([0-9A-Fa-f]{4}-[0-9A-Fa-f]{4})$\")\n" +
         "EXIT_EXISTED = 3  # destination existed; nothing was overwritten\n\n" +
         "def volume_ids():\n" +
@@ -894,11 +894,20 @@ final class DebianInstaller {
         "    if len(a) != 9 or a[4] != \"-\":\n" +
         "        return False\n" +
         "    return all(ch.isdigit() or ch in \"abcdefABCDEF\" for ch in a[:4] + a[5:])\n\n" +
-        "def resolve_volume(args):\n" +
-        "    # Separate an optional positional volume-id selector from path args.\n" +
+        "def resolve_volume(args, selector=None):\n" +
+        "    # Optional positional volume-id selector, valid BEFORE or AFTER the\n" +
+        "    # subcommand; case-insensitive against the live mount ids.\n" +
         "    ids = volume_ids()\n" +
-        "    if args and looks_like_volume_id(args[0]):\n" +
-        "        return str(args.pop(0)).strip(), args\n" +
+        "    if selector is None:\n" +
+        "        if args and looks_like_volume_id(args[0]):\n" +
+        "            selector = str(args.pop(0)).strip()\n" +
+        "    if selector is not None:\n" +
+        "        for vid in ids:\n" +
+        "            if vid.lower() == str(selector).strip().lower():\n" +
+        "                return vid, args\n" +
+        "        sys.stderr.write(\"Error: volume not mounted: \" + str(selector) +\n" +
+        "                         \"; mounted: \" + \", \".join(ids) + \"\\n\")\n" +
+        "        sys.exit(2)\n" +
         "    if len(ids) == 1:\n" +
         "        return ids[0], args\n" +
         "    if not ids:\n" +
@@ -937,15 +946,16 @@ final class DebianInstaller {
         "def main():\n" +
         "    argv = list(sys.argv[1:])\n" +
         "    # A positional XXXX-YYYY first argument is an optional volume selector,\n" +
-        "    # valid in any subcommand shape; drop it from the subcommand args.\n" +
+        "    # valid before or after the subcommand; forward it to resolve_volume.\n" +
+        "    selector = None\n" +
         "    if argv and looks_like_volume_id(argv[0]):\n" +
-        "        argv.pop(0)\n" +
+        "        selector = str(argv.pop(0)).strip()\n" +
         "    if not argv:\n" +
         "        usage()\n" +
         "    cmd = argv.pop(0)\n" +
         "    if cmd not in (\"list\", \"read\", \"write\"):\n" +
         "        usage()\n" +
-        "    volume_id, rest = resolve_volume(argv)\n" +
+        "    volume_id, rest = resolve_volume(argv, selector)\n" +
         "    if volume_id is None:\n" +
         "        sys.stderr.write(\"Error: no mounted USB/SD volume (from \" + PROC_MOUNTS_PATH +\n" +
         "                         \"); plug the pendrive and retry\\n\")\n" +
