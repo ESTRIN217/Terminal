@@ -32,7 +32,6 @@
             <a class="brand" href="#top">
                 <img class="brand-icon" src="img/icon-192.png" alt="" width="32" height="32">
                 <span class="brand-name">Terminal</span>
-                <span class="badge badge-version" data-site="version">3.0.0</span>
             </a>
 
             <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-principal">
@@ -60,7 +59,7 @@
         <section class="hero">
             <div class="wrap hero-inner">
                 <div class="hero-copy">
-                    <p class="eyebrow">Terminal 3.0.0 · GPLv3 · fork independiente</p>
+                    <p class="eyebrow">Terminal · GPLv3 · fork independiente</p>
                     <h1>Tu terminal, con Debian de verdad</h1>
                     <p class="lead">
                         Emulador de terminal y un entorno Linux completo con <code>proot</code>,
@@ -70,7 +69,7 @@
 
                     <div class="cta-row">
                         <a class="btn btn-primary" href="https://github.com/ESTRIN217/Terminal/releases/download/v3.0.0/terminal_3.0.0_universal.apk">
-                            Descargar 3.0.0 <span class="btn-note">APK · <span data-site="apk-size">16 MB</span></span>
+                            Descargar <span data-site="version">3.0.0</span> <span class="btn-note">APK · <span data-site="apk-size">16 MB</span></span>
                         </a>
                         <a class="btn btn-ghost" href="https://github.com/ESTRIN217/Terminal">Ver en GitHub</a>
                     </div>
@@ -83,7 +82,7 @@
                     </ul>
 
                     <p class="hero-foot">
-                        Paquete <code>com.estrin217.terminal</code> · publicado el <span data-site="published">26 de octubre de 2026</span>
+                        Publicado el <span data-site="published">26 de octubre de 2026</span>
                     </p>
                 </div>
 
@@ -240,7 +239,7 @@
                             </div>
                             <div>
                                 <dt>Arquitectura</dt>
-                                <dd><code>arm64-v8a</code> (el binario de proot es solo AArch64)</dd>
+                                <dd><code>arm64-v8a</code></dd>
                             </div>
                             <div>
                                 <dt>Android</dt>
@@ -317,20 +316,7 @@
                             El acceso a dispositivos concretos (<code>/dev/null</code>, <code>/dev/tty</code>…)
                             sigue funcionando.
                         </p>
-                    </article>
-                    <article class="card">
-                        <h3>Estadísticas de CPU</h3>
-                        <p>
-                            En dispositivos con SELinux del fabricante, la app sirve lecturas
-                            de <code>/proc/stat</code>, <code>/proc/cpuinfo</code> y
-                            <code>/proc/uptime</code> por <em>snapshots</em> en la sesión Debian,
-                            así que <code>htop</code> y <code>btop</code> funcionan sin root.
-                            Lo que queda de SELinux es el tamaño mínimo que <code>btop</code> pide
-                            por su cuenta: una terminal de al menos 80 columnas × 24 líneas; si
-                            es más estrecha muestra <code>Terminal size too small</code> — gira el
-                            dispositivo o reduce la letra. Detalles en la
-                            <a href="https://terminal-gnulinux-docs.web.app/limitaciones.html">wiki</a>.
-                        </p>
+                      <p>Para más detalles, revisa la wiki de <a href="https://terminal-gnulinux-docs.web.app/limitaciones.html">limitaciones conocidas</a>.</p>
                     </article>
                 </div>
             </div>
@@ -392,13 +378,13 @@
                     <li>
                         <a href="https://github.com/ESTRIN217/Terminal/releases">
                             <span class="links-title">Releases</span>
-                            <span class="links-desc">APK firmados y <code>sha256sums</code></span>
+                            <span class="links-desc">Descarga APK firmados</span>
                         </a>
                     </li>
                     <li>
                         <a href="https://github.com/ESTRIN217/Terminal/issues">
                             <span class="links-title">Issues</span>
-                            <span class="links-desc">Aquí van los errores, no a Termux</span>
+                            <span class="links-desc">Aquí van los errores</span>
                         </a>
                     </li>
                     <li>

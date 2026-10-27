@@ -21,7 +21,26 @@
   fix ni spec. Warnings OSC 8 de zutty: NO de fastfetch (su fuente no emite
   OSC 8), de los dotfiles; inofensivos.
 
+## Guía Android Studio ARM64 (2026-10-27)
+- **Verificado en el guest Debian del dispositivo (5 GB RAM)**: AS Rabbit 1
+  2026.2.1 + IDEA Community 2025.3 aarch64 (build 253) + **skiko 0.144.5** de
+  Maven Central + OpenJDK 25 del guest (jbr → symlink). Funciona en X11
+  (DISPLAY=:0 inyectado por la app), avisos de rendimiento aparte.
+- **Descubrimiento clave**: los natives de la última IDEA Community (línea 253)
+  son VIEJOS frente a plataforma 262 → splash muere con
+  `RenderException`/`UnsatisfiedLinkError _nSetFontEdging`. Fix: remplazar
+  `libskiko-linux-arm64.so` por `skiko-awt-runtime-linux-arm64` de Maven.
+  Versión del skiko readose del jar: `unzip -p lib/intellij.libraries.skiko.jar
+  org/jetbrains/skiko/Version.class | grep -aoE '[0-9]+\.[0-9]+\.[0-9]+'` (sin
+  binutils). IUA: IDEA 2025.3 Community extrae como `idea-IU-…` (nombre unified).
+- **Docs**: página nueva `wiki/android-studio.html` (sin commits, pendiente
+  descongelar con transporte update-site); nav actualizada en las 9 páginas +
+  filas/cross-links en portada y `x11.html`. Pendiente: adaptar repos externos
+  `android-studio-termux-arm64*` (rename a terminal-arm64 por el usuario en
+  GitHub) con el script sin sudo + parche skiko; fix del wget blob→raw.
+
 ## Spec 021 en curso (2026-10-27)
+
 - **Almacenamiento USB: detección + ficheros vía SAF.** T4–T7 COMPLETAS
   (commits `c7e9c902`…`395a5f00`): `UsbBlockDeviceFormatLibrary` (pura + tests),
   constantes 021 en `TermuxConstants` (incl. `USB_FILE_BRIDGE_ABSTRACT_ADDRESS =

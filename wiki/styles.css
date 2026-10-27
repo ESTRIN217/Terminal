@@ -373,10 +373,12 @@ blockquote p:last-child {
     font-size: 0.92rem;
 }
 
+.footer__inner { display: grid; gap: 12px; justify-items: center; text-align: center; }
 .footer p {
-    margin-bottom: 0.4em;
+    margin: 0; color: var(--muted); font-size: .9rem; 
 }
 
 .footer .muted {
     color: var(--muted);
 }
+.footer__legal { font-size: .82rem; opacity: .8; }

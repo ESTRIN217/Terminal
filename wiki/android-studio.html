@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Android Studio en ARM64 — Wiki de Terminal</title>
+    <meta name="description" content="Cómo ejecutar Android Studio (ARM64) dentro del guest Debian de la app Terminal: híbrido con natives de IntelliJ IDEA, parche skiko y JDK del sistema.">
+    <meta name="color-scheme" content="dark">
+    <link rel="canonical" href="https://terminal-gnulinux-docs.web.app/android-studio.html">
+    <link rel="icon" href="https://terminal-gnulinux.web.app/img/icon-192.png" type="image/png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+    <header class="site-header">
+        <div class="wrap header-inner">
+            <a class="brand" href="index.html">
+                <span class="brand-name">Terminal</span>
+                <span class="brand-sub">· wiki</span>
+            </a>
+            <nav class="site-nav" aria-label="Enlaces del sitio">
+                <ul>
+                    <li><a href="https://terminal-gnulinux.web.app">Sitio</a></li>
+                    <li><a href="https://github.com/ESTRIN217/Terminal">GitHub</a></li>
+                    <li><a href="https://github.com/ESTRIN217/Terminal/releases">Descargar</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main id="contenido">
+        <div class="wrap docs">
+            <nav class="docs-nav" aria-label="Páginas de la wiki">
+                <h2>Documentación</h2>
+                <ul>
+                    <li><a href="index.html">Portada</a></li>
+                    <li><a href="instalacion.html">Instalación</a></li>
+                    <li><a href="uso-terminal.html">Uso de la terminal</a></li>
+                    <li><a href="personalizacion.html">Apariencia y fuentes</a></li>
+                    <li><a href="hipervinculos.html">Hipervínculos</a></li>
+                    <li><a href="imagenes.html">Imágenes en la terminal</a></li>
+                    <li><a href="x11.html">Servidor X11 (companion)</a></li>
+                    <li><a href="android-studio.html" aria-current="page">Android Studio (ARM64)</a></li>
+                    <li><a href="limitaciones.html">Limitaciones conocidas</a></li>
+                </ul>
+            </nav>
+
+            <article class="docs-main">
+                <header class="doc-head">
+                    <h1>Android Studio en ARM64</h1>
+                    <p class="doc-meta">Desarrolla apps Android desde tu dispositivo: Android Studio dentro del guest Debian de Terminal, con ventana X11 propia en una pestaña.</p>
+                </header>
+
+                <div class="doc-body">
+                    <div class="key-point">
+                        <p>
+                            <strong>Verificado en un dispositivo real (octubre de 2026)</strong>:
+                            Android Studio <strong>Rabbit 1 · 2026.2.1</strong> + native de
+                            <strong>skiko 0.144.5</strong> + <strong>OpenJDK 25</strong> del guest,
+                            sobre un teléfono con <strong>5 GB de RAM</strong> (heap de 2 GB).
+                            Arranca su ventana en la pestaña X11 y el IDE es usable, avisos de
+                            rendimiento aparte.
+                        </p>
+                    </div>
+
+                    <h2>¿Qué es esto?</h2>
+                    <p>
+                        Google no publica Android Studio para Linux ARM64: el tarball «Linux»
+                        solo trae binarios nativos (<code>.so</code>) para x86_64. La solución
+                        clásica de la comunidad Termux —brought por <a href="https://github.com/HomuHomu833">HomuHomu833</a>—
+                        es un <strong>híbrido</strong>: se toma el Android Studio normal de Linux
+                        y se le copian los natives ARM64 de <strong>IntelliJ IDEA Community</strong>,
+                        que sí tiene build <code>aarch64</code>. Ambos IDEs comparten la misma base
+                        (IntelliJ Platform), así que el truco funciona.
+                    </p>
+                    <p>
+                        Esta guía lo porta al guest Debian de Terminal: sin root extra, sin
+                        <code>sudo</code> (el guest ya es root), con el JDK que trae Debian y la
+                        GUI en la <a href="x11.html">pestaña X11</a>. Además añade un parche
+                        obligatorio que la guía original no necesitaba (ver
+                        <a href="#parche-skiko">Parche skiko</a>).
+                    </p>
+
+                    <h2>Requisitos</h2>
+                    <table>
+                        <thead>
+                            <tr><th>Recurso</th><th>Recomendado</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>RAM del dispositivo</td>
+                                <td>6 GB (8 GB va holgado; se ha probado con 5 GB conservando <code>-Xmx2048m</code>)</td>
+                            </tr>
+                            <tr>
+                                <td>Almacenamiento libre</td>
+                                <td>10 GB (descargas + extracción de ambos IDEs)</td>
+                            </tr>
+                            <tr>
+                                <td>Sesión</td>
+                                <td>Guest Debian de la app Terminal (la sesión interna Debian)</td>
+                            </tr>
+                            <tr>
+                                <td>GUI</td>
+                                <td>Servidor X corriendo: abre la <a href="x11.html">pestaña X11</a> y pulsa <em>Iniciar el servidor X</em> (la app exporta <code>DISPLAY=:0</code> en la sesión Debian)</td>
+                            </tr>
+                            <tr>
+                                <td>JDK</td>
+                                <td><code>openjdk-25-jdk</code> de Debian</td>
+                            </tr>
+                            <tr>
+                                <td>Herramientas</td>
+                                <td><code>curl</code> y <code>unzip</code> en el guest (instalables con <code>apt</code>)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h2>Combinación verificada</h2>
+                    <table>
+                        <thead>
+                                <tr><th>Componente</th><th>Versión verificada</th></tr>
+                            </thead>
+                        <tbody>
+                            <tr>
+                                <td>Android Studio (Linux)</td>
+                                <td><a href="https://developer.android.com/studio">Rabbit 1 · 2026.2.1</a> (<code>android-studio-rabbit1-linux.tar.gz</code>)</td>
+                            </tr>
+                            <tr>
+                                <td>IntelliJ IDEA Community (aarch64)</td>
+                                <td><strong>2025.3</strong>, build 253.28294.334 (la última publicada; verifica en la <a href="https://www.jetbrains.com/idea/download/?section=linux">descarga de JetBrains</a> el artefacto <code>idea-*.tar.gz</code> <strong>ARM64</strong>)</td>
+                            </tr>
+                            <tr>
+                                <td>skiko (nativo aarch64)</td>
+                                <td><strong>0.144.5</strong> desde <a href="https://repo1.maven.org/maven2/org/jetbrains/skiko/skiko-awt-runtime-linux-arm64/">Maven Central</a></td>
+                            </tr>
+                            <tr>
+                                <td>JDK</td>
+                                <td>OpenJDK 25.0.4 (Debian trixie) vía enlace simbólico del <code>jbr</code></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h2>Paso 1: descargar Android Studio e IDEA</h2>
+                    <p>
+                        Descarga los dos tarballs y extrae en tu <code>$HOME</code> del guest;
+                        desde el navegador del dispositivo o directamente con <code>curl</code>:
+                    </p>
+                    <div class="code-wrap"><pre><code>cd ~
+# Android Studio (última estable, Linux):
+curl -LO https://dl.google.com/android/studio/ide-zips/2026.2.1.8/android-studio-rabbit1-linux.tar.gz
+# IntelliJ IDEA Community (artefacto aarch64; revisa la versión en la web de JetBrains):
+curl -LO https://download.jetbrains.com/idea/idea-2025.3-aarch64.tar.gz
+
+tar -xzf android-studio-rabbit1-linux.tar.gz          # → ~/android-studio
+tar -xzf idea-2025.3-aarch64.tar.gz                    # → ~/idea-IU-253.… (véase abajo)
+mv idea-IU-* idea-IC</code></pre></div>
+                    <p>
+                        <strong>Detalle curioso</strong>: desde 2025.3, JetBrains unificó el
+                        nombre interno, así que incluso el artefacto Community se extrae como
+                        <code>idea-IU-…</code>. El <code>mv</code> de arriba lo deja como
+                        <code>idea-IC</code> para que el resto de comandos no cambie. Descarga
+                        siempre la versión <strong>aarch64/ARM64</strong>: los tarballs x86 de
+                        IDEA no tienen natives útiles aquí.
+                    </p>
+
+                    <h2 id="parche-librerias">Paso 2: parche de natives ARM64</h2>
+                    <p>
+                        Copia los natives <code>aarch64</code> de IDEA sobre la instalación de
+                        Android Studio:
+                    </p>
+                    <div class="code-wrap"><pre><code>cp -r ~/idea-IC/lib/jna/*                 ~/android-studio/lib/jna/
+cp -r ~/idea-IC/lib/native/*              ~/android-studio/lib/native/
+cp -r ~/idea-IC/lib/pty4j/*               ~/android-studio/lib/pty4j/
+cp -r ~/idea-IC/lib/skiko-awt-runtime-all/* ~/android-studio/lib/skiko-awt-runtime-all/</code></pre></div>
+                    <p>
+                        Tanto Android Studio como IDEA reparten estos natives por subcarpetas de
+                        arquitectura, así que los ficheros <code>x86-64</code> antiguos quedan
+                        conviviendo con los nuevos; a la hora de cargar se eligen por
+                        <code>os.arch</code>. Si quieres ahorrar espacio puedes borrar los
+                        subdirectorios <code>amd64</code>, <code>linux-x86_64</code> y similares.
+                    </p>
+
+                    <h2 id="parche-skiko">Paso 3: parche skiko (¡obligatorio!)</h2>
+                    <div class="key-point">
+                        <p>
+                            Aquí está la <strong>diferencia grande respecto a la guía clásica de
+                            Termux</strong>: los natives de la última IDEA Community (línea 253)
+                            se han quedado <strong>antiguos</strong> frente a la plataforma de
+                            Android Studio Rabbit (línea 262). Al arrancar, el splash de Compose
+                            explota con
+                            <code>org.jetbrains.skiko.RenderException: Cannot create surface</code>
+                            y un <code>UnsatisfiedLinkError</code> en
+                            <code>skia/paragraph/TextStyleKt._nSetFontEdging</code>.
+                            La solución: traer el nativo <code>skiko</code> de la
+                            <strong>versión exacta</strong> que pide tu Android Studio, desde
+                            Maven Central.
+                        </p>
+                    </div>
+                    <p>
+                        La versión que pide el IDE se lee del propio jar (sin necesitar
+                        <code>strings</code> ni binutils):
+                    </p>
+                    <div class="code-wrap"><pre><code>SKIKO_DESEADO=$(unzip -p ~/android-studio/lib/intellij.libraries.skiko.jar \
+                  org/jetbrains/skiko/Version.class \
+                  | grep -aoE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+echo "AS necesita skiko $SKIKO_DESEADO"        # Rabbit 2026.2.1 → 0.144.5</code></pre></div>
+                    <p>y se sustituye el nativo:</p>
+                    <div class="code-wrap"><pre><code>cd /tmp
+curl -LO "https://repo1.maven.org/maven2/org/jetbrains/skiko/skiko-awt-runtime-linux-arm64/${SKIKO_DESEADO}/skiko-awt-runtime-linux-arm64-${SKIKO_DESEADO}.jar"
+unzip -j -o "skiko-awt-runtime-linux-arm64-${SKIKO_DESEADO}.jar" "*libskiko-linux-arm64.so" -d ~
+cp ~/libskiko-linux-arm64.so ~/android-studio/lib/skiko-awt-runtime-all/
+rm ~/libskiko-linux-arm64.so</code></pre></div>
+                    <p>
+                        JNA y pty4j son ABI-estables entre estas líneas de plataforma, así que con
+                        los de IDEA 253 van bien; solo <code>skiko</code> ha necesitado
+                        actualización a fecha de esta guía.
+                    </p>
+
+                    <h2>Paso 4: Java Runtime (jbr)</h2>
+                    <p>
+                        Android Studio trae un JBR propio para x86_64: hay que quitarlo y apuntar
+                        al JDK del guest:
+                    </p>
+                    <div class="code-wrap"><pre><code>rm -rf ~/android-studio/jbr
+ln -s /usr/lib/jvm/java-25-openjdk-arm64 ~/android-studio/jbr</code></pre></div>
+                    <p>
+                        La guía antigua hablaba de <code>openjdk-21</code> porque Termux no
+                        ofrecía otro: el guest Debian trae 25 y la prueba va correcta con 25.
+                    </p>
+
+                    <h2>Paso 5: arrancar el IDE</h2>
+                    <ol>
+                        <li>
+                            Abre la <a href="x11.html">pestaña X11</a> y pulsa
+                            <strong>Iniciar el servidor X</strong>. Cuando el escritorio X11
+                            aparezca, minimiza la pestaña (el servidor sigue arriba).
+                        </li>
+                        <li>
+                            Entra a la sesión Debian (pestaña normal de terminal) y lanza:
+                            <div class="code-wrap"><pre><code>cd ~/android-studio/bin
+./studio.sh</code></pre></div>
+                        </li>
+                        <li>
+                            El splash de Compose aparece sobre el escritorio X11 y en un rato se
+                            abre el asistente de configuración. La primera ejecución tarda: es
+                            normal que tarde minutos en un móvil.
+                        </li>
+                    </ol>
+                    <p>
+                        No hace falta exportar <code>DISPLAY</code>: la app ya pone
+                        <code>DISPLAY=:0</code> en las sesiones Debian (ver
+                        <a href="x11.html">Servidor X11</a>).
+                    </p>
+
+                    <h2>Preguntas y problemas comunes</h2>
+                    <h3>No aparece la ventana y muere con <code>RenderException</code></h3>
+                    <p>Es el <a href="#parche-skiko">parche skiko</a> que falta: la guía clásica de
+                        Termux no lo necesita porque empareja versiones más cercanas entre sí.
+                        Con Android Studio ≥ 2026 es <strong>obligatorio</strong>.</p>
+
+                    <h3>El IDE cierra por memoria</h3>
+                    <p>
+                        Con 5 GB de RAM el límite por defecto (<code>-Xmx2048m</code> en
+                        <code>~/android-studio/bin/studio.vmoptions</code>) va correcto pero justo.
+                        Baja el heap a <code>-Xmx1536m</code> si el sistema se queda apurado, y
+                        cierra Gradle daemons con <code>gradle --stop</code> desde proyectos
+                        anteriores para liberar JVMs.
+                    </p>
+
+                    <h3><code>Permission denied</code> al ejecutar <code>studio.sh</code></h3>
+                    <div class="code-wrap"><pre><code>chmod +x ~/android-studio/bin/*.sh</code></pre></div>
+
+                    <h3>Avisos que puedes ignorar</h3>
+                    <ul>
+                        <li>
+                            <code>[warning][cds] Archived non-system classes are disabled…</code>:
+                            informativo del GC/CDS de Java, no afecta.
+                        </li>
+                        <li>
+                            <code>dbind-WARNING … Couldn't register with accessibility bus</code>:
+                            GTK/ORbit de la composición de Atk; el IDE sigue funcionando.
+                        </li>
+                        <li>
+                            Los binarios <code>x86-64</code> que siguen en las carpetas de natives
+                            tras el parche se quedan sin usar (el IDE elige por arquitectura).
+                        </li>
+                    </ul>
+
+                    <h2>Lo que no va (y cómo vive sin ello)</h2>
+                    <ul>
+                        <li>
+                            <strong>Emulador Android</strong>: no hay KVM en kernels de Android
+                            comunes, así que el aviso de la guía de Termux sigue vivo. Se prueba
+                            la app en un dispositivo físico con ADB (activa la depuración USB en
+                            el teléfono de pruebas, y conecta por USB con la app Terminal —
+                            <code>adb install app.apk</code> en la sesión del guest).
+                        </li>
+                        <li>
+                            <strong>Posterior a la versión usada</strong>: no hay garantía de que
+                            otra versión de Android Studio traiga otra <code>skiko</code> distinta;
+                            el paso 3 es genérico y se ajusta solo.
+                        </li>
+                    </ul>
+
+                    <h2>Créditos y avisos</h2>
+                    <p>
+                        Adaptación ARM64 original: comunidad Termux y
+                        <a href="https://github.com/HomuHomu833">HomuHomu833</a>.
+                        Parche skiko para la línea 2026: verificado en esta wiki.
+                    </p>
+                    <div class="key-point">
+                        <p>
+                            Android Studio y el logotipo de Android son marcas de Google LLC;
+                            IntelliJ IDEA es marca de JetBrains s.r.o. Esta guía no está afiliada
+                            a Google ni a JetBrains, y el uso de los natives de IDEA se hace por
+                            interoperabilidad en ARM64 no soportado oficialmente: úsalo bajo tu
+                            propio riesgo y respeta los términos de servicio de Android Studio.
+                        </p>
+                    </div>
+                </div>
+            </article>
+        </div>
+    </main>
+  <footer class="footer">
+        <div class="wrap footer__inner">
+              <p>Desarrollado con pasión por <strong>ESTRIN217</strong>. Hecho con ❤️ en Venezuela.</p>
+            <p>
+                <strong>Wiki de Terminal</strong> · parte del proyecto
+                <a href="https://github.com/ESTRIN217/Terminal">ESTRIN217/Terminal</a> (GPLv3).
+            </p>
+            <p class="muted">
+                Fork independiente de <a href="https://github.com/termux/termux-app">termux/termux-app</a>.
+                Sin afiliación con el equipo de Termux.
+            </p>
+            <p class="footer__legal">© 2026 Terminal · Esta página es estática: no usa cookies, analítica ni servicios de terceros.</p>
+        </div>
+  </footer>
+</body>
+</html>
