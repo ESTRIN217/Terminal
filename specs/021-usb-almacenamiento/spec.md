@@ -1,6 +1,6 @@
 # Spec 021 — Almacenamiento USB: detección informativa de pendrives (lsblk-like) y acceso a ficheros vía SAF
 
-Estado: **en implementación (factibilidad cerrada, T8 vía bind)**
+Estado: **implementada y verificada en dispositivo (2026-10-27)**
 
 ## Contexto y objetivo
 

@@ -49,11 +49,13 @@
   `terminal-usb-cp` descubre volúmenes en vivo de `/proc/mounts` (`list/read/
   write`, selector ID en cualquier posición — fix `6f562e53`, sin ping, exit 3
   destino existente, anti-`..`). Exit 0 siempre en lsblk.
-- **PENDIENTE T9:** verificación en dispositivo final (build nuevo + logs con
-  el selector ya posición-independiente) y marcar spec 021 implementada.
-  `USB_FILE_BRIDGE_ABSTRACT_ADDRESS` sin uso (puente de ficheros descartado por
-  F1+; se conserva documentada). `lsblk` NO leerá sysfs real NUNCA (SELinux
-  untrusted_app) — no reintentar fix.
+- **Spec 021 CERRADA (2026-10-27): verificación completa en dispositivo** —
+  `lsblk` (tamaños en vivo, pendrive + microSD, exit 0) y `terminal-usb-cp`
+  (selector posicional, round-trip, exit 3 re-escritura) verificados por el
+  mantenedor en el volúmen real `47A8-1024` (`write`/`read`/exit-3/limpieza).
+  `USB_FILE_BRIDGE_ABSTRACT_ADDRESS` sin uso (puente descartado por F1, queda
+  documentada). `lsblk` NO leerá sysfs real NUNCA (SELinux untrusted_app) — no
+  reintentar fix. Wiki ampliada (`4f2e2d8e`).
   (list/read ≥10 MB/write idempotencia en pendrive real, tras `app:assembleDebug`)
   y `lsblk` con mountpoint volumeId fresco. `USB_FILE_BRIDGE_ABSTRACT_ADDRESS`
   sin uso (puente de ficheros descartado por F1+; se conserva documentada).

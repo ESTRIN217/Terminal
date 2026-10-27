@@ -71,8 +71,17 @@ negativo, la spec se reescopa (RF-4/RF-5 fuera) y las tareas T5+ no se marcan.
     log, delegando todo el parseo en la librería (cero regex en el server). Shape
     JSON T6/T4 intacto (`volumeId`/`mountpoint` rellenos).
 
-- [ ] **T9. Documentación en wiki (limitaciones + guía) y validación global.** RF-2, RF-5
+- [x] **T9. Documentación en wiki (limitaciones + guía) y validación global.** RF-2, RF-5
   - Hecho cuando: `wiki/limitaciones.html` documente SELinux/sysfs (sin fix) y el resultado
     del experimento del bind; documentación de uso de `lsblk` y `terminal-usb-cp` en español;
     verificación en dispositivo checklist (`lsblk` sin crash, `terminal-usb-cp` con todas las vías
     confirmadas) y `./gradlew test` verde al 100% en todos los módulos.
+
+## Verificación en dispositivo (2026-10-27, cierre de T9)
+
+- `lsblk`: filas live de los dos volúmenes (microSD `47A8-1024` 3G y pendrive
+  `459E-170F` 965M), `type=volume`, sizes reales vía statvfs, exit 0.
+- `terminal-usb-cp 47A8-1024 write /tmp/a` → OK (`ls -l` confirma);
+  repetición → exit 3 "destination exists (not overwritten)";
+  `read 47A8-1024 a` → contenido correcto; limpieza OK.
+- `./gradlew test` completo verde (última pasada antes del cierre).
