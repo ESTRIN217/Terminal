@@ -4,7 +4,12 @@
   firmado + `sha256sums`; CI adjunta los `+github-debug` al publicarse. Sitio y wiki
   desplegados (`update-site.py` + `firebase deploy --only hosting`, dos targets).
 - Rama `3.0` = `master` (ff-merge `74b4ac75 → 74333562`). Specs 010–020 CERRADAS.
-- **Spec 020 (Soporte USB sin root: lsusb + bridge UsbManager)**: implementada (T1–T6), `./gradlew test` en verde. Puente socket `terminal_usb` + snapshots `/tmp/usb_devices.*` + `lsusb`/`termux-usb` instalados en `/usr/local/bin`.
+- **Spec 020 (Soporte USB sin root: lsusb + bridge UsbManager)**: implementada
+  y verificada en dispositivo (commits `87aeaaf2`, `3ea23f96`, verificación
+  2026-10-26). Puente socket abstracto `@terminal_usb` + snapshots
+  `/tmp/usb_devices.*` + `lsusb`/`termux-usb` instalados en `/usr/local/bin`.
+  PENDIENTE (no código): rotar la Context7 API key expuesta en git (opencode.json
+  d628080a) y sacarla del fichero trackeado.
 - Residuales aceptados y documentados (wiki `limitaciones.html`): btop ≥80×24,
   Adreno sin validar en hardware, glxinfo BadMatch rootless, Zink/OpenCL sin vía,
   Sixel/animaciones no soportadas. 017 fuera de alcance: ekbar completo,
