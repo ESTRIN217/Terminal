@@ -762,6 +762,14 @@ public final class TermuxConstants {
     /** Guest-relative path of the terminal-usb symlink (spec 020). */
     public static final String DEBIAN_TERMINAL_USB_RELATIVE_PATH = "usr/local/bin/terminal-usb";
 
+    /** Guest-relative path of the lsblk wrapper script (spec 021). */
+    public static final String DEBIAN_LSBLOCK_RELATIVE_PATH = "usr/local/bin/lsblk";
+    /** Guest-relative path of the terminal-usb-cp file bridge tool (spec 021). */
+    public static final String DEBIAN_TERMINAL_USB_CP_RELATIVE_PATH = "usr/local/bin/terminal-usb-cp";
+
+    /** Linux abstract UNIX namespace address of the file bridge (spec 021, separate from the 020 USB bridge). */
+    public static final String USB_FILE_BRIDGE_ABSTRACT_ADDRESS = "terminal_usb_files";
+
 
 
     /** Termux app $PREFIX directory path */

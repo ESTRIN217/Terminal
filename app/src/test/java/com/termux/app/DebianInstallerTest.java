@@ -105,6 +105,11 @@ public class DebianInstallerTest {
         Assert.assertEquals("usr/local/bin/lsusb", TermuxConstants.DEBIAN_LSUSB_RELATIVE_PATH);
         Assert.assertEquals("usr/local/bin/termux-usb", TermuxConstants.DEBIAN_TERMUX_USB_RELATIVE_PATH);
         Assert.assertEquals("usr/local/bin/terminal-usb", TermuxConstants.DEBIAN_TERMINAL_USB_RELATIVE_PATH);
+        // Spec 021 constants (T5): guest paths for lsblk/terminal-usb-cp and the
+        // file bridge abstract endpoint, without touching the spec 020 values.
+        Assert.assertEquals("usr/local/bin/lsblk", TermuxConstants.DEBIAN_LSBLOCK_RELATIVE_PATH);
+        Assert.assertEquals("usr/local/bin/terminal-usb-cp", TermuxConstants.DEBIAN_TERMINAL_USB_CP_RELATIVE_PATH);
+        Assert.assertEquals("terminal_usb_files", TermuxConstants.USB_FILE_BRIDGE_ABSTRACT_ADDRESS);
         Assert.assertFalse(DebianInstaller.isUsbToolsInstalled());
 
         java.io.File tempRoot = java.io.File.createTempFile("rootfs-test", "");

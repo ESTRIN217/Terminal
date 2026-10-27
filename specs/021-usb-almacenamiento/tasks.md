@@ -24,7 +24,7 @@ negativo, la spec se reescopa (RF-4/RF-5 fuera) y las tareas T5+ no se marcan.
     block devices y `encode/decodePathForBridge`; `UsbBlockDeviceFormatLibraryTest` verde
     con `./gradlew :termux-shared:test` (tests en rojo primero).
 
-- [ ] **T5. Constantes en `TermuxConstants`.** RF-3, RF-4
+- [x] **T5. Constantes en `TermuxConstants`.** RF-3, RF-4
   - Hecho cuando: `TermuxConstants` incluya rutas guest (`usr/local/bin/lsblk`,
     `usr/local/bin/terminal-usb-cp`) y endpoint del puente de ficheros sin tocar las
     constantes de la 020.
