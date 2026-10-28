@@ -49,10 +49,12 @@
   `terminal-usb-cp` descubre volúmenes en vivo de `/proc/mounts` (`list/read/
   write`, selector ID en cualquier posición — fix `6f562e53`, sin ping, exit 3
   destino existente, anti-`..`). Exit 0 siempre en lsblk.
-- **Spec 021 CERRADA (2026-10-27): verificación completa en dispositivo** —
-  `lsblk` (tamaños en vivo, pendrive + microSD, exit 0) y `terminal-usb-cp`
-  (selector posicional, round-trip, exit 3 re-escritura) verificados por el
-  mantenedor en el volúmen real `47A8-1024` (`write`/`read`/exit-3/limpieza).
+- **Spec 021 CERRADA (2026-10-28): todos los criterios de finalización verificados** —
+  incluyendo el round-trip ≥10 MB vía `terminal-usb-cp` (md5 origen = md5 leído,
+  `b46c54af`). Spec/plan/tasks sincronizados con la implementación
+  (`52e2dbbc`). `lsblk` (tamaños en vivo, pendrive + microSD, exit 0) y
+  `terminal-usb-cp` (selector posicional, ≥10 MB limpio, exit 3 re-escritura)
+  verificados por el mantenedor en el volúmen real `47A8-1024`.
   `USB_FILE_BRIDGE_ABSTRACT_ADDRESS` sin uso (puente descartado por F1, queda
   documentada). `lsblk` NO leerá sysfs real NUNCA (SELinux untrusted_app) — no
   reintentar fix. Wiki ampliada (`4f2e2d8e`).
