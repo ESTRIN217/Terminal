@@ -39,29 +39,25 @@
   `android-studio-termux-arm64*` (rename a terminal-arm64 por el usuario en
   GitHub) con el script sin sudo + parche skiko; fix del wget blob→raw.
 
-## Spec 021 en curso (2026-10-27)
+## Spec 021 — Almacenamiento USB (CERRADA 2026-10-28)
 
-- **Almacenamiento USB: detección + ficheros vía bind.** T1–T8.2 COMPLETAS
-  (`./gradlew test` verde). Detección en vivo (T8.2): `lsblk` prioriza filas
-  LIVE de `/proc/mounts` del guest (pendrive + microSD interna, `type=volume`,
-  tamaño por `statvfs` sobre `/root/storage/<ID>`, `-` si no medible) + filas
-  del snapshot solo para hardware sin volumen (sda `mass-storage`);
-  `terminal-usb-cp` descubre volúmenes en vivo de `/proc/mounts` (`list/read/
-  write`, selector ID en cualquier posición — fix `6f562e53`, sin ping, exit 3
-  destino existente, anti-`..`). Exit 0 siempre en lsblk.
-- **Spec 021 CERRADA (2026-10-28): todos los criterios de finalización verificados** —
-  incluyendo el round-trip ≥10 MB vía `terminal-usb-cp` (md5 origen = md5 leído,
-  `b46c54af`). Spec/plan/tasks sincronizados con la implementación
-  (`52e2dbbc`). `lsblk` (tamaños en vivo, pendrive + microSD, exit 0) y
-  `terminal-usb-cp` (selector posicional, ≥10 MB limpio, exit 3 re-escritura)
-  verificados por el mantenedor en el volúmen real `47A8-1024`.
-  `USB_FILE_BRIDGE_ABSTRACT_ADDRESS` sin uso (puente descartado por F1, queda
-  documentada). `lsblk` NO leerá sysfs real NUNCA (SELinux untrusted_app) — no
-  reintentar fix. Wiki ampliada (`4f2e2d8e`).
-  (list/read ≥10 MB/write idempotencia en pendrive real, tras `app:assembleDebug`)
-  y `lsblk` con mountpoint volumeId fresco. `USB_FILE_BRIDGE_ABSTRACT_ADDRESS`
-  sin uso (puente de ficheros descartado por F1+; se conserva documentada).
-  `lsblk` NO leerá sysfs real NUNCA (SELinux untrusted_app) — no reintentar fix.
+- Todos los criterios de finalización verificados. Implementación: librería
+  pura `UsbBlockDeviceFormatLibrary` + tests, constantes 021, sección
+  `blockDevices` aditiva en snapshot de `UsbBridgeServer` (mountpoints desde
+  `/proc/mounts` del host, parseo puro `extractVolumeMountpoints`, refresco
+  JIT en cada conexión al bridge) y wrappers guest `lsblk` (filas LIVE de
+  `/proc/mounts` del guest: pendrive + microSD, `type=volume`, tamaño
+  `statvfs`, exit 0 siempre) y `terminal-usb-cp` (descubrimiento en vivo,
+  selector ID cualquier posición, exit 3 destino existente, anti-`..`),
+  instalados vía `usbToolsNeedRefresh`. Round-trip ≥10 MB verificado vía
+  wrapper (md5 origen = md5 leído). Spec/plan/tasks sincronizados
+  (`52e2dbbc`), wiki ampliada (`4f2e2d8e`).
+- **Reglas permanentes:** la vía es el bind `-b /storage:$HOME/storage` ya
+  existente (SELinux deniega readdir de `/storage`, no el hijo); el puente de
+  ficheros de sockets está descartado (`USB_FILE_BRIDGE_ABSTRACT_ADDRESS`
+  queda sin uso/documentada); `lsblk` NO leerá sysfs real NUNCA (SELinux
+  untrusted_app) — no reintentar fix; no usar `ACTION_MEDIA_MOUNTED`
+  (restringido).
 
 ## Arquitectura y reglas prácticas
 - `terminal-emulator` → `terminal-view` → `termux-shared` → `app`; `filemanager` →
