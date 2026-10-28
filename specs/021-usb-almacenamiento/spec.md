@@ -173,9 +173,10 @@ documentación de limitaciones (no código muerto ni caminos que no se puedan ve
    denied`: muestra el inventario snapshot + nota de limitación, exit 0.
 2. `terminal-usb-cp list` lista los ficheros del volumen del pendrive (vía bind, según el
    experimento RF-5 cerrado); `read`/`write` copian ficheros de tamaño grande (≥ 10 MB) sin
-   corrupción. **Estado (2026-10-28):** verificado round-trip directo por el bind (dd 10 MiB +
-   md5) y del wrapper con fichero pequeño; la pasada ≥10 MB **a través del wrapper** queda
-   como verificación pendiente del mantenedor (la ruta de código es la misma: `cp` sobre el bind).
+   corrupción. **Verificado en dispositivo (2026-10-28):** round-trip 10 MiB vía
+   `terminal-usb-cp` sobre el volúmen `47A8-1024` con origen en `/dev/urandom`; md5 del origen
+   = md5 del fichero leído de vuelta (`e509c7d92c7e9c46956e6c04ccab9597`), estable entre
+   lecturas, limpieza final OK.
 3. Los binarios `lsblk`/`terminal-usb-cp` se instalan/refrescan con el mecanismo
    `usbToolsNeedRefresh` sin romper los de la 020 (byte-compare).
 4. El resultado del experimento de proot `-b /storage/XXXX-YYYY:/root/usb` está documentado

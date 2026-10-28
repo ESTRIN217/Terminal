@@ -86,3 +86,10 @@ negativo, la spec se reescopa (RF-4/RF-5 fuera) y las tareas T5+ no se marcan.
   repetición → exit 3 "destination exists (not overwritten)";
   `read 47A8-1024 a` → contenido correcto; limpieza OK.
 - `./gradlew test` completo verde (última pasada antes del cierre).
+
+## Chip de verificación ≥10 MB vía wrapper (2026-10-28, cierre del criterio de finalización #2)
+
+- Origen 10 MiB en `/dev/urandom` (`dd`), md5 origen `e509c7d92c7e9c46956e6c04ccab9597`.
+- `terminal-usb-cp 47A8-1024 write /tmp/big` → OK (sin salida, exit 0).
+- `terminal-usb-cp 47A8-1024 read big | md5sum` → `e509c7d92c7e9c46956e6c04ccab9597` (hash
+  optimo con el original, y stable entre lecturas). Limpieza de datos `rm` OK.
