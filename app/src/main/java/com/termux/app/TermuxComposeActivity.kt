@@ -64,6 +64,7 @@ import com.termux.shared.view.KeyboardUtils
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.compose.ComposeTerminalSessionClient
 import com.termux.terminal.compose.ComposeTerminalViewClient
+import com.termux.terminal.compose.BrowserLogic
 import com.termux.terminal.compose.DebianInstallerScreen
 import com.termux.terminal.compose.ExtraKeysConfig
 import com.termux.terminal.compose.TerminalColorSchemeLoader
@@ -219,7 +220,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         mPreferences = TermuxAppSharedPreferences.build(this, true)
         mViewModel = ViewModelProvider(this)[TermuxViewModel::class.java]
         mTerminalSessionClient = ComposeTerminalSessionClient(mViewModel, ::removeSession)
-        mTerminalViewClient = ComposeTerminalViewClient(mViewModel, mProperties, ::removeSession, ::showMoreMenu)
+        mTerminalViewClient = ComposeTerminalViewClient(mViewModel, mProperties, ::removeSession, ::showMoreMenu, ::handleOpenLink)
 
         // Apply keep screen on flag if previously enabled via the more options menu
         mIsKeepScreenOnEnabled = mPreferences.shouldKeepScreenOn()
@@ -296,6 +297,8 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                         onPasteFromClipboard = { pasteFromClipboard() },
                         onOpenFileManager = { addFileManagerSession(null) },
                         onOpenX11 = { addX11Session() },
+                        onOpenBrowserTab = { addBrowserSession(null) },
+                        onOpenLink = { handleOpenLink(it) },
                         onNewFileManagerTab = { addFileManagerSession(null) },
                         onCreateFileManagerShortcut = { createFileManagerLauncherShortcut(it) },
                         onCreateFileShortcut = { createFileLauncherShortcut(it) },
@@ -433,6 +436,33 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             Toast.makeText(this, R.string.title_max_terminals_reached, Toast.LENGTH_SHORT).show()
         } else {
             mViewModel.createX11Session()
+        }
+    }
+
+    /**
+     * Opens a new browser session tab, honoring the sessions cap (spec 022, RF-1).
+     * The tab is purely UI backed: closing it later never touches TermuxService.
+     */
+    private fun addBrowserSession(initialUrl: String?) {
+        if (mViewModel.uiState.value.sessions.size >= MAX_SESSIONS) {
+            Toast.makeText(this, R.string.title_max_terminals_reached, Toast.LENGTH_SHORT).show()
+        } else {
+            mViewModel.createBrowserSession(initialUrl)
+        }
+    }
+
+    /**
+     * Routes a link tap per the in-app browser preference (spec 022, RF-4/RF-5/RF-7/RF-8):
+     * http/s with the preference on opens a new browser tab; everything else — including
+     * when the preference is off — is handed to the system browser like before (RF-5).
+     *
+     * @param uri the identified link URI (spec 003 allowlist output)
+     */
+    private fun handleOpenLink(uri: String) {
+        val internal = mPreferences.isLinksInternalBrowserEnabled()
+        when (BrowserLogic.routeLink(uri, internal)) {
+            BrowserLogic.LinkRoute.INTERNAL_TAB -> addBrowserSession(uri)
+            BrowserLogic.LinkRoute.EXTERNAL -> ShareUtils.openUrl(this, uri)
         }
     }
 
@@ -1017,6 +1047,11 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             com.termux.terminal.x11.X11SessionRegistry.release(model.id)
         }
 
+        // Spec 022: browser tabs are UI-only too; close their engine session (RF-9).
+        if (model is TermuxSessionUiModel.Browser) {
+            com.termux.terminal.compose.BrowserTabRegistry.release(model.id)
+        }
+
         if (mViewModel.uiState.value.sessions.isEmpty()) {
             finish()
         }
@@ -1427,7 +1462,9 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
             val listView = dialog.getListView()
             listView?.setOnItemLongClickListener { _, _, position, _ ->
                 dialog.dismiss()
-                ShareUtils.openUrl(this, urls[position].toString())
+                // Spec 022: route the list URL through the app preference (RF-4/RF-5/RF-7);
+                // the long-press copy action below stays untouched.
+                handleOpenLink(urls[position].toString())
                 true
             }
         }

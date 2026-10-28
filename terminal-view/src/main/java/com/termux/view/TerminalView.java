@@ -629,6 +629,9 @@ public final class TerminalView extends View {
             uri = mRenderer.mUrlScanner.getUriAt(mEmulator.getScreen(), row, column);
         }
         if (!TerminalEmulator.isAllowedHyperlinkUri(uri)) return false;
+        // Spec 022 (RF-4/RF-5/RF-7): the client may route the URI itself (in-app browser
+        // tab or external per the preference); the legacy ACTION_VIEW stays as fallback.
+        if (mClient.onHyperlinkOpen(uri)) return true;
         try {
             getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(uri)));
             return true;

@@ -126,6 +126,8 @@ import kotlinx.coroutines.delay
  * `mClient.onLongPress(event)`: when it returns true the canvas does not start a text
  * selection
  * @param onFontSizeStep Callback with a signed font-size step in pixels for pinch-zoom
+ * @param onOpenLink Callback opening an OSC 8/printed-URL link per the app preference
+ * (spec 022, RF-4/RF-5/RF-7): the canvas only detects; the activity routes
  * @param hyperlinksEnabled Whether OSC 8 hyperlinks underline and open on tap
  * @param imagesEnabled Whether inline terminal images (OSC 1337 / kitty) are painted
  * @param modifier Modifier to apply to the canvas
@@ -144,6 +146,7 @@ internal fun ComposeTerminalCanvas(
     onLongPressConsumed: () -> Boolean = { false },
     onFontSizeStep: (Float) -> Unit = {},
     onClientTap: (() -> Unit)? = null,
+    onOpenLink: (String) -> Unit = {},
     hyperlinksEnabled: Boolean = true,
     imagesEnabled: Boolean = true,
     modifier: Modifier = Modifier
@@ -647,8 +650,8 @@ internal fun ComposeTerminalCanvas(
                                     linkRow >= -emulator.screen.activeTranscriptRows &&
                                     linkRow < emulator.mRows
                                 ) emulator.getHyperlinkUriAt(linkRow, linkCol) else null
-                                if (TerminalEmulator.isAllowedHyperlinkUri(uri)) {
-                                    ShareUtils.openUrl(context, uri)
+                                if (uri != null && TerminalEmulator.isAllowedHyperlinkUri(uri)) {
+                                    onOpenLink(uri)
                                     return@detectTapGestures
                                 }
                                 // Plain-text URL span (Spec 003, RF-1): same stale-row
@@ -659,8 +662,8 @@ internal fun ComposeTerminalCanvas(
                                     linkRow >= -emulator.screen.activeTranscriptRows &&
                                     linkRow < emulator.mRows
                                 ) urlScanner.getUriAt(emulator.screen, linkRow, linkCol) else null
-                                if (TerminalEmulator.isAllowedHyperlinkUri(plainUri)) {
-                                    ShareUtils.openUrl(context, plainUri)
+                                if (plainUri != null && TerminalEmulator.isAllowedHyperlinkUri(plainUri)) {
+                                    onOpenLink(plainUri)
                                     return@detectTapGestures
                                 }
                             }

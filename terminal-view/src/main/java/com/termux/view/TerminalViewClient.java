@@ -28,6 +28,18 @@ public interface TerminalViewClient {
      */
     void onSingleTapUp(MotionEvent e);
 
+    /**
+     * Spec 022 (RF-4/RF-5/RF-7): the client routes a tapped hyperlink (OSC 8 or a
+     * printed-URL span) itself. Returning {@code true} consumes the tap; returning
+     * {@code false} makes {@code TerminalView} fall back to its own ACTION_VIEW open.
+     *
+     * @param uri the allowed link URI under the finger (spec 003 allowlist output)
+     * @return whether the client opened the URI
+     */
+    default boolean onHyperlinkOpen(String uri) {
+        return false;
+    }
+
     boolean shouldBackButtonBeMappedToEscape();
 
     boolean shouldEnforceCharBasedInput();

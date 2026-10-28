@@ -91,6 +91,32 @@ class TermuxViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
+     * Create a browser session tab (spec 022, RF-1). Purely UI backed: closing it later
+     * never touches [TermuxService], the same contract as [createX11Session].
+     *
+     * @param initialUrl URL the tab loads on first bind, or null for a blank tab
+     * @return The stable id of the new session
+     */
+    fun createBrowserSession(initialUrl: String? = null): String {
+        val id = UUID.randomUUID().toString()
+        viewModelScope.launch {
+            _uiState.update { state ->
+                val browserCount = state.sessions.count { it is TermuxSessionUiModel.Browser }
+                val name = BrowserLogic.nextSessionName(
+                    browserCount,
+                    getApplication<Application>().getString(R.string.browser_session_default_name)
+                )
+                val newModel = TermuxSessionUiModel.Browser(id = id, name = name, initialUrl = initialUrl)
+                val newSessions = state.sessions + newModel
+                sanitizeSplit(activateSession(state.copy(
+                    sessions = newSessions
+                ), newSessions.lastIndex))
+            }
+        }
+        return id
+    }
+
+    /**
      * Remove a session from the UI state.
      *
      * @param sessionModel The session model to remove

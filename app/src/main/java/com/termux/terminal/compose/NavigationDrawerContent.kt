@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
@@ -41,6 +42,7 @@ import com.termux.R
  * @param onX11Click Callback when the X11 button is clicked (spec 014)
  * @param onSettingsClick Callback when the settings button is clicked
  * @param onToggleKeyboardClick Callback when the toggle keyboard button is clicked
+ * @param onNewBrowserTabClick Callback for the trailing "new browser tab" action (spec 022, RF-1)
  * @param modifier Modifier to apply
  * @param content The content to display inside the drawer
  */
@@ -50,6 +52,7 @@ fun TermuxNavigationDrawer(
     onOpenChange: (Boolean) -> Unit,
     onFileManagerClick: () -> Unit,
     onX11Click: () -> Unit,
+    onNewBrowserTabClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onToggleKeyboardClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -117,6 +120,20 @@ fun TermuxNavigationDrawer(
                             Icon(
                                 imageVector = Icons.Default.DesktopWindows,
                                 contentDescription = stringResource(R.string.action_open_x11)
+                            )
+                        },
+                        modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                    )
+
+                   // Spec 022 (RF-1): the trailing "new browser tab" drawer action.
+                    NavigationDrawerItem(
+                        label = { Text(stringResource(R.string.action_open_browser)) },
+                        selected = false,
+                        onClick = onNewBrowserTabClick,
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Default.Public,
+                                contentDescription = stringResource(R.string.action_open_browser)
                             )
                         },
                         modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)

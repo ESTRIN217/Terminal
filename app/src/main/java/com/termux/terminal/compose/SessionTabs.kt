@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -100,6 +99,7 @@ private fun SessionTab(
                     imageVector = when (session) {
                         is TermuxSessionUiModel.FileManager -> Icons.Default.Folder
                         is TermuxSessionUiModel.X11 -> Icons.Default.DesktopWindows
+                        is TermuxSessionUiModel.Browser -> Icons.Default.Public
                         else -> Icons.Default.Terminal
                     },
                     contentDescription = stringResource(R.string.session),

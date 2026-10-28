@@ -85,7 +85,9 @@ private const val LOG_TAG = "TermuxMainScreen"
  * @param onPasteFromClipboard Callback to paste the clipboard into the active terminal session
  * @param onOpenFileManager Callback to open the file manager
  * @param onOpenX11 Callback to open an X11 session tab (spec 014)
+ * @param onOpenBrowserTab Callback to open a new blank browser tab (spec 022, RF-1)
  * @param onNewFileManagerTab Callback to open an additional file manager tab (spec 008, RF-10)
+ * @param onOpenLink Callback to open a link per the app preference (spec 022, RF-4/RF-5/RF-7/RF-8)
  * @param onCreateFileManagerShortcut Callback to pin a launcher shortcut to a folder (RF-16)
  * @param onCreateFileShortcut Callback to pin a launcher shortcut to a file (spec 009, RF-11)
  * @param onOpenInTerminal Callback to open a terminal in a directory (file manager panes)
@@ -114,7 +116,9 @@ fun TermuxMainScreen(
     onPasteFromClipboard: () -> Unit,
     onOpenFileManager: () -> Unit,
     onOpenX11: () -> Unit,
+    onOpenBrowserTab: () -> Unit,
     onNewFileManagerTab: () -> Unit,
+    onOpenLink: (String) -> Unit,
     onCreateFileManagerShortcut: (File) -> Unit,
     onCreateFileShortcut: (File) -> Unit,
     onOpenInTerminal: (String) -> Unit,
@@ -174,6 +178,10 @@ fun TermuxMainScreen(
             onX11Click = {
                 viewModel.setDrawerOpen(false)
                 onOpenX11()
+            },
+            onNewBrowserTabClick = {
+                viewModel.setDrawerOpen(false)
+                onOpenBrowserTab()
             },
             onSettingsClick = {
                 viewModel.setDrawerOpen(false)
@@ -323,6 +331,7 @@ fun TermuxMainScreen(
                                         onOpenInTerminal = onOpenInTerminal,
                                         onEditFile = onEditFile,
                                         onNewFileManagerTab = onNewFileManagerTab,
+                                        onOpenLink = onOpenLink,
                                         onCreateFileManagerShortcut = onCreateFileManagerShortcut,
                                         onCreateFileShortcut = onCreateFileShortcut,
                                         onShowMoreMenu = onShowMoreMenu,
@@ -355,6 +364,7 @@ fun TermuxMainScreen(
                                         onOpenInTerminal = onOpenInTerminal,
                                         onEditFile = onEditFile,
                                         onNewFileManagerTab = onNewFileManagerTab,
+                                        onOpenLink = onOpenLink,
                                         onCreateFileManagerShortcut = onCreateFileManagerShortcut,
                                         onCreateFileShortcut = onCreateFileShortcut,
                                         onShowMoreMenu = onShowMoreMenu,
@@ -383,6 +393,7 @@ fun TermuxMainScreen(
                                     onOpenInTerminal = onOpenInTerminal,
                                     onEditFile = onEditFile,
                                     onNewFileManagerTab = onNewFileManagerTab,
+                                    onOpenLink = onOpenLink,
                                     onCreateFileManagerShortcut = onCreateFileManagerShortcut,
                                     onCreateFileShortcut = onCreateFileShortcut,
                                     onShowMoreMenu = onShowMoreMenu,
@@ -451,6 +462,9 @@ fun TermuxMainScreen(
                             val sticky = viewModel.uiState.value.extraKeysModifiers
                             controller.sendExtraKey(key, isMacro, sticky)
                         }
+                        // Browser tabs have no terminal keys (spec 022): the GeckoView
+                        // owns its own input when focused. T8 wires focus handoff.
+                        is TermuxSessionUiModel.Browser -> {}
                     }
                 }
             }
@@ -567,6 +581,7 @@ private fun handleExtraKeysSpecialKey(
  * @param onOpenInTerminal Callback to open a terminal in a directory (file manager panes)
  * @param onEditFile Callback to open a file in a rootfs editor (file manager panes)
  * @param onNewFileManagerTab Callback to open an additional file manager tab (spec 008, RF-10)
+ * @param onOpenLink Callback to open a link per the app preference (spec 022, RF-4/RF-5/RF-7/RF-8)
  * @param onCreateFileManagerShortcut Callback to pin a launcher shortcut to a folder (RF-16)
  * @param onCreateFileShortcut Callback to pin a launcher shortcut to a file (spec 009, RF-11)
  * @param onShowMoreMenu Callback to open the terminal "More" sheet (selection toolbar)
@@ -590,6 +605,7 @@ private fun SessionPane(
     onOpenInTerminal: (String) -> Unit,
     onEditFile: (String) -> Unit,
     onNewFileManagerTab: () -> Unit,
+    onOpenLink: (String) -> Unit,
     onCreateFileManagerShortcut: (File) -> Unit,
     onCreateFileShortcut: (File) -> Unit,
     onShowMoreMenu: () -> Unit,
@@ -688,6 +704,7 @@ private fun SessionPane(
                     onActivatePane = { onPaneFocused(model.id) },
                     onLongPressConsumed = { viewClient.onLongPress(null) },
                     onClientTap = { viewClient.onSingleTapUp(null) },
+                    onOpenLink = onOpenLink,
                     hyperlinksEnabled = hyperlinksEnabled,
                     imagesEnabled = imagesEnabled,
                     onFontSizeStep = { step ->
@@ -750,6 +767,17 @@ private fun SessionPane(
             sessionId = model.id,
             tag = model.tag,
             onCloseSession = { onRemoveSession(model) },
+            isActivePane = isActivePane,
+            onActivatePane = { onPaneFocused(model.id) },
+            modifier = modifier
+        )
+        // Spec 022: browser panes never paint terminals; the host owns the chrome
+        // (URL bar, RF-2) and the RF-6 overlay. It is not split-aware: one pane.
+        is TermuxSessionUiModel.Browser -> BrowserSessionHost(
+            sessionId = model.id,
+            initialUrl = model.initialUrl,
+            onCloseSession = { onRemoveSession(model) },
+            onOpenLink = onOpenLink,
             isActivePane = isActivePane,
             onActivatePane = { onPaneFocused(model.id) },
             modifier = modifier

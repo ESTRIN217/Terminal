@@ -22,7 +22,9 @@ class ComposeTerminalViewClient(
     private val mViewModel: TermuxViewModel,
     private val mProperties: TermuxAppSharedProperties,
     private val mOnRemoveSession: (TerminalSession) -> Unit,
-    private val mOnShowMoreMenu: () -> Unit
+    private val mOnShowMoreMenu: () -> Unit,
+    /** Spec 022: link routing owned by the host activity (RF-4/RF-5/RF-7). */
+    private val mOnOpenLink: (String) -> Unit
 ) : TerminalViewClient {
 
     companion object {
@@ -47,6 +49,20 @@ class ComposeTerminalViewClient(
 
     override fun onSingleTapUp(e: MotionEvent?) {
         showSoftKeyboard()
+    }
+
+    /**
+     * Spec 022 (RF-4/RF-5/RF-7): OSC 8/printed-URL taps of the legacy renderer route
+     * through the activity handler, which honors the app preference for both directions.
+     * Always [Boolean.TRUE]: when the preference is off the handler performs the same
+     * ACTION_VIEW the old openHyperlinkAt did, and returning it prevents a double-open.
+     *
+     * @param uri the allowed link URI under the finger
+     * @return always true (the tap is consumed either way)
+     */
+    override fun onHyperlinkOpen(uri: String): Boolean {
+        mOnOpenLink(uri)
+        return true
     }
 
     /** Whether the last BACK key-down consumed a native-pane selection dismiss. */

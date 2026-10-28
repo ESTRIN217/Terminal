@@ -180,6 +180,22 @@ sealed class TermuxSessionUiModel {
     ) : TermuxSessionUiModel() {
         override val title: String = ""
     }
+
+    /**
+     * A browser tab (spec 022), purely UI backed. Its engine state (location, history)
+     * lives in the per-tab controller registry, never in this model.
+     *
+     * @param id Stable id for the tab
+     * @param name Display name for the session
+     * @param initialUrl URL the tab loads once (null for a blank tab opened from the tab bar)
+     */
+    data class Browser(
+        override val id: String,
+        override val name: String,
+        val initialUrl: String? = null
+    ) : TermuxSessionUiModel() {
+        override val title: String = ""
+    }
 }
 
 /**
