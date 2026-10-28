@@ -8,8 +8,7 @@
   y verificada en dispositivo (commits `87aeaaf2`, `3ea23f96`, verificación
   2026-10-26). Puente socket abstracto `@terminal_usb` + snapshots
   `/tmp/usb_devices.*` + `lsusb`/`termux-usb` instalados en `/usr/local/bin`.
-  PENDIENTE (no código): rotar la Context7 API key expuesta en git (opencode.json
-  d628080a) y sacarla del fichero trackeado.
+  
 - Residuales aceptados y documentados (wiki `limitaciones.html`): btop ≥80×24,
   Adreno sin validar en hardware, glxinfo BadMatch rootless, Zink/OpenCL sin vía,
   Sixel/animaciones no soportadas. 017 fuera de alcance: ekbar completo,
@@ -58,6 +57,39 @@
   queda sin uso/documentada); `lsblk` NO leerá sysfs real NUNCA (SELinux
   untrusted_app) — no reintentar fix; no usar `ACTION_MEDIA_MOUNTED`
   (restringido).
+
+## Spec 022 — Navegador GeckoView (EN CURSO, spec aprobada 2026-10-28)
+
+- Objetivo: pestañas de navegador in-app (quinto caso sealed `Browser`, patrón X11 014)
+  para abrir los enlaces del terminal (hipervínculos/URL 003 + More-menu) sin salir de la app.
+- Motor decidido con el mantenedor: **GeckoView release arm64-v8a**, pin
+  `159.0.20261022150525`. Aprendizaje clave: los `maven-metadata.xml` de
+  maven.mozilla.org están desincronizados (dicen que el release acabó en 99/2022), pero el
+  canal release SÍ publicó hasta 159 (oct-2026) — verificar por POM/AAR directo, no por
+  metadata. AAR arm64 = 87 MiB comprimido; el universal de 232 MiB está PROHIBIDO (RNF-1).
+- **Hecho T2 (F3 positivo):** AAR resuelve; el motor exige compileSdk 37.2 y minSdk 26 →
+  enmienda aprobada (RNF-0): minSdk 24→26 + targetSdk 28 INTACTO; AGENTS.md ya dice minSdk
+  26. APK universal debug = 140.8 MB con libxul.so (154 MB) dentro. `./gradlew test` verde.
+- **Hecho T3:** `BrowserLogic.kt` (routeLink/normalizeUrlInput/tabLabel/nextSessionName,
+  puros) + `BrowserLogicTest`/`BrowserSessionsTest` (rojo→verde; quirk: los schemes se
+  normalizan a minúscula, RFC 3986 §3.1). Puerta `./gradlew test` completa verde.
+- **Hecho T4:** prefs `KEY_LINKS_INTERNAL_BROWSER` (on por defecto) + fila en Ajustes
+  (icono Public); de paso reparado `terminal_images` ausente en pt-rBR (crash latente).
+- **Hecho T5–T10:** sealed `Browser` + `createBrowserSession`; `BrowserController.kt`
+  (delegates verificados contra fuentes FF-159: `onLocationChange` 4-args,
+  `onNewSession` → `GeckoResult.fromValue(null)` tras rutar RF-8); `BrowserSessionHost`;
+  dispatch en `TermuxMainScreen`; ruteo canvas/More-menu vía `handleOpenLink`; legado
+  `TerminalView.onHyperlinkOpen(uri)` (default method → fallback ACTION_VIEW); licencia
+  MPL-2.0 en LicensesScreen. RF-1 enmendado: **la entrada de navegador vive en el drawer**
+  (el tab bar quedó como fila pura de pestañas).
+- **Verificación parcial del mantenedor (2026-10-28):** probado en dispositivo, funciona.
+  Falta el punto formal RNF-3 (procesos GV UID compartido + `dumpsys meminfo`).
+- **T12 hecho (solo commits, enmienda del mantenedor):** árbol dividido en
+  `a3d53f26` (build+spec), `be451b10` (lógica+tests), `824c013f` (prefs/
+  ajustes/licencia ×3 locales), `efad182f` (motor+UI+drawer+ruteo). Sin
+  changelog ni update-site: queda para la release 3.1 general.
+- Pendiente: cerrar T11 completo (RNF-3 formal) y re-ejecutar
+  `./gradlew :app:assembleRelease` (R8) — corre en segundo plano.
 
 ## Arquitectura y reglas prácticas
 - `terminal-emulator` → `terminal-view` → `termux-shared` → `app`; `filemanager` →

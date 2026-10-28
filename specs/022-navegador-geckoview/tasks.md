@@ -91,7 +91,7 @@ verde → marcar. F1–F3 antes de tocar UI (ver plan).
   - Hecho cuando: checklist de "Criterios de finalización" de spec.md completa;
     memoria y resultados registrados en spec.md.
 
-- [ ] **T12. Solo commits.** *(2026-10-28: el mantenedor decide — T12 se reduce a
+- [x] **T12. Solo commits.** *(2026-10-28: el mantenedor decide — T12 se reduce a
   Conventional Commits del código; sin `CHANGELOG.md` ni flujo web/update-site, que
   quedan para la release general de la 3.1.)*
   - Tipo `Added` (capitalizado), commits diferenciados por capa (build/prefs/lógica/
