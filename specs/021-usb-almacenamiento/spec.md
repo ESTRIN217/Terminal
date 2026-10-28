@@ -27,17 +27,18 @@ El objetivo de esta spec es doble:
    pendrives conectados con formato "lsblk-ish", **leyendo snapshots** y **sin tocar sysfs real**,
    en modo informativo (no consulta el estado real del kernel del host).
 
-2. **Acceso a ficheros (RF-2):** un puente host↔guest para listar/leer/escribir/copiar ficheros
-   del volumen montado por el framework, con una herramienta de usuario `terminal-usb-cp` en el
-   guest. Se incluye un **experimento de factibilidad** documentada para ver si proot admite un
-   bind transparente `"-b /storage/XXXX-YYYY:/root/usb"`; si funciona, se prefiere ese cómodo
-   acceso directo; si falla, el puente de ficheros es la vía.
+2. **Acceso a ficheros (RF-4):** un wrapper fino `terminal-usb-cp` en el guest para
+   listar/leer/escribir/copiar ficheros del volumen montado por el framework, vía el bind
+   proot ya existente de `/storage`. Se incluye un **experimento de factibilidad** documentada
+   para ver si proot admite un bind transparente `"-b /storage/XXXX-YYYY:/root/usb"`; RESUELTO
+   por infraestructura existente — el bind global `-b /storage:$HOME/storage` cumple el
+   objetivo (ver "Resultados de factibilidad"); el puente de ficheros queda descartado.
 
 **Fallback de factibilidad:** si (1) el framework Android no monta el pendrive en el hardware
-objeto de pruebas o (2) `/storage/XXXX-YYYY` no es accesible aun con el permiso de storage del
-filemanager dando consentimiento mediante el diálogo/plantilla SAF, entonces RF-2 queda
-descartado en el dispositivo y la spec se **reescopa** a RF-1 + documentación de limitaciones
-(no código muerto ni caminos que no se puedan verificar).
+objetivo de pruebas o (2) `/storage/XXXX-YYYY` no es accesible aun con el permiso de storage del
+filemanager, entonces RF-4 queda descartado en el dispositivo y la spec se **reescopa** a RF-1 +
+documentación de limitaciones (no código muerto ni caminos que no se puedan verificar).
+**Veredicto (2026-10-27):** ambos positivos; no hay reescopo.
 
 ## Usuarios
 
@@ -77,10 +78,12 @@ descartado en el dispositivo y la spec se **reescopa** a RF-1 + documentación d
 ## Requisitos funcionales (EARS)
 
 - **RF-1 (lsblk informativo):** CUANDO el usuario ejecute `lsblk` en la sesión Debian,
-  EL SISTEMA mostrará un inventario "lsblk-ish" de los pendrives conocidos por el snapshot
-  (`/tmp/usb_devices.json`), **sin intentar leer sysfs real del host**: formato de tabla
-  `NAME / RIDGE / CAPACITY / TYPE / MOUNTPOINT` con al menos nombre (sda-like), interfaz
-  (`mass-storage` si clase USB = 0x08), y nota de limitación (`-` en mountpoint si no montyado).
+  EL SISTEMA mostrará un inventario "lsblk-ish" **sin intentar leer sysfs real del host**:
+  tabla `NAME SIZE TYPE MOUNTPOINT` con los volúmenes externos montados listados EN VIVO del
+  `/proc/mounts` del guest (`type=volume`, capacidad medida con `statvfs` sobre el bind,
+  `size=-` si no medible), más las filas de hardware USB del snapshot (`/tmp/usb_devices.json`,
+  p. ej. `sda` desmontado como `mass-storage`); deduplicado por volumen y con `-` en mountpoint
+  si no está montado.
 
 - **RF-2 (aviso de limitación):** SI el snapshot está vacío o `/sys/dev/block` sigue siendo
   imposible de leer, ENTONCES `lsblk` terminará con código 0, imprimirá el inventario
@@ -92,31 +95,45 @@ descartado en el dispositivo y la spec se **reescopa** a RF-1 + documentación d
   `/usr/local/bin/` con el mecanismo `usbToolsNeedRefresh` de la 020, sin romper los
   binarios ya instalados de la 020.
 
-- **RF-4 (acceso SAF):** CUANDO un pendrive esté montado por el framework Android
-  (`/storage/XXXX-YYYY`) y los permisos de storage del app estén concedidos,
-  EL SISTEMA proveerá en el guest `terminal-usb-cp` con subcomandos:
-  - `list [path]` : listing de ficheros del volumen (ruta, tamaño, tipo).
-  - `read <src> [dst]` : copiar fichero del volumen al guest (vía stdout si sin dst, o F a file).
+- **RF-4 (acceso a ficheros vía bind — definitiva tras factibilidad):** CUANDO un volumen
+  externo esté montado por el framework Android (`/storage/XXXX-YYYY`) y sea visible por el
+  bind del guest (`/root/storage/<ID>`), EL SISTEMA proveerá en el guest `terminal-usb-cp`
+  con subcomandos y selector de volumen opcional en cualquier posición
+  (`terminal-usb-cp [ID] ...`):
+  - `list [path]` : listado `ls -l` del path del volumen.
+  - `read <src> [dst]` : copiar fichero del volumen al guest (stdout si no hay dst).
   - `write <src> [dst]` : copiar fichero del guest al volumen.
+  Sin sobrescribir en silencio: si el destino existe, mensaje a stderr y exit 3; rutas con
+  `..` que escapen del volumen se rechazan (exit 2). El puente de ficheros de sockets queda
+  DESCARTADO (descartado por F1, ver "Resultados de factibilidad").
 
-- **RF-5 (experimento bind transparente):** ANTES de que se implante definitivamente el
-  puente de ficheros, EL SISTEMA documentará el resultado del experimento de factibilidad de
-  proot con `"-b /storage/XXXX-YYYY:/root/usb"`:
-  - SI el bind funciona, la vía preferida será el bind directo (documentar variables y
-    limitaciones de escritura vs. `DocumentsContract`), y `terminal-usb-cp` será un wrapper
-    fino alrededor de `cp`/`mv` sobre `/root/usb` (no cifrado).
+- **RF-5 (experimento bind transparente):** ANTES de decidir la vía de T8, EL SISTEMA
+  documentará el resultado del experimento de factibilidad de proot con
+  `"-b /storage/XXXX-YYYY:/root/usb"`:
+  - SI el bind funciona, la vía preferida será el bind directo y `terminal-usb-cp` será un
+    wrapper fino alrededor de `cp`/`mv` (no cifrado).
   - SI falla, la vía será el puente de ficheros (RF-4), y la limitación del bind se
-  documentará en `wiki/limitaciones.html`.
+    documentará en `wiki/limitaciones.html`.
+  **Veredicto (2026-10-27):** el bind global `-b /storage:$HOME/storage` ya existente cumple
+  el objetivo por semejanza del experimento (`/root/storage/<ID>`), luego vía (a) bind;
+  `terminal-usb-cp` opera sobre `/root/storage/<ID>/...` (no `/root/usb`).
 
 - **RF-6 (sincronización de snapshots):** MIENTRAS haya sesión activa y se enganche o
-  desenganche un pendrine, EL SISTEMA actualizará `/tmp/usb_devices.json`/`.txt` con las
-  pistas de `StorageManager` además de las de `UsbManager` usadas hoy (VID/PID/interfaz
-  0x08 y nombre de volumen), en los ciclos `ATTACHED/DETACHED` de la 020.
+  desenganche un pendrive, EL SISTEMA actualizará `/tmp/usb_devices.json`/`.txt` en los ciclos
+  `ATTACHED/DETACHED` de la 020, con las colas de clasificación de interfaz 0x08 y los
+  mountpoints de volúmenes leídos del **`/proc/mounts` del host** (parseo puro
+  `extractVolumeMountpoints`; SELinux deniega el `readdir` de `/storage`), y además **refrescará
+  el snapshot en cada conexión al bridge** (just-in-time: el framework monta el volumen
+  DESPUÉS del attach; `ACTION_MEDIA_MOUNTED` está restringido). Las herramientas guest
+  (`lsblk`/`terminal-usb-cp`) leen los volúmenes en vivo del `/proc/mounts` del guest
+  (T8.2: ver "Resultados de factibilidad").
 
 ## Requisitos no funcionales
 
 - **RNF-1:** Sin root, sin parches de kernel ni SELinux permissive; todo va sobre APIs
-  públicas de Android (`UsbManager`, `StorageManager`, `DocumentsContract`/`java.io.File`).
+  públicas de Android (`UsbManager` heredado de la 020, `/proc/mounts`, `java.io.File`).
+  `DocumentsContract`/`StorageManager` no se necesitan (acceso directo al path del volumen
+  verificado en dispositivo, F2).
 
 - **RNF-2:** Parsing/formato (lineas lsblk-like, listado de ficheros, paths de volumen) en
   funciones puras con tests JUnit que corran sin el SDK de Android
@@ -130,13 +147,15 @@ descartado en el dispositivo y la spec se **reescopa** a RF-1 + documentación d
 
 - Pendrive con formato no soportado por Android (NTFS, ext4, LUKS): el framework no lo monta
   (no aparece ni en `StorageManager`, ni en `/storage/`), pero sí en `UsbManager` (interfaz
-  0x08): lsblk lo muestra como `mass-storage` que no puede montando una nota de limitación.
-- Pendrive desconectado entre snapshot y ejecución de `lsblk`: lsblk cierra con código 0
-  y muestra el estado del último inventario (es un snapshot, no estado vivo).
-- `/storage/XXXX-YYYY` con rutas con espacios/UTF-8: el puente de ficheros usa nombres
-  codificados (o JSON base64-like) para no romper por espacios.
-- Escritura en el volumen cuando el soporte FAT32 sin `DocumentsContract` falla (si
-  `java.io.File` no puede escribir en `/storage/XXXX-YYYY`): se muestra error descriptivo.
+  0x08): `lsblk` lo muestra como fila de hardware `mass-storage` con `mountpoint=-` y nota
+  de limitación; `terminal-usb-cp` no lo puede operar (sin bind de volumen montado).
+- Pendrive desconectado entre snapshot y ejecución de `lsblk`: `terminal-usb-cp` responde con
+  "volume not mounted" (exit 2); `lsblk` deja de listar sus filas en vivo.
+- `/storage/XXXX-YYYY` con rutas con espacios/UTF-8: los paths se pasan como argumentos
+  posicionales de `terminal-usb-cp` (quoting del shell) y se componen con normalización
+  dentro del volumen; el puente de ficheros con nombres codificados quedó descartado con la vía.
+- Escritura en el volumen cuando FAT32 sin `DocumentsContract` falla (si `java.io.File`
+  no puede escribir en `/storage/XXXX-YYYY`): se muestra error descriptivo.
 - Si (1) o (2) del fallback de factibilidad falla en dispositivo: **la spec se reescopa en frío**
   a RF-1 + limitaciones, quitando RF-4/RF-5 (no hay código no verifisable).
 
@@ -152,9 +171,11 @@ descartado en el dispositivo y la spec se **reescopa** a RF-1 + documentación d
 
 1. En el guest sin root, `lsblk` no produce `failed to access sysfs directory ... Permission
    denied`: muestra el inventario snapshot + nota de limitación, exit 0.
-2. `terminal-usb-cp list` lista los ficheros del volumen del pendrive (via bind proot o via
-   puente, según el experimento RF-5); `read`/`write` copian ficheros de tamaño grande
-   (≥ 10 MB) sin corrupción.
+2. `terminal-usb-cp list` lista los ficheros del volumen del pendrive (vía bind, según el
+   experimento RF-5 cerrado); `read`/`write` copian ficheros de tamaño grande (≥ 10 MB) sin
+   corrupción. **Estado (2026-10-28):** verificado round-trip directo por el bind (dd 10 MiB +
+   md5) y del wrapper con fichero pequeño; la pasada ≥10 MB **a través del wrapper** queda
+   como verificación pendiente del mantenedor (la ruta de código es la misma: `cp` sobre el bind).
 3. Los binarios `lsblk`/`terminal-usb-cp` se instalan/refrescan con el mecanismo
    `usbToolsNeedRefresh` sin romper los de la 020 (byte-compare).
 4. El resultado del experimento de proot `-b /storage/XXXX-YYYY:/root/usb` está documentado
@@ -220,7 +241,8 @@ Verificados en guest Debian por el mantenedor con un pendrive Generic Flash Disk
   `/storage/XXXX-YYYY`); el snapshot queda solo para las filas de hardware USB
   (nombre/capacidad) de `lsblk`, que ahora deduplican contra los `volumeId` del
   snapshot para no repetir. El mapeo no clava el volumen al pendrive: con varios
-  volúmenes se retratan como filas separadas `type=volume` (`size=-`, montado en
+  volúmenes se retratan como filas separadas `type=volume` (tamaño en vivo por `statvfs`
+  sobre el bind, `-` si no medible; montado en
   `/root/storage/<ID>`). En `terminal-usb-cp` el descubrimiento de volúmenes
   pasa a ser en vivo de `/proc/mounts` y se **elimina** el ping al bridge y el
   fallback al snapshot: el refresh JIT del snapshot (RF-6 enmienda) sigue

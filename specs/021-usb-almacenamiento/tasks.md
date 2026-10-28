@@ -53,7 +53,8 @@ negativo, la spec se reescopa (RF-4/RF-5 fuera) y las tareas T5+ no se marcan.
 
 - [x] **T8.2. Fix en dispositivo: herramientas guest leen volúmenes en vivo del
       `/proc/mounts` del guest.** RF-1, RF-4
-  - Hecho cuando: `lsblk` añade filas en vivo (`type=volume`, `size=-`,
+  - Hecho cuando: `lsblk` añade filas en vivo (`type=volume`, tamaño en vivo por
+    `statvfs` sobre el bind, `-` si no medible,
     `/root/storage/<ID>`) parseando `/proc/mounts` del guest con deduplicado
     contra el snapshot (microSD visible, sin colgarla del pendrive); y
     `terminal-usb-cp` descubre volúmenes en vivo de `/proc/mounts` (se elimina
