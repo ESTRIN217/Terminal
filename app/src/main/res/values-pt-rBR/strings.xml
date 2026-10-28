@@ -312,6 +312,11 @@
     <!-- Settings: terminal (Spec 003, RF-11; catches up with the EN/es sections) -->
     <string name="terminal_hyperlinks">Hiperlinks de terminal [Experimental]</string>
     <string name="terminal_hyperlinks_desc">Sublinhe os links OSC 8 e as URLs impressas e abra-os ao tocar</string>
+    <!-- Reposta da 022: terminal_images faltava em pt-rBR (crash de recursos no appholder da GUI) -->
+    <string name="terminal_images">Imagens de terminal</string>
+    <string name="terminal_images_desc">Mostra imagens em linha (OSC 1337 / kitty graphics)</string>
+    <string name="links_internal_browser">Abrir links no app</string>
+    <string name="links_internal_browser_desc">Abre os links do terminal no navegador interno em vez do navegador do sistema</string>
 
     <!-- GPU status panel (Spec 011, RF-2/RF-3/RF-5/RF-6). The keys map the
          GpuDetectionLibrary.STATE_KEY_* / REASON_* constants. -->
@@ -359,6 +364,20 @@
     <string name="x11_no_server_title">Nenhum servidor X em execução</string>
     <string name="x11_no_server_body">Toque em “Iniciar o servidor X” para lançar o companion pelo próprio app.</string>
     <string name="x11_no_server_hint">O serviço iniciado assim vive em seu próprio processo; você pode fechar esta aba quando quiser sem pará-lo.</string>
+    <!-- Abas de navegador (Spec 022) -->
+    <string name="action_open_browser">Navegador</string>
+    <string name="browser_session_default_name">Navegador</string>
+    <string name="browser_urlbar_hint">Digite um endereço (https:// fica implícito)</string>
+    <string name="browser_urlbar_desc">Barra de endereços</string>
+    <string name="browser_nav_back_desc">Voltar</string>
+    <string name="browser_nav_forward_desc">Avançar</string>
+    <string name="browser_nav_reload_desc">Recarregar</string>
+    <string name="browser_error_title">Não foi possível carregar a página</string>
+    <string name="browser_error_body">A página falhou dentro do navegador interno. Você pode retentar o carregamento ou abri-la no navegador do sistema.</string>
+    <string name="browser_error_retry">Tentar novamente</string>
+    <string name="browser_error_open_external">Abrir no navegador do sistema</string>
+    <string name="license_geckoview">Licença Pública da Mozilla 2.0</string>
+    <string name="license_geckoview_detail">Motor do navegador interno (GeckoView)</string>
     <string name="x11_start_server">Iniciar o servidor X</string>
     <string name="x11_start_server_failed">Não foi possível iniciar o servidor X: %1$s</string>
     <string name="x11_start_server_sent">Companion em execução; aguardando o display…</string>

@@ -194,6 +194,14 @@ public final class TermuxPreferenceConstants {
         public static final String KEY_TERMINAL_IMAGES = "terminal_images";
         public static final boolean DEFAULT_VALUE_TERMINAL_IMAGES = true;
 
+        /**
+         * Defines the key for whether terminal and More-menu links open in the in-app
+         * GeckoView browser tab (spec 022, RF-4/RF-5). Default on; "off" keeps the
+         * previous system ACTION_VIEW behavior.
+         */
+        public static final String KEY_LINKS_INTERNAL_BROWSER = "links_internal_browser";
+        public static final boolean DEFAULT_VALUE_LINKS_INTERNAL_BROWSER = true;
+
 
         /**
          * Defines the key for whether the display is locked to 60 Hz (battery saving)

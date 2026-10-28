@@ -22,6 +22,7 @@ data class SettingsUiState(
     val nativeComposeRenderer: Boolean = false,
     val terminalHyperlinks: Boolean = true,
     val terminalImages: Boolean = true,
+    val linksInternalBrowser: Boolean = true,
     val force60Hz: Boolean = false,
     val logLevel: Int = 1,
     val terminalViewKeyLogging: Boolean = false,

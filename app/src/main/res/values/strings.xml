@@ -109,6 +109,20 @@
     <string name="x11_session_default_name">X11</string>
     <string name="x11_no_server_title">No X server is running</string>
     <string name="x11_no_server_body">Tap “Start the X server” to launch the companion from the app.</string>
+    <!-- Spec 022: browser session tabs -->
+    <string name="action_open_browser">Browser</string>
+    <string name="browser_session_default_name">Browser</string>
+    <string name="browser_urlbar_hint">Type an address (https:// is implied)</string>
+    <string name="browser_urlbar_desc">Address bar</string>
+    <string name="browser_nav_back_desc">Go back</string>
+    <string name="browser_nav_forward_desc">Go forward</string>
+    <string name="browser_nav_reload_desc">Reload</string>
+    <string name="browser_error_title">Could not load the page</string>
+    <string name="browser_error_body">The page failed inside the in-app browser. You can retry the load or open it in the system browser.</string>
+    <string name="browser_error_retry">Retry</string>
+    <string name="browser_error_open_external">Open in system browser</string>
+    <string name="license_geckoview">Mozilla Public License 2.0</string>
+    <string name="license_geckoview_detail">In-app browser engine (GeckoView)</string>
     <string name="x11_no_server_hint">Services started this way live in their own process; close this tab any time without stopping them.</string>
     <string name="x11_start_server">Start the X server</string>
     <string name="x11_start_server_failed">Could not start the X server: %1$s</string>
@@ -411,6 +425,8 @@
     <string name="terminal_hyperlinks_desc">Underline OSC 8 links and printed URLs, and open them on tap</string>
     <string name="terminal_images">Terminal images [Experimental]</string>
     <string name="terminal_images_desc">Show inline images (OSC 1337 / kitty graphics)</string>
+    <string name="links_internal_browser">Open links in the app</string>
+    <string name="links_internal_browser_desc">Open terminal links in the in-app browser instead of the system browser</string>
     <string name="force_60hz">Force 60 Hz (battery)</string>
     <string name="force_60hz_desc">Limit the display to 60 Hz instead of the maximum refresh rate</string>
     <string name="save_to_a_files">Save to a files</string>

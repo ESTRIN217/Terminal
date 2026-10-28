@@ -66,6 +66,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 nativeComposeRenderer = p.isNativeComposeRendererEnabled(),
                 terminalHyperlinks = p.isTerminalHyperlinksEnabled(),
                 terminalImages = p.isTerminalImagesEnabled(),
+                linksInternalBrowser = p.isLinksInternalBrowserEnabled(),
                 force60Hz = p.shouldForce60Hz(),
                 logLevel = p.getLogLevel(),
                 terminalViewKeyLogging = p.isTerminalViewKeyLoggingEnabled(),
@@ -151,6 +152,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setTerminalImages(value: Boolean) {
         prefs?.setTerminalImagesEnabled(value)
         _uiState.update { it.copy(terminalImages = value) }
+    }
+
+    fun setLinksInternalBrowser(value: Boolean) {
+        prefs?.setLinksInternalBrowserEnabled(value)
+        _uiState.update { it.copy(linksInternalBrowser = value) }
     }
 
     fun setForce60Hz(value: Boolean) {

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material.icons.filled.Smartphone
@@ -200,6 +201,13 @@ fun SettingsScreen(
                     icon = Icons.Default.Image,
                     checked = state.terminalImages,
                     onCheckedChange = viewModel::setTerminalImages
+                )
+                SettingsSwitchTile(
+                    title = stringResource(R.string.links_internal_browser),
+                    subtitle = stringResource(R.string.links_internal_browser_desc),
+                    icon = Icons.Default.Public,
+                    checked = state.linksInternalBrowser,
+                    onCheckedChange = viewModel::setLinksInternalBrowser
                 )
                 SettingsSwitchTile(
                     title = stringResource(R.string.force_60hz),

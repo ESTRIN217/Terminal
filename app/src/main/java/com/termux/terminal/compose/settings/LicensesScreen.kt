@@ -59,6 +59,12 @@ private fun licenses(): List<LicenseInfo> = listOf(
         name = stringResource(R.string.license_gplv2_classpath),
         detail = stringResource(R.string.license_openjdk),
         url = "https://openjdk.org/legal/gplv2+ce.html"
+    ),
+    // Spec 022 (RF-11): the embedded browser engine.
+    LicenseInfo(
+        name = stringResource(R.string.license_geckoview),
+        detail = stringResource(R.string.license_geckoview_detail),
+        url = "https://github.com/mozilla/gecko-dev/blob/master/LICENSE"
     )
 )
 

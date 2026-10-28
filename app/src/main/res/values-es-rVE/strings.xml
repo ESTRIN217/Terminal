@@ -111,6 +111,20 @@
         <string name="x11_no_server_title">No hay servidor X en ejecución</string>
         <string name="x11_no_server_body">Pulsa «Iniciar el servidor X» para lanzar el companion desde la app.</string>
         <string name="x11_no_server_hint">El servicio arrancado así vive en su propio proceso; puedes cerrar esta pestaña cuando quieras sin detenerlo.</string>
+        <!-- Spec 022: pestañas de sesión de navegador -->
+        <string name="action_open_browser">Navegador</string>
+        <string name="browser_session_default_name">Navegador</string>
+        <string name="browser_urlbar_hint">Escribe una dirección (https:// es implícito)</string>
+        <string name="browser_urlbar_desc">Barra de direcciones</string>
+        <string name="browser_nav_back_desc">Ir atrás</string>
+        <string name="browser_nav_forward_desc">Ir adelante</string>
+        <string name="browser_nav_reload_desc">Recargar</string>
+        <string name="browser_error_title">No se pudo cargar la página</string>
+        <string name="browser_error_body">La página falló dentro del navegador interno. Puedes reintentar la carga o abrirla en el navegador del sistema.</string>
+        <string name="browser_error_retry">Reintentar</string>
+        <string name="browser_error_open_external">Abrir en navegador externo</string>
+        <string name="license_geckoview">Mozilla Public License 2.0</string>
+        <string name="license_geckoview_detail">Motor del navegador interno (GeckoView)</string>
         <string name="x11_start_server">Iniciar el servidor X</string>
         <string name="x11_start_server_failed">No se pudo iniciar el servidor X: %1$s</string>
         <string name="x11_start_server_sent">Companion en ejecución; esperando el display…</string>
@@ -402,6 +416,8 @@
     <string name="terminal_hyperlinks_desc">Subraya los enlaces OSC 8 y las URLs impresas, y ábrelos al tocarlos</string>
     <string name="terminal_images">Imágenes de terminal [Experimental]</string>
     <string name="terminal_images_desc">Muestra imágenes en línea (OSC 1337 / kitty graphics)</string>
+    <string name="links_internal_browser">Abrir enlaces en la app</string>
+    <string name="links_internal_browser_desc">Abre los enlaces de la terminal en el navegador interno en lugar del navegador del sistema</string>
     <string name="force_60hz">Forzar 60 Hz (batería)</string>
     <string name="force_60hz_desc">Limita la pantalla a 60 Hz en lugar de la tasa de refresco máxima</string>
     <string name="toggle_keyboard">Alternar teclado</string>

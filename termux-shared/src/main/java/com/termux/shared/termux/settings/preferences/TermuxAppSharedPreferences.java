@@ -317,6 +317,25 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     }
 
     /**
+     * Whether terminal and More-menu links open in the in-app GeckoView browser tab
+     * (spec 022). Default on; false keeps the previous external ACTION_VIEW behavior.
+     *
+     * @return {@code true} if links open inside the app.
+     */
+    public boolean isLinksInternalBrowserEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_LINKS_INTERNAL_BROWSER, TERMUX_APP.DEFAULT_VALUE_LINKS_INTERNAL_BROWSER);
+    }
+
+    /**
+     * Persist the in-app browser link routing switch (spec 022).
+     *
+     * @param value whether links open inside the app
+     */
+    public void setLinksInternalBrowserEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_LINKS_INTERNAL_BROWSER, value, false);
+    }
+
+    /**
      * Whether inline terminal images (OSC 1337 / kitty) are painted.
      *
      * @return true when images are enabled (default true)
