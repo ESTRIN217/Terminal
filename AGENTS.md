@@ -95,7 +95,8 @@ app  →  termux-shared  →  terminal-view  →  terminal-emulator
 
 - **When touching a persisted-prefs block, keep EVERY existing key** — rewriting the serializer and dropping one key silently loses the setting. Seen in spec 008: `show_hidden` was lost when `persistPrefs()` was refactored. Current file-manager keys: `sort_option`, `sort_ascending`, `show_hidden`, `folders_first`, `view_mode`, `favorites`, `folder:<path>:*`.
 - **targetSdk 28 is intentional** — raising it triggers scoped storage and other restrictions that break file access model.
-- **minSdk 24** — proot uses `getifaddrs` (Bionic API 24+). Native code is compiled against android-28.
+- **minSdk 26** (spec 022 RNF-0, enmienda 2026-10-28: GV release 159 lo exige; antes 24
+  por proot `getifaddrs` Bionic, que sigue OK en 26). Native code is compiled against android-28.
 - **ABI splits** are enabled by default for debug builds (`arm64-v8a` + universal). Controlled by `TERMUX_SPLIT_APKS_FOR_DEBUG_BUILDS` env var.
 - **arm64-v8a only** — proot binary (loader + AArch64 assembly) is hardcoded for arm64. No other ABIs are supported at runtime.
 - **proot build pipeline** — CMake builds a multi-stage proot binary (loader → strip → objcopy → loader-info → final proot), staged to `app/src/main/assets/arm64-v8a/proot`. `merge.*Assets` tasks depend on `buildCMake` to ensure the binary is in the APK on first build.

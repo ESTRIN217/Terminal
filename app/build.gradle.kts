@@ -21,7 +21,9 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.termux"
 
-    compileSdk { version = release(37) { minorApiLevel = 1 } }
+    // Spec 022: GeckoView 159 exige compilar contra android-37.2 (checkAarMetadata).
+    // Solo compileSdk; targetSdk sigue en 28 (intencional, ver AGENTS.md).
+    compileSdk { version = release(37) { minorApiLevel = 2 } }
     ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: providers.gradleProperty("ndkVersion").orNull ?: ""
 
     dependencies {
@@ -43,11 +45,16 @@ android {
         implementation(project(":filemanager"))
         // Spec 014: servidor X11 (verificación + cliente LorieView en pestañas).
         implementation(project(":termux-x11-lorie"))
+        // Spec 022: motor GeckoView del navegador interno (solo app; las librerías
+        // Java puras NUNCA lo ven. RNF-1 del plan).
+        implementation(libs.geckoview)
     }
 
     defaultConfig {
         applicationId = "com.estrin217.terminal"
-        minSdk = providers.gradleProperty("minSdkVersion").orNull?.toInt() ?: 24
+        // Spec 022 RNF-0 (enmienda): minSdk 26 — GV release 159 lo exige
+        // (antes 24 por proot/getifaddrs, que sigue satisfecho con 26).
+        minSdk = providers.gradleProperty("minSdkVersion").orNull?.toInt() ?: 26
         targetSdk = providers.gradleProperty("targetSdkVersion").orNull?.toInt() ?: 28
         versionCode = 122
         val verName = appVersionName.ifEmpty { "3.0.0" }

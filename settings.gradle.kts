@@ -12,6 +12,9 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = uri("https://jitpack.io") }
+        // Spec 022: distribuye el motor GeckoView del release de Mozilla
+        // (maven-metadata desincronizado; POM/AAR verificado directo)
+        maven { url = uri("https://maven.mozilla.org/maven2/") }
     }
 }
 

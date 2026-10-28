@@ -28,6 +28,11 @@ xz = "1.10"
 termuxAmLibrary = "v2.0.0"
 coil = "3.6.3"
 
+# Spec 022: motor GeckoView (release arm64-v8a, pin aprobado en spec.md RF-12;
+# verificado contra maven.mozilla.org el 2026-10-28). Pin textual EXACTO, nunca
+# rangos dinámicos (RF-12).
+geckoview = "159.0.20261022150525"
+
 # Desugaring
 desugarJdkLibs = "2.1.5"
 
@@ -76,6 +81,10 @@ xz = { group = "org.tukaani", name = "xz", version.ref = "xz" }
 termux-am-library = { group = "com.termux", name = "termux-am-library", version.ref = "termuxAmLibrary" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
+
+# Spec 022: navegadores internas (motor self-contained; artefacto arm64-v8a del
+# fork arm64-only — el universal de 232 MiB queda PROHIBIDO, RNF-1)
+geckoview = { group = "org.mozilla.geckoview", name = "geckoview-arm64-v8a", version.ref = "geckoview" }
 
 # Desugaring
 desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
