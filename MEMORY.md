@@ -88,8 +88,11 @@
   `a3d53f26` (build+spec), `be451b10` (lógica+tests), `824c013f` (prefs/
   ajustes/licencia ×3 locales), `efad182f` (motor+UI+drawer+ruteo). Sin
   changelog ni update-site: queda para la release 3.1 general.
-- Pendiente: cerrar T11 completo (RNF-3 formal) y re-ejecutar
-  `./gradlew :app:assembleRelease` (R8) — corre en segundo plano.
+- Pendiente: cerrar T11 completo (RNF-3 formal).
+- **`assembleRelease` (R8) NO verificado (2026-10-29):** 3 intentos agotan la
+  RAM del entorno (OOM); pospuesto — reintentar con heap Gradle reducido o en
+  CI. No dar por sana la ofuscación del AAR de GV hasta entonces.
+- Sin changelog/update-site: quedan para la release 3.1 general.
 
 ## Arquitectura y reglas prácticas
 - `terminal-emulator` → `terminal-view` → `termux-shared` → `app`; `filemanager` →

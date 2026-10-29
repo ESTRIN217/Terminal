@@ -98,3 +98,8 @@ verde → marcar. F1–F3 antes de tocar UI (ver plan).
     UI/drawer) según partición acordada; `MEMORY.md` final incluido.
   - Hecho cuando: árbol de commits limpio en la rama; `MEMORY.md` actualizado;
     spec pasa a "implementada y verificada" solo con T11/T12 completos.
+  - **Nota 2026-10-29:** `:app:assembleRelease` (R8 con libxul) NO VERIFICADO
+    por el momento: 3 intentos seguidos agotan toda la RAM del entorno de
+    build (OOM). Posponer; si se reintenta, con heap Gradle reducido o en la
+    CI del repo. El debug (assembleDebug) sí compiló con el motor en el APK
+    (T2/F3).
