@@ -57,6 +57,16 @@
     <string name="msg_compress_failed">Error al comprimir</string>
     <string name="msg_compress_collision">%1$s ya existe</string>
     <string name="msg_compress_invalid_name">Nombre de archivo no válido</string>
+
+    <!-- spec 023: ejecutar en la terminal / descomprimir -->
+    <string name="action_run_in_terminal">Ejecutar en la terminal</string>
+    <string name="action_extract">Descomprimir</string>
+    <string name="extract_password_title">Descomprimir %1$s</string>
+    <string name="msg_extract_done">Descomprimido: %1$s</string>
+    <string name="msg_extract_exists">%1$s ya existe</string>
+    <string name="msg_extract_failed">Error al descomprimir %1$s</string>
+    <string name="msg_extract_unsafe_entry">Abortado: entrada no segura %1$s</string>
+    <string name="msg_file_not_executable">El archivo no es ejecutable y no hay intérprete disponible en el rootfs</string>
     <string name="msg_error_rename">Error al renombrar</string>
     <string name="msg_path_copied">Ruta copiada al portapapeles</string>
     <string name="msg_paths_copied">%1$d rutas copiadas al portapapeles</string>

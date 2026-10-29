@@ -6,6 +6,8 @@ import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.estrin217.filemanager.ArchiveCreator
+import com.estrin217.filemanager.ArchiveExtractor
+import com.estrin217.filemanager.ExtractionOutcome
 import com.estrin217.filemanager.FileOperationsHelper
 import com.estrin217.filemanager.FileSortOption
 import com.estrin217.filemanager.R
@@ -1053,6 +1055,94 @@ class FileManagerViewModel(
         _uiState.update {
             it.copy(statusMessage = getApplication<Application>()
                 .getString(R.string.msg_compress_failed))
+        }
+    }
+
+    /**
+     * Extracts [file] into the open folder off the main thread (spec 023,
+     * RF-6..RF-8): the format/target decision comes from {@link ExtractPolicy}
+     * before any disk read; an existing destination is a refused collision
+     * (RNF-5); containers create `dir/<target>/`, loose compressors write the
+     * single target file. A `.7z` without the password it needs reports
+     * [ExtractionOutcome.PasswordRequired], after which the screen asks once
+     * and invokes this again with [password]. Busy covers the whole write and
+     * the listing refreshes afterwards.
+     *
+     * @param file The item the menu acted on (extension decides format).
+     * @param password Optional; honored by `.7z` and re-set after the dialog.
+     * @param onResult Invoked on the main thread with the outcome.
+     */
+    fun extractItem(file: File, password: CharArray?, onResult: (ExtractionOutcome?) -> Unit) {
+        val parsed = ExtractPolicy.parse(file.name)
+        if (parsed == null) {
+            notifyExtractFailed(file.name)
+            return
+        }
+        val (format, target) = parsed
+        val base = when (target) {
+            is ExtractionTarget.Folder -> target.name
+            is ExtractionTarget.Single -> target.name
+        }
+        val destination = File(currentDir, base)
+        _uiState.update { it.copy(busy = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val outcome: ExtractionOutcome? = if (destination.exists()) {
+                // RNF-5: refuse before reading a single byte of the archive.
+                ExtractionOutcome.Collision(base)
+            } else when (target) {
+                is ExtractionTarget.Folder -> if (!destination.mkdirs()) {
+                    ExtractionOutcome.Failed
+                } else {
+                    ArchiveExtractor.extract(file, destination, format, password)
+                }
+                is ExtractionTarget.Single ->
+                    ArchiveExtractor.extract(file, destination, format, password)
+            }
+            withContext(Dispatchers.Main) {
+                when (outcome) {
+                    null -> notifyExtractDone(file.name)
+                    is ExtractionOutcome.Collision -> notifyExtractExists(outcome.destination)
+                    is ExtractionOutcome.UnsafeEntry -> notifyExtractUnsafe(outcome.entry)
+                    // PasswordRequired is silent here: the screen opens the
+                    // password dialog to run the single RF-8 retry.
+                    ExtractionOutcome.PasswordRequired, ExtractionOutcome.Failed ->
+                        notifyExtractFailed(file.name)
+                }
+                if (outcome != ExtractionOutcome.PasswordRequired) refresh()
+                onResult(outcome)
+            }
+        }
+    }
+
+    /** Posts the "extracted to <name>"-shaped status message (RF-6). */
+    fun notifyExtractDone(name: String) {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>()
+                .getString(R.string.msg_extract_done, name))
+        }
+    }
+
+    /** Posts the collision refusal for [name]'s destination (RF-6, RNF-5). */
+    fun notifyExtractExists(name: String) {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>()
+                .getString(R.string.msg_extract_exists, name))
+        }
+    }
+
+    /** Posts the extraction failure for [name] (RF-6, RF-8). */
+    fun notifyExtractFailed(name: String) {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>()
+                .getString(R.string.msg_extract_failed, name))
+        }
+    }
+
+    /** Posts the zip-slip refusal citing the offending [entry] (RF-7). */
+    fun notifyExtractUnsafe(entry: String) {
+        _uiState.update {
+            it.copy(statusMessage = getApplication<Application>()
+                .getString(R.string.msg_extract_unsafe_entry, entry))
         }
     }
 

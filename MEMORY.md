@@ -80,8 +80,22 @@
   (prefs/ajustes/licencia), `efad182f` (motor/UI/drawer) + bookkeeping.
 - Sin changelog/update-site: quedan para la release 3.1 general.
 
-## Doc limitaciones udev (2026-10-29)
-- Documentado en `wiki/limitaciones.html` + README § Limitaciones conocidas:
+## Spec 023 — Ejecutar en terminal y Descomprimir (2026-10-29)
+
+- Implementada (T1–T8), `./gradlew test` verde; pendiente verificación en
+  dispositivo por el mantenedor. Menú More: «Ejecutar en la terminal»
+  (archivos, tras Abrir con…, callback opcional `onRunInTerminal`, oculto sin
+  cablear) y «Descomprimir» (tras Comprimir…, solo formatos extraíbles).
+- Piezas: `ExtractPolicy` (formato+destino por nombre: contenedor → carpeta
+  `<base>/`, suelto gz/bz2/xz → fichero), `RunPolicy` (ejecutable → `./n`,
+  `.sh`/`.bash` → bash, `.py` → python3, comillas escapadas), `ArchiveExtractor`
+  (commons-compress: zip/tar+gz/bz2/xz/7z, zip-slip aborta y limpia el
+  destino). Colisión (destino existe) se rechaza sin leer el archivo (RNF-5).
+- Sin rar ni zip cifrado (fuera de alcance de la spec); sin dependencias nuevas.
+- 7z cifrado: reintento ÚNICO con contraseña (`DialogKind.EXTRACT_PASSWORD`);
+  errónea → aviso de fallo, sin bucle de diálogo.
+
+## Doc limitaciones udev (2026-10-29)- Documentado en `wiki/limitaciones.html` + README § Limitaciones conocidas:
   `udevadm control --reload-rules` (`No such file or directory`) y
   `systemd-hwdb update` (`Bad file descriptor`) son **esperados en proot**:
   no hay `udevd` (socket `/run/udev/control` no existe), sin uevents del kernel

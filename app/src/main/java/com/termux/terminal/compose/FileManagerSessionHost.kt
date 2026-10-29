@@ -48,6 +48,8 @@ import java.io.File
  * @param onCloseSession Callback when the tab should be closed (back at root / X button)
  * @param onOpenInTerminal Callback with the directory host path to open a terminal in
  * @param onEditFile Callback with the file host path to open in a rootfs editor
+ * @param onRunInTerminal Callback with the file host path to run in a rootfs terminal
+ * session (spec 023, RF-1..RF-4); null keeps the menu element hidden (008 precedent)
  * @param onNewFileManagerTab Callback to open an additional file manager tab (RF-10)
  * @param onCreateShortcut Callback to pin a launcher shortcut to the open folder (RF-16)
  * @param onCreateFileShortcut Callback to pin a launcher shortcut to a file (spec 009, RF-11)
@@ -59,6 +61,7 @@ fun FileManagerSessionHost(
     onCloseSession: () -> Unit,
     onOpenInTerminal: (String) -> Unit,
     onEditFile: (String) -> Unit,
+    onRunInTerminal: ((File) -> Unit)? = null,
     initialPath: String? = null,
     isActivePane: Boolean = true,
     onActivatePane: () -> Unit = {},
@@ -191,6 +194,7 @@ fun FileManagerSessionHost(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         onOpenInTerminal = { dir -> onOpenInTerminal(dir.absolutePath) },
         onEditFile = { file -> onEditFile(file.absolutePath) },
+        onRunInTerminal = { file -> onRunInTerminal?.invoke(file) },
         onNewFileManagerTab = onNewFileManagerTab,
         onCreateShortcut = onCreateShortcut,
         onCreateFileShortcut = onCreateFileShortcut,

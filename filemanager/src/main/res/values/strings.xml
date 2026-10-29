@@ -57,6 +57,16 @@
     <string name="msg_compress_failed">Compression failed</string>
     <string name="msg_compress_collision">%1$s already exists</string>
     <string name="msg_compress_invalid_name">Invalid archive name</string>
+
+    <!-- spec 023: run in terminal / extract -->
+    <string name="action_run_in_terminal">Run in terminal</string>
+    <string name="action_extract">Extract</string>
+    <string name="extract_password_title">Extract %1$s</string>
+    <string name="msg_extract_done">Extracted: %1$s</string>
+    <string name="msg_extract_exists">%1$s already exists</string>
+    <string name="msg_extract_failed">Failed to extract %1$s</string>
+    <string name="msg_extract_unsafe_entry">Aborted: unsafe archive entry %1$s</string>
+    <string name="msg_file_not_executable">File is not executable and no supported interpreter is available in the rootfs</string>
     <string name="msg_error_rename">Failed to rename</string>
     <string name="msg_path_copied">Path copied to clipboard</string>
     <string name="msg_paths_copied">%1$d paths copied to clipboard</string>

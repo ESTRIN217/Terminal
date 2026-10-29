@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FileCopy
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Refresh
@@ -59,6 +60,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SortByAlpha
@@ -126,6 +128,7 @@ import android.content.Context
 import com.estrin217.filemanager.FileTypeDetector
 import com.estrin217.filemanager.FileOperationsHelper
 import com.estrin217.filemanager.FileSortOption
+import com.estrin217.filemanager.ExtractionOutcome
 import com.estrin217.filemanager.R
 import com.termux.shared.termux.TermuxConstants
 import kotlinx.coroutines.launch
@@ -134,7 +137,7 @@ import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 
-private enum class DialogKind { NONE, NEW_FOLDER, NEW_FILE, NEW_SYMLINK, RENAME, DELETE, PROPERTIES, GO_TO, COMPRESS }
+private enum class DialogKind { NONE, NEW_FOLDER, NEW_FILE, NEW_SYMLINK, RENAME, DELETE, PROPERTIES, GO_TO, COMPRESS, EXTRACT_PASSWORD }
 
 /**
  * Expressive file manager screen. Ports all `FileManagerActivity`
@@ -163,7 +166,12 @@ fun FileManagerScreen(
      * App-side launcher shortcut pinning that opens one *file* with its
      * Android app (spec 009, RF-11); hidden while the host does not wire it.
      */
-    onCreateFileShortcut: ((File) -> Unit)? = null
+    onCreateFileShortcut: ((File) -> Unit)? = null,
+    /**
+     * App-side "Run in terminal" for one file (spec 023, RF-1..RF-4); the
+     * element hides while the host does not wire it (008 precedent).
+     */
+    onRunInTerminal: ((File) -> Unit)? = null
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -884,6 +892,29 @@ fun FileManagerScreen(
                                             }
                                         }
                                     } else null,
+                                    onRunInTerminal = if (onRunInTerminal != null) {
+                                        {
+                                            itemMenuFile = null
+                                            // Pre-checks (rootfs, MAX_SESSIONS,
+                                            // mappable path) are the host's, like
+                                            // the Rootfs editor flow (RF-2).
+                                            onRunInTerminal(file)
+                                        }
+                                    } else null,
+                                    canExtract = !file.isDirectory &&
+                                        ExtractPolicy.parse(file.name) != null,
+                                    onExtract = {
+                                        itemMenuFile = null
+                                        // RF-6: status messages per outcome come
+                                        // from the ViewModel; a password-needed
+                                        // 7z opens the dialog for the one retry.
+                                        viewModel.extractItem(file, null) { outcome ->
+                                            if (outcome is ExtractionOutcome.PasswordRequired) {
+                                                dialogFile = file
+                                                dialog = DialogKind.EXTRACT_PASSWORD
+                                            }
+                                        }
+                                    },
                                     onCut = {
                                         itemMenuFile = null
                                         viewModel.cutItem(file)
@@ -1213,6 +1244,24 @@ fun FileManagerScreen(
                 dialog = DialogKind.NONE
             }
         }
+        DialogKind.EXTRACT_PASSWORD -> {
+            val f = dialogFile
+            if (f != null) {
+                // RF-8 single retry: wrong password lands in the failed
+                // status message; the dialog never opens back-to-back.
+                ExtractPasswordDialog(
+                    file = f,
+                    onDismiss = { dialog = DialogKind.NONE },
+                    onConfirm = { password ->
+                        val target = dialogFile
+                        dialog = DialogKind.NONE
+                        target?.let { viewModel.extractItem(it, password) { } }
+                    }
+                )
+            } else {
+                dialog = DialogKind.NONE
+            }
+        }
         DialogKind.NONE -> Unit
     }
 }
@@ -1247,6 +1296,11 @@ fun FileManagerScreen(
  * @param onOpenWithRootfs Opens the resolved destination in the rootfs
  * editor after the nano→vim availability pre-check, or null when the host
  * does not wire an editor session (the option hides, 008 precedent).
+ * @param onRunInTerminal Runs this file in a rootfs terminal session
+ * (spec 023, RF-1), or null when the host does not wire a runner (hidden).
+ * @param canExtract Whether the item's name matches an extractable archive
+ * format (spec 023, RF-5).
+ * @param onExtract Extracts this archive into its destination (RF-6).
  * @param onCreateShortcut Folder shortcut callback, or null when the host
  * does not wire it (element hidden, 008 precedent).
  * @param onCreateFileShortcut File shortcut callback (opens the file with
@@ -1272,6 +1326,9 @@ private fun ItemMoreMenu(
     onToggleFavorite: () -> Unit,
     onOpenWithSystem: () -> Unit,
     onOpenWithRootfs: (() -> Unit)?,
+    onRunInTerminal: (() -> Unit)?,
+    canExtract: Boolean,
+    onExtract: () -> Unit,
     onCreateShortcut: (() -> Unit)?,
     onCreateFileShortcut: (() -> Unit)?,
     onProperties: () -> Unit
@@ -1310,6 +1367,16 @@ private fun ItemMoreMenu(
                 }
             }
         }
+        // "Run in terminal" for files (spec 023, RF-1): right after the
+        // "Open with…" submenu, hidden while the host does not run a session.
+        if (!isFolder && onRunInTerminal != null) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_run_in_terminal)) },
+                leadingIcon = { Icon(Icons.Default.PlayArrow, null) },
+                enabled = !busy,
+                onClick = onRunInTerminal
+            )
+        }
         DropdownMenuItem(
             text = { Text(stringResource(R.string.action_cut)) },
             leadingIcon = { Icon(Icons.Default.ContentCut, null) },
@@ -1346,6 +1413,16 @@ private fun ItemMoreMenu(
             enabled = !busy,
             onClick = onCompress
         )
+        // "Extract" for supported archive names (spec 023, RF-5/RF-6); the
+        // destination and its collision refusal are the ViewModel's (RNF-5).
+        if (!isFolder && canExtract) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_extract)) },
+                leadingIcon = { Icon(Icons.Default.FolderOpen, null) },
+                enabled = !busy,
+                onClick = onExtract
+            )
+        }
         DropdownMenuItem(
             text = { Text(stringResource(R.string.action_share)) },
             leadingIcon = { Icon(Icons.Default.Share, null) },
@@ -1618,6 +1695,53 @@ private fun CompressDialog(
                     onConfirm(name.trim(), format, chars)
                 },
                 enabled = name.trim().isNotEmpty()
+            ) { Text(stringResource(R.string.filemanager_ok)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        }
+    )
+}
+
+/**
+ * Password prompt for an encrypted `.7z` the first extract attempt demanded
+ * (spec 023, RF-8): one accept runs the single retry with the entered
+ * password; a wrong one posts the failed status message and closes the
+ * dialog (no back-to-back prompt).
+ *
+ * @param file The archive being extracted.
+ * @param onDismiss Called when the dialog is cancelled.
+ * @param onConfirm Called with the password from the (possibly empty) field
+ * — an empty field keeps the earlier null-password shape.
+ */
+@Composable
+private fun ExtractPasswordDialog(
+    file: File,
+    onDismiss: () -> Unit,
+    onConfirm: (CharArray?) -> Unit
+) {
+    var password by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.extract_password_title, file.name)) },
+        text = {
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text(stringResource(R.string.compress_password_label)) },
+                singleLine = true,
+                // Masked input; the retry is what makes it meaningful.
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    // Empty stays null so the retry keeps the null-password
+                    // shape (a re-prompt would not be honored anyway, RF-8).
+                    onConfirm(if (password.isNotEmpty()) password.toCharArray() else null)
+                }
             ) { Text(stringResource(R.string.filemanager_ok)) }
         },
         dismissButton = {

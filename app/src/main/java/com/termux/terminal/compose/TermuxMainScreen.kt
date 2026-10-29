@@ -92,6 +92,7 @@ private const val LOG_TAG = "TermuxMainScreen"
  * @param onCreateFileShortcut Callback to pin a launcher shortcut to a file (spec 009, RF-11)
  * @param onOpenInTerminal Callback to open a terminal in a directory (file manager panes)
  * @param onEditFile Callback to open a file in a rootfs editor (file manager panes)
+ * @param onRunInTerminal Callback to run a file in a rootfs terminal session (spec 023)
  * @param onOpenSettings Callback to open settings
  * @param moreMenuState Non-null while the terminal "More" sheet is open (item flags/labels)
  * @param onShowMoreMenu Callback to open the terminal "More" sheet (top bar / selection toolbar)
@@ -123,6 +124,7 @@ fun TermuxMainScreen(
     onCreateFileShortcut: (File) -> Unit,
     onOpenInTerminal: (String) -> Unit,
     onEditFile: (String) -> Unit,
+    onRunInTerminal: (String) -> Unit,
     onOpenSettings: () -> Unit,
     moreMenuState: TerminalMoreMenuUiState?,
     onShowMoreMenu: () -> Unit,
@@ -330,6 +332,7 @@ fun TermuxMainScreen(
                                         onRemoveSession = onRemoveSession,
                                         onOpenInTerminal = onOpenInTerminal,
                                         onEditFile = onEditFile,
+                                        onRunInTerminal = onRunInTerminal,
                                         onNewFileManagerTab = onNewFileManagerTab,
                                         onOpenLink = onOpenLink,
                                         onCreateFileManagerShortcut = onCreateFileManagerShortcut,
@@ -363,6 +366,7 @@ fun TermuxMainScreen(
                                         onRemoveSession = onRemoveSession,
                                         onOpenInTerminal = onOpenInTerminal,
                                         onEditFile = onEditFile,
+                                        onRunInTerminal = onRunInTerminal,
                                         onNewFileManagerTab = onNewFileManagerTab,
                                         onOpenLink = onOpenLink,
                                         onCreateFileManagerShortcut = onCreateFileManagerShortcut,
@@ -392,6 +396,7 @@ fun TermuxMainScreen(
                                     onRemoveSession = onRemoveSession,
                                     onOpenInTerminal = onOpenInTerminal,
                                     onEditFile = onEditFile,
+                                    onRunInTerminal = onRunInTerminal,
                                     onNewFileManagerTab = onNewFileManagerTab,
                                     onOpenLink = onOpenLink,
                                     onCreateFileManagerShortcut = onCreateFileManagerShortcut,
@@ -580,6 +585,7 @@ private fun handleExtraKeysSpecialKey(
  * @param onRemoveSession Callback to remove the session
  * @param onOpenInTerminal Callback to open a terminal in a directory (file manager panes)
  * @param onEditFile Callback to open a file in a rootfs editor (file manager panes)
+ * @param onRunInTerminal Callback to run a file in a rootfs terminal session (spec 023)
  * @param onNewFileManagerTab Callback to open an additional file manager tab (spec 008, RF-10)
  * @param onOpenLink Callback to open a link per the app preference (spec 022, RF-4/RF-5/RF-7/RF-8)
  * @param onCreateFileManagerShortcut Callback to pin a launcher shortcut to a folder (RF-16)
@@ -604,6 +610,7 @@ private fun SessionPane(
     onRemoveSession: (TermuxSessionUiModel) -> Unit,
     onOpenInTerminal: (String) -> Unit,
     onEditFile: (String) -> Unit,
+    onRunInTerminal: (String) -> Unit,
     onNewFileManagerTab: () -> Unit,
     onOpenLink: (String) -> Unit,
     onCreateFileManagerShortcut: (File) -> Unit,
@@ -755,6 +762,7 @@ private fun SessionPane(
             onCloseSession = { onRemoveSession(model) },
             onOpenInTerminal = onOpenInTerminal,
             onEditFile = onEditFile,
+            onRunInTerminal = { file -> onRunInTerminal(file.absolutePath) },
             initialPath = model.initialPath,
             isActivePane = isActivePane,
             onActivatePane = { onPaneFocused(model.id) },

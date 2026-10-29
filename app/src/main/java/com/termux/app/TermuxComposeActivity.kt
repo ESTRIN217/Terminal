@@ -31,6 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
 import com.estrin217.filemanager.FileOperationsHelper
+import com.estrin217.filemanager.compose.RunPlan
+import com.estrin217.filemanager.compose.RunPolicy
 import com.termux.R
 import com.termux.app.activities.HelpActivity
 import com.termux.app.activities.SettingsComposeActivity
@@ -304,6 +306,7 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
                         onCreateFileShortcut = { createFileLauncherShortcut(it) },
                         onOpenInTerminal = { openTerminalIn(it) },
                         onEditFile = { openFileInEditor(it) },
+                        onRunInTerminal = { runFileInTerminal(it) },
                         onOpenSettings = {
                             ActivityUtils.startActivity(
                                 this@TermuxComposeActivity,
@@ -1002,6 +1005,96 @@ class TermuxComposeActivity : ComponentActivity(), ServiceConnection {
         mViewModel.addSession(
             termuxSession.getTerminalSession(),
             "$editor: ${file.name}"
+        )
+    }
+
+    /**
+     * Run a file from the file manager in a Debian rootfs terminal session
+     * (spec 023, RF-2..RF-4). Mirrors [openFileInEditor]'s pre-checks and
+     * session shape; the pure [RunPolicy] decides between a direct
+     * `./<name>` execution and an interpreter (`bash`/`python3`) for a
+     * non-executable text script. The session stays interactive after the
+     * file exits (`exec bash`).
+     *
+     * @param hostPath Absolute host path of the file to run
+     */
+    private fun runFileInTerminal(hostPath: String) {
+        val service = mTermuxService ?: return
+
+        if (mViewModel.uiState.value.sessions.size >= MAX_SESSIONS) {
+            Toast.makeText(this, R.string.title_max_terminals_reached, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!DebianInstaller.isInstalled()) {
+            Logger.logError(LOG_TAG, "Run in terminal: Debian rootfs not installed")
+            Toast.makeText(this, R.string.debian_installer_title, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val file = File(hostPath)
+        if (!file.isFile) {
+            Logger.logError(LOG_TAG, "Run in terminal: not a file: $hostPath")
+            return
+        }
+        // hostPathToGuestPath falls back to /root for unmappable paths; same
+        // rejection as the editor flow (RF-2).
+        if (!ProotShellEnvironment.isHostPathMappable(hostPath)) {
+            Logger.logError(LOG_TAG, "Run in terminal: unmappable path: $hostPath")
+            Toast.makeText(
+                this, com.estrin217.filemanager.R.string.filemanager_unmappable_path,
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+
+        // RF-4: interpreter availability is a rootfs fact, probed like the
+        // editor candidates (`usr/bin`, host-side canExecute).
+        val rootfsBin = TermuxConstants.DEBIAN_ROOTFS_DIR_PATH + "/usr/bin/"
+        val interpreters = buildSet {
+            if (File(rootfsBin + "bash").canExecute()) add("bash")
+            if (File(rootfsBin + "python3").canExecute()) add("python3")
+        }
+
+        when (val plan = RunPolicy.decide(file.name, file.canExecute(), interpreters)) {
+            is RunPlan.NotExecutable ->
+                AlertDialog.Builder(this)
+                    .setMessage(com.estrin217.filemanager.R.string.msg_file_not_executable)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            else -> launchRunSession(plan, file)
+        }
+    }
+
+    /**
+     * Spawn a rootfs session that `cd`s into [file]'s directory, launches the
+     * [RunPlan] command and drops back to a login shell (spec 023, RF-2).
+     * The command string inside the plan is already shell-escaped
+     * ([RunPolicy] owns that), so it embeds verbatim; the `cd` inside the
+     * script makes `./<name>` hit the mapped folder regardless of how the
+     * session's working directory maps (plan decision 5).
+     *
+     * @param plan Decision of [RunPolicy.decide] (direct or interpreter).
+     * @param file Host file to run (mappable and existing, RF-2 checked).
+     */
+    private fun launchRunSession(plan: RunPlan, file: File) {
+        val service = mTermuxService ?: return
+        val command = when (plan) {
+            is RunPlan.Direct -> plan.command
+            is RunPlan.Interpreter -> plan.command
+            is RunPlan.NotExecutable -> return
+        }
+        val parentHost = file.parent ?: TermuxConstants.DEBIAN_GUEST_HOME_DIR_PATH
+        val guestDir = ProotShellEnvironment.hostPathToGuestPath(parentHost)
+        val escapedDir = guestDir.replace("'", "'\\''")
+        val script = "cd '$escapedDir'; $command; exec bash"
+
+        val termuxSession = service.createTermuxSession(
+            null, arrayOf("-c", script), null, parentHost, false, null
+        ) ?: return
+
+        mViewModel.addSession(
+            termuxSession.getTerminalSession(),
+            "run: ${file.name}"
         )
     }
 
