@@ -95,6 +95,14 @@
   (`echo 'exit 0' > /var/lib/dpkg/info/udisks2.postinst && dpkg --configure -a`).
   Mismo patrón para cualquier paquete cuyo postinst llame a `udevadm`/
   `systemd-hwdb`.
+- **Wiki `limitaciones.html` revisada (podada A+B+C)**: de 578 a 348 líneas.
+  Cortados los logs de validación QA (llvmpipe 2026-10-22, checklist de 7 pasos
+  Adreno/KGSL, crónica de debug de VirGL; el "implementado, pendiente de validar
+  en hardware Adreno" queda en el bullet del panel). La receta paso a paso de
+  VirGL se movió a `wiki/x11.html#virgl` (allí solo queda el resumen + link);
+  zutty condensado a un párrafo, OSC 8 a una frase. Sin pérdida de síntomas ni
+  remedios. Anclas: `limitaciones.html#aceleracion-virgl`, `#virgl-zutty`,
+  `x11.html#virgl` (referenciadas cruzadamente).
 
 ## Arquitectura y reglas prácticas
 - `terminal-emulator` → `terminal-view` → `termux-shared` → `app`; `filemanager` →

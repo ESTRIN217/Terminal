@@ -78,397 +78,177 @@
 
                     <h2>Dispositivos USB (<code>lsusb</code> y <code>termux-usb</code>) — resuelto sin root</h2>
                     <p>
-                        En Android sin root, el kernel y la política SELinux de <code>untrusted_app</code>
-                        deniegan el acceso directo a los nodos <code>/dev/bus/usb/</code> y <code>/sys/bus/usb/</code>,
-                        por lo que el comando <code>lsusb</code> estándar de escritorio fallaba con
-                        <code>unable to initialize libusb: -99</code>.
-                    </p>
-                    <p>
-                        Este fork lo resuelve sin root (spec&nbsp;020) integrando el servicio nativo
-                        <code>android.hardware.usb.UsbManager</code> de Android:
+                        En Android sin root, la política SELinux de <code>untrusted_app</code> deniega el
+                        acceso directo a <code>/dev/bus/usb/</code>, y el <code>lsusb</code> estándar de
+                        escritorio falla con <code>unable to initialize libusb: -99</code>. Este fork lo
+                        resuelve (spec&nbsp;020) pasando por el <code>UsbManager</code> de Android:
                     </p>
                     <ul>
-                        <li>
-                            <strong>Listado con <code>lsusb</code>:</strong> La app detecta dinámicamente
-                            la conexión y desconexión de periféricos OTG y sincroniza los snapshots
-                            en <code>/tmp/usb_devices.txt</code>. Ejecutar <code>lsusb</code> lista
-                            los dispositivos físicos conectados en el formato clásico de Linux
-                            (<code>Bus 001 Device 002: ID vid:pid &lt;Fabricante Producto&gt;</code>).
-                        </li>
-                        <li>
-                            <strong>Interacción con <code>termux-usb</code> / <code>terminal-usb</code>:</strong>
-                            Un puente en el host (<code>UsbBridgeServer</code>) permite solicitar
-                            permisos al usuario (<code>termux-usb -r &lt;dispositivo&gt;</code>, disparando el
-                            diálogo de confirmación del sistema Android) y abrir el dispositivo entregando
-                            el descriptor de archivo al comando subordinado
-                            (<code>termux-usb -e &lt;comando&gt; &lt;dispositivo&gt;</code>) vía <code>SCM_RIGHTS</code>.
-                        </li>
+                        <li><code>lsusb</code> lista los dispositivos OTG conectados y desconectados
+                            en tiempo real, en el formato clásico de Linux
+                            (<code>Bus 001 Device 002: ID vid:pid …</code>).</li>
+                        <li><code>termux-usb</code> pide el permiso de Android para un dispositivo
+                            (<code>-r</code>) y lo entrega a un comando subordinado (<code>-e</code>),
+                            sin tocar nodos del kernel.</li>
                     </ul>
 
                     <h2>Almacenamiento USB desde el guest (<code>lsblk</code> y <code>terminal-usb-cp</code>)</h2>
                     <p>
                         Con un pendrive montado por el framework (p.&nbsp;ej.
-                        <code>/storage/459E-170F</code>), el acceso desde el invitado Debian
-                        funciona <strong>con matices</strong> dictados por SELinux
-                        (spec&nbsp;021, verificado en dispositivo real, 2026-10-27):
+                        <code>/storage/459E-170F</code>), el acceso desde el invitado funciona
+                        <strong>con matices</strong> dictados por SELinux (spec&nbsp;021, verificado en
+                        dispositivo):
                     </p>
                     <ul>
-                        <li>
-                            <strong>Inventario de block devices:</strong>
-                            <code>lsblk</code> del invitado no lee el sysfs real del host
-                            (el <code>readdir</code> de <code>/sys/dev/block</code> lo deniega
-                            <code>untrusted_app</code>; misma familia que
-                            <code>/sys/devices</code>). En su lugar lista desde el
-                            <strong>snapshot del bridge</strong> de la app
-                            (<code>/tmp/usb_devices.json</code>, refrescado justo a tiempo en
-                            cada conexión), con un aviso de limitación en la salida.
-                        </li>
-                        <li>
-                            <strong>Ficheros del volumen — el matiz del bind:</strong> el
-                            <code>readdir</code> del catálogo <code>/root/storage</code>
-                            (bind global
-                            <code>-b /storage:$HOME/storage</code>) también está denegado por
-                            SELinux, pero el <strong>acceso directo al hijo del volumen
-                            funciona</strong>:
-                            <code>ls /root/storage/459E-170F</code> lista, y leer y escribir va
-                            bien. Por eso el acceso a ficheros va por el wrapper fino
-                            <code>terminal-usb-cp</code> (<code>list/read/write</code> + <code>cp -n</code>
-                            sin sobrescribir) contra
-                            <code>/root/storage/&lt;ID&gt;/…</code>, no por un listado del catálogo.
-                            Escritura validada con round-trip de 10&nbsp;MiB en el dispositivo real
-                            (md5 verificado).
-                        </li>
+                        <li><strong><code>lsblk</code>:</strong> el listado de block devices por sysfs
+                            está denegado, así que lista desde el inventario de la app que llega al
+                            invitado, con un aviso de limitación en la salida.</li>
+                        <li><strong>ficheros del volumen:</strong> listar la carpeta raíz del bind
+                            (<code>/root/storage</code>) está denegado, pero el acceso directo al
+                            volumen (su subcarpeta con el ID) <em>sí</em> funciona: se lee y escribe
+                            bien. La vía soportada para copiar es <code>terminal-usb-cp</code>
+                            (listado, lectura y escritura sin sobrescribir).</li>
                     </ul>
 
                     <h2>Estadísticas de CPU (<code>/proc/stat</code>) — resuelto con snapshot vivo</h2>
                     <p>
-                        Desde Android 8 (API 26), SELinux deniega a las apps <code>untrusted_app</code>
-                        leer <code>/proc/stat</code>: sin nada más, <code>htop</code> muere con
-                        <code>Cannot open /proc/stat: Permission denied</code> y <code>btop</code> con
-                        <code>Failed to parse /proc/stat</code>. Este fork lo compensa sin root
-                        (spec&nbsp;010): al abrir sesiones Debian, la app sondea qué fuentes
-                        (<code>/proc/stat</code>, <code>/proc/meminfo</code>, <code>/proc/loadavg</code>)
-                        están realmente bloqueadas y, por cada una, bindea en proot un
-                        <strong>snapshot vivo</strong> reescrito cada segundo.
+                        Desde Android 8 (API 26), SELinux deniega a las apps
+                        <code>untrusted_app</code> leer <code>/proc/stat</code>: sin nada más,
+                        <code>htop</code> muere con <code>Cannot open /proc/stat: Permission denied</code>
+                        y <code>btop</code> con <code>Failed to parse /proc/stat</code>. El fork lo
+                        compensa sin root (spec&nbsp;010): al abrir sesiones Debian, la app sondea qué
+                        fuentes están bloqueadas (<code>stat</code>, <code>meminfo</code>,
+                        <code>loadavg</code>) y bindea en proot un <strong>snapshot vivo</strong>
+                        reescrito cada segundo por cada una.
                     </p>
                     <p>
-                        El modelo de datos: la carga de CPU es la de los <em>procesos propios de la
-                        sesión</em> (todos corren sobre el UID de la app — Android no expone el resto
-                        del sistema sin root), <code>btime</code> se deriva de <code>SystemClock</code>,
-                        la RAM de <code>ActivityManager</code> y los contadores de
-                        <em>corriendo/bloqueados</em> vienen del <code>loadavg</code> real si el
-                        dispositivo lo permite (si no, de los procesos propios). Si el dispositivo
-                        sí deja leer los ficheros originales (root o SELinux permissive), no se
-                        escribe ningún snapshot y se usa la vía nativa. El muestreo se para cuando
-                        no queda ninguna sesión activa. Los medidores responden al uso real;
-                        <code>htop</code> arranca normal.
+                        Qué se mide: la carga es la de los procesos de la propia sesión (todos corren
+                        sobre el UID de la app — Android no expone el resto del sistema sin root), con
+                        RAM y uptime de las APIs del sistema. Si el dispositivo deja leer los ficheros
+                        originales (root o SELinux permissive), no se escribe snapshot y se usa la vía
+                        nativa. El muestreo se para cuando no queda ninguna sesión activa. Con los
+                        overlays, <code>htop</code> arranca normal y los medidores responden al uso real.
                     </p>
-                    <h2>btop: arranque con <code>/sys/devices</code> denegado — resuelto con snapshot estático</h2>
+
+                    <h2>btop: arranque con <code>/sys/devices</code> y <code>/proc/uptime</code> denegados — resuelto</h2>
                     <p>
                         En dispositivos que deniegan enumerar <code>sysfs</code>, <code>btop</code>
-                        moría a su arranque con
-                        <code>ERROR: Exception in Shared::init() → … [/sys/devices]</code>: los
-                        kernels arm64 de Android no emiten la línea <code>model name</code> en
+                        moría a su arranque (<code>ERROR: … Shared::init()</code>): los kernels arm64 de
+                        Android no emiten la línea <code>model name</code> en
                         <code>/proc/cpuinfo</code>, así que btop cae a un fallback interno que
-                        <em>lista</em> <code>/sys/devices</code> — un <code>readdir</code> que la
-                        política SELinux del fabricante deniega al UID de la app.
-                    </p>
-                    <p>
-                        Resuelto sin root (spec&nbsp;019) por la misma vía de snapshots, pero por
-                        <strong>semántica</strong> y no por bloqueo: al abrir cada sesión Debian, la
-                        app bindea <code>-b &lt;snapshot&gt;:/proc/cpuinfo</code> con una copia
-                        <em>verbatim</em> del fichero real más una línea
-                        <code>model name : &lt;SoC&gt;</code> (prioridad
-                        <code>Build.SOC_MODEL</code>, degradación a <code>Build.HARDWARE</code>).
-                        Con esa línea, btop resuelve el nombre de la CPU antes de llegar al
-                        fallback y el listing denegado deja de ejecutarse. El snapshot es estático
-                        (no hay muestreo en background); si la lectura del fichero falla o no hay
-                        nombre utilizable, no se añade bind alguno y se queda la vía nativa.
-                    </p>
-                    <p>
-                        Con la validación en dispositivo, btop cayó después en
-                        <code>/proc/uptime</code> (<code>Failed to get uptime</code>): la misma
-                        familia restringida de procfs que <code>/proc/stat</code>. La enmienda
-                        RF-9 de la spec&nbsp;019 lo sirve como <strong>snapshot vivo</strong> del
-                        mismo sampler (uptime exacto derivado de <code>SystemClock</code>,
-                        avanzando cada tick, porque btop compara uptime entre lecturas); el bind
-                        solo se emite cuando el dispositivo bloquea su lectura directa.
+                        <em>lista</em> <code>/sys/devices</code> — un <code>readdir</code> que SELinux
+                        deniega. El fork lo evita sin root (spec&nbsp;019): bindea una copia de
+                        <code>/proc/cpuinfo</code> con la línea <code>model name : &lt;SoC&gt;</code>
+                        añadida, de modo que btop resuelve el nombre de la CPU sin llegar al fallback.
+                        Si la lectura falla o no hay nombre utilizable, no se añade bind alguno y se
+                        queda la vía nativa. La misma familia restringida cubre
+                        <code>/proc/uptime</code>, que se sirve como snapshot vivo solo cuando su
+                        lectura directa está bloqueada.
                     </p>
                     <p>
                         Nota de uso: con los overlays, <code>btop</code> arranca sin errores del
                         sistema, pero exige por su propia configuración un mínimo de
                         <strong>80 columnas × 24 líneas</strong>. En una terminal estrecha muestra
-                        <code>Terminal size too small</code>; no es un fallo del rootfs ni de la
-                        app: gira el dispositivo a apaisado o reduce el tamaño de letra de la
-                        terminal hasta cubrir ese tamaño.
+                        <code>Terminal size too small</code>; no es un fallo del rootfs: gira el
+                        dispositivo a apaisado o reduce el tamaño de letra de la terminal hasta cubrir
+                        ese tamaño.
                     </p>
 
                     <h2>Gráficos GPU: llvmpipe por defecto (y cuándo se acelera)</h2>
                     <p>
                         Dentro de la sesión Debian, <code>glxinfo</code> y <code>vulkaninfo</code>
                         reportan por defecto el renderizador por CPU de Mesa:
-                        <strong>llvmpipe</strong> (y <strong>lavapipe</strong> para Vulkan). No es
-                        un bug: es el máximo alcanzable sin root en la mayoría de móviles. Debian
-                        compila sus drivers de mesa contra el kernel DRM (<code>/dev/dri</code>),
-                        que Android no expone a las apps.
+                        <strong>llvmpipe</strong> (y <strong>lavapipe</strong> para Vulkan). No es un
+                        bug: es el máximo alcanzable sin root en la mayoría de móviles — Debian compila
+                        sus drivers contra el kernel DRM (<code>/dev/dri</code>), que Android no expone
+                        a las apps.
                     </p>
                     <p>
-                        La sección <strong>«Estado GPU»</strong> de Ajustes dice qué situación
-                        tiene tu dispositivo:
+                        La sección <strong>«Estado GPU»</strong> de Ajustes dice qué vía tiene tu
+                        dispositivo:
                     </p>
                     <ul>
                         <li>
-                            <strong>Adreno (Qualcomm):</strong> existe una vía real sin root — el
-                            backend <code>kgsl</code> de los drivers libres
-                            <code>freedreno/turnip</code> habla con el nodo
-                            <code>/dev/kgsl-3d0</code> (spec&nbsp;011). Cuando la versión de mesa del
-                            invitado coincide con la esperada, Ajustes ofrece «Instalar aceleración
-                            GPU»: seis <code>.deb</code> de mesa recompilados con KGSL, verificados
-                            por SHA-256, instalados con <code>apt install --reinstall</code> dentro
-                            del invitado, con holds y desinstalación limpia hacia el mirror Debian.
-                            Referencia externa:
+                            <strong>Adreno (Qualcomm):</strong> vía real sin root — el backend
+                            <code>kgsl</code> de los drivers libres <code>freedreno/turnip</code> habla
+                            con el nodo <code>/dev/kgsl-3d0</code> (spec&nbsp;011). Cuando la versión de
+                            mesa del invitado coincide con la esperada, el panel ofrece «Instalar
+                            aceleración GPU»: mesa recompilada con KGSL, verificada por SHA-256, con
+                            holds y desinstalación limpia hacia el mirror Debian. La vía está
+                            implementada y pendiente de validar en un Adreno real; el resultado de la
+                            validación se anotará aquí. Referencia externa:
                             <a href="https://github.com/lfdevs/mesa-for-android-container">lfdevs/mesa-for-android-container</a>.
                         </li>
                         <li>
-                            <strong>Mali / PowerVR (MediaTek, Exynos…):</strong> sin vía directa
-                            a la GPU sin root (los drivers libres necesitan módulos kernel DRM que el
-                            kernel Android no trae, y <code>libhybris</code> no está en Debian 13).
-                            Pero ahora <strong>sí hay una vía indirecta agnóstica</strong>: la
-                            <a href="#aceleracion-virgl">aceleración VirGL</a> de más abajo,
-                            disponible en Ajustes para cualquier GPU. El panel «Estado GPU» ya
-                            lo refleja: para Mali y PowerVR el texto ya no es «sin aceleración»,
-                            sino «aceleración disponible vía VirGL».
+                            <strong>Mali / PowerVR (MediaTek, Exynos…):</strong> sin vía directa a la
+                            GPU sin root (los drivers libres necesitan módulos kernel DRM que el kernel
+                            Android no trae). La vía disponible es la indirecta y agnóstica
+                            (spec&nbsp;013): la <a href="#aceleracion-virgl">aceleración VirGL</a>,
+                            ofrecida en el panel para cualquier GPU («aceleración disponible vía
+                            VirGL», ya no «sin aceleración»).
                         </li>
                     </ul>
+
                     <h2 id="aceleracion-virgl">Aceleración VirGL: la vía agnóstica del fabricante</h2>
                     <p>
-                        VirGL es la segunda familia de aceleración sin root del fork (spec&nbsp;013)
-                        y la única accesible desde GPUs no Qualcomm (Mali, PowerVR, Adreno sin
-                        KGSL…). El modelo es <em>cliente-servidor</em>: la app ejecuta un pequeño
-                        servidor nativo (<code>virgl_test_server</code>, compilado en el pipeline
-                        del fork con el mismo NDK que proot y dentro del APK) que renderiza 3D con
-                        el <strong>EGL del sistema Android</strong> — el driver del fabricante que
-                        la app puede usar sin root — mientras el invitado Debian habla con él
-                        mediante el driver <code>virpipe</code> de mesa. Es una
-                        <strong>capa de traducción</strong>: offload real del GPU para quienes hoy
-                        usan llvmpipe, pero no equivalente a la aceleración nativa; no prometemos FPS.
+                        VirGL (spec&nbsp;013) es la vía accesible desde cualquier GPU (Mali, PowerVR,
+                        Adreno sin KGSL…). El modelo es cliente-servidor: la app corre un pequeño
+                        servidor nativo (<code>virgl_test_server</code>, embebido en el APK) que
+                        renderiza 3D con el <strong>EGL del sistema Android</strong>, y el invitado
+                        Debian lo consume con el driver <code>virpipe</code> de mesa. Es una
+                        <strong>capa de traducción</strong>: offload real del GPU para quien hoy usa
+                        llvmpipe, no aceleración nativa equivalente — no prometemos FPS.
                     </p>
-                    <h3>Receta de uso (display = la pestaña X11 de la app)</h3>
-                    <ol>
-                        <li>Ajustes → «Estado GPU» → activa <strong>«Aceleración GPU vía VirGL»</strong>.
-                            El switch arranca el servidor nativo y falla <em>antes</em> de marcar
-                            la opción si algo sale mal (el detalle queda en el log de la app).
-                            Es mutuamente excluyente con la vía Adreno/KGSL: para cambiar de una
-                            a otra hay que pasar por «desactivada».</li>
-                        <li>Abre la <a href="x11.html">pestaña X11</a> de la app (el companion
-                            se arranca siempre desde la propia app; el guest no puede hacerlo) y
-                            deja el display vivo.</li>
-                        <li>En la sesión Debian, las variables del entorno de la vía se inyectan
-                            <strong>solo cuando el socket del servidor existe</strong>
-                            (<code>/tmp/virgl_test</code>; haz <code>ls -l /tmp/virgl_test</code> para
-                            comprobarlo). En una sesión nueva:
-                            <pre><code>env | grep -E 'GALLIUM_DRIVER|MESA_GL_VERSION_OVERRIDE|VTEST_SOCKET_NAME'</code></pre>
-                            El display también viene exportado de fábrica
-                            (<code>DISPLAY=:0</code>, spec&nbsp;015), así que no hace
-                            falta ningún export manual.</li>
-                        <li>Lanza una app gráfica y verifica el renderer:
-                            <code>glxgears</code> (del paquete <code>mesa-utils</code>)
-                            imprime <code>GL_RENDERER = virgl (…)</code> al arrancar y
-                            <code>glmark2</code> da un score comparable. Nota honesta de
-                            validación: <code>glxinfo</code> completo aborta en un
-                            <code>X_GetImage</code> BadMatch en displays rootless (quirk
-                            conocido del stack, mesa&nbsp;25.0.7 + servidor X11
-                            rootless), no un problema de la vía. Con la opción apagada,
-                            una sesión nueva debe volver byte a byte al entorno previo.</li>
-                    </ol>
-                    <h3>Estado de la validación de la vía VirGL (spec&nbsp;013)</h3>
                     <p>
-                        La parte no dependiente del dispositivo (compilación del binario,
-                        embebido en el APK, panel y ciclo de vida ligado a las sesiones) está
-                        implementada y en verde (<code>./gradlew test</code>). En el
-                        dispositivo real (Mali T606) ya está confirmado que el servidor
-                        nativo arranca dentro de la app y crea el socket
-                        <code>/tmp/virgl_test</code>; el path del cliente quedó fijado
-                        tras la depuración contra la mesa stock del rootfs
-                        (<code>25.0.7-2+deb13u1</code>): la variable del invitado es
-                        <code>VTEST_SOCKET_NAME=/tmp/virgl_test</code> (mesa stock lee
-                        ese nombre con el path crudo del invitado, y no la URI
-                        <code>VIRGL_TEST_SERVER_URI</code> que solo entienden las
-                        mesas del paquete de Termux). La
-                        <strong>medición de validación (2026-10-24, Mali T606,
-                        Mali-G57)</strong>: con la vía activa sobre la pestaña
-                        X11, <code>glxgears</code> ≈&nbsp;140&nbsp;FPS (sin límite
-                        por vsincronía, sobre todo CPU+puente) y
-                        <strong><code>glmark2&nbsp;2023.01 Score&nbsp;57</code></strong>
-                        (<code>GL_RENDERER: virgl (Mali-G57)</code>,
-                        <code>GL_VERSION: 4.0</code> con el override inyectado).
-                        Pegas documentadas del stack, no de la vía: la mesa
-                        stock no soporta <code>GLX_EXT_swap_control</code>/<code>
-                        GLX_MESA_swap_control</code> en este display (glmark2 lo
-                        advierte), y <code>glxinfo</code> completo aborta con un
-                        <code>X_GetImage</code> BadMatch en el display rootless
-                        (coincide con el síntoma conocido del stack en los hilos
-                        de Termux; la validación se hizo con <code>glxgears</code> y
-                        <code>glmark2</code>). El ciclo completo del interruptor está
-                        validado en el dispositivo: activar → render →
-                        desactivar, con el entorno del invitado volviendo byte
-                        a byte al previo y sin proceso ni socket residuales.
-                        Sin promesas de rendimiento en apps reales.
+                        Uso en dos líneas: activa <strong>«Aceleración GPU vía VirGL»</strong> en
+                        Ajustes → «Estado GPU», deja viva la <a href="x11.html#virgl">pestaña X11</a>
+                        y lanza la app gráfica (el env del invitado se inyecta solo cuando el servidor
+                        existe). La receta completa — verificación del renderer, benchmark y avisos del
+                        stack — está en la <a href="x11.html#virgl">sección de VirGL del display
+                        X11</a>. Validado en dispositivo (Mali-G57): <code>glmark2</code>
+                        score&nbsp;57 con <code>GL_RENDERER: virgl</code> y <code>glxgears</code>
+                        fluido; con la opción apagada, una sesión nueva vuelve byte a byte al entorno
+                        previo.
                     </p>
                     <h3 id="virgl-zutty">zutty bajo VirGL: congelación intermitente (documentada, sin fix)</h3>
                     <p>
-                        Observado y reproducido en dispositivo (2026-10-26, Mali&nbsp;T606):
-                        con la aceleración VirGL activa, el terminal del invitado
-                        <strong>zutty</strong> se congela de forma esporádica al procesar
-                        ráfagas de texto (p.&nbsp;ej. la salida de <code>fastfetch</code> en el
-                        arranque del shell). La ventana deja de actualizar el contenido y lo que
-                        se ejecuta detrás de ella — fastfetch en este caso — queda bloqueado
-                        escribiendo al pty (<em>parece</em> "fastfetch colgado al 100% de CPU",
-                        pero fastfetch es solo el espectador: no alcanza a volcar más salida
-                        porque zutty dejó de leer).
-                    </p>
-                    <p>
-                        El resto del stack está verificado al mismo tiempo: <code>glxgears</code>
-                        rinde ~170&nbsp;FPS con zutty abierto (el socket vtest y el
-                        cliente <code>virpipe</code> soportan clientes GL concurrentes), la
-                        detección de GPU de fastfetch completa y reporta
-                        <code>Mesa virgl</code>, y el mismo burst que congela a zutty pasa sin
-                        problemas en la pestaña de terminal de la app. La congelación es
-                        sensible al <em>timing</em> (completó sola al variar las variables de
-                        debug de mesa <code>MESA_DEBUG</code>/<code>EGL_LOG_LEVEL</code>), lo que
-                        apunta a una carrera en la renderización GL de zutty sobre la capa de
-                        traducción, no a un dead-lock del servidor ni a un bug de fastfetch.
-                        La cartera sospechosa es la combinación mesa <code>virpipe</code>/
-                        vtest ↔ zutty (el terminal que más estrés GL mete: atlas de fuentes,
-                        texturas por ráfaga), no el pipeline del fork.
-                    </p>
-                    <p>
-                        No se aplicará un fix en este fork por ahora: el bug vive aguas abajo
-                        (zutty/mesa-virpipe). La mitigación <em>por parte del usuario</em> es
-                        cualquiera de estas dos, sin tocar las sesiones del resto del
-                        escritorio:
-                    </p>
-                    <ul>
-                        <li>
-                            <strong>zutty con rasterizador de CPU:</strong> lanzarlo solo a él
-                            sin la vía VirGL
-                            (<code>GALLIUM_DRIVER=llvmpipe zutty</code>); llvmpipe corre
-                            multihilo (ver los "Hilos de llvmpipe" de Ajustes) y el resto de
-                            apps gráficas del invitado mantienen la aceleración.
-                        </li>
-                        <li>
-                            <strong>Otro terminal del invitado</strong> que no sea zutty
-                            (p.&nbsp;ej. <code>xterm</code> o <code>xfce4-terminal</code>):
-                            la congelación no se ha observado fuera de zutty.
-                        </li>
-                    </ul>
-                    <p>
-                        Nota aparte, ligada a este mismo terminal: al arrancar zutty pueden ver
-                        avisos <code>W … (Unimplemented) unhandled OSC: '8;;file:///'</code>.
-                        Son <strong>inofensivos</strong>: zutty no implementó los hipervínculos
-                        OSC&nbsp;8 y los descarta avisando; y no vienen de fastfetch (su fuente
-                        no emite OSC&nbsp;8 para nada) sino de otra herramienta de los
-                        dotfiles propios (los <code>ls</code> modernos, <code>bat</code>,
-                        etc.). Se pueden cazar con <code>bash -x 2&gt;/tmp/x.log</code> y
-                        desactivarlos en su configuración, o simplemente ignorarlos.
+                        Con VirGL activa, el terminal <code>zutty</code> del invitado se congela de
+                        forma esporádica ante ráfagas de texto (observado con <code>fastfetch</code>;
+                        fastfetch es solo el espectador: queda bloqueado escribiendo al pty porque
+                        zutty dejó de leer). La cartera sospechada es la combinación mesa
+                        <code>virpipe</code>/vtest ↔ zutty — el terminal que más estrés GL mete —, no
+                        el pipeline del fork; no habrá fix aquí porque el bug vive aguas abajo
+                        (zutty/mesa-virpipe). Mitigaciones: lanzarlo con
+                        <code>GALLIUM_DRIVER=llvmpipe zutty</code>, o usar otro terminal del invitado
+                        (<code>xterm</code>, <code>xfce4-terminal</code>) — la congelación no se ha
+                        observado fuera de zutty. Sus avisos
+                        <code>unhandled OSC: '8;;…'</code> son inofensivos: no implementa hipervínculos
+                        OSC&nbsp;8 y descarta los que llegan.
                     </p>
                     <h3>Alternativa sin pestaña X11: VNC dentro del invitado (secundaria)</h3>
                     <p>
-                        Si no usas la pestaña X11, un escritorio VNC <em>dentro</em> del Debian
-                        (paquetes de la distro, p.&nbsp;ej. <code>tigervnc-standalone-server</code>)
-                        + un visor VNC externo invocan las mismas variables del invitado y
-                        renderizan por la misma vía. Queda como alternativa secundaria para
-                        usuarios sin acceso a la pestaña X11; el camino principal del fork es
-                        el display integrado de la spec&nbsp;014.
+                        Un escritorio VNC <em>dentro</em> del Debian (paquetes de la distro, p.&nbsp;ej.
+                        <code>tigervnc-standalone-server</code>) + un visor VNC externo usan las mismas
+                        variables del invitado y renderizan por la misma vía. Es la alternativa
+                        secundaria para quien no use la pestaña X11; el camino principal del fork es el
+                        display integrado (spec&nbsp;014).
                     </p>
-                    <h3>Lo que sí quedan como «sin vía» (limitaciones honestas)</h3>
+                    <h3>Lo que queda «sin vía» y el refuerzo por CPU</h3>
                     <p>
-                        Esta spec deliberadamente <strong>no añade</strong> estas dos rutas y se
-                        documentan como pendientes: <strong>Zink</strong> (OpenGL sobre Vulkan)
-                        exige un driver Vulkan visible sin root — lavapipe es CPU, y los drivers
-                        vendor hardware Vulkan no son alcanzables por la app — por lo que tampoco
-                        mejoraría nada respecto a llvmpipe hoy; <strong>OpenCL</strong> requiere
-                        el ICD del fabricante (libOpenCL vendor-aware de Qualcomm/Mali), que en
-                        Debian 13 no hay para estos ICD de Android. La spec&nbsp;011 documentó
-                        ambos como límites; siguen siéndolo.
+                        <strong>Zink</strong> (OpenGL sobre Vulkan) exige un driver Vulkan alcanzable
+                        sin root — lavapipe es CPU y los drivers vendor no lo son, así que hoy tampoco
+                        mejoraría a llvmpipe — y <strong>OpenCL</strong> pide el ICD del fabricante
+                        (Qualcomm/Mali), ausente en Debian 13 para los ICD de Android. Ambos quedan
+                        documentados como límites (spec&nbsp;011) y siguen siéndolo.
                     </p>
                     <p>
-                        Para los casos por CPU (spec&nbsp;012), el rasterizador de llvmpipe corre
-                        <strong>multihilo</strong> (<code>LP_NUM_THREADS</code>,
-                        <code>GALLIUM_NUM_THREADS</code>): usa los núcleos libres en vez de uno
-                        solo. En Ajustes → <strong>«Hilos de llvmpipe»</strong> viene activado
-                        por defecto con N=8; el slider permite elegir N entre 1 y 16. El valor
-                        efectivo en el invitado es <code>min(núcleos, N)</code> y ambas variables
-                        reciben ese mismo número.
-                    </p>
-                    <p>
-                        Para volver al entorno sin estas variables, desactiva
-                        <strong>«Activar multihilo»</strong> en ese panel. El cambio se aplica a
-                        las sesiones nuevas; las ya abiertas conservan el entorno con el que
-                        arrancaron. Con aceleración GPU activa (KGSL <em>o</em> VirGL),
-                        llvmpipe no usa estos ajustes.
-                    </p>
-                    <p>
-                        Validación en dispositivo (2026-10-22): Infinix X6525, Unisoc T606,
-                        Mali T606, 8 núcleos, Debian 13. En una sesión nueva con la opción activa,
-                        <code>echo</code> mostró <code>LP=8 GALLIUM=8 CORES=8</code>; al apagarla,
-                        mostró <code>LP= GALLIUM= CORES=8</code>. <code>htop 3.4.1</code> arrancó
-                        y mostró los 8 CPU; no se observó regresión del overlay de la spec&nbsp;010.
-                    </p>
-                    <p>
-                        Benchmark: se intentó <code>glmark2-es2 --off-screen</code>, pero el
-                        ejecutable no está instalado (<code>bash: glmark2-es2: orden no encontrada</code>).
-                        La caché local de paquetes Debian tampoco ofreció un proveedor instalable
-                        para <code>glmark2-es2</code>; no se obtuvo score y no se afirma una mejora
-                        de rendimiento. Por tanto, la validación medida disponible es la inyección
-                        de variables y la ejecución correcta de <code>htop</code>.
-                    </p>
-                    <h2>Estado de la validación de la vía Adreno/KGSL (spec&nbsp;011)</h2>
-                    <p>
-                        La parte no dependiente del hardware se implementó íntegra y quedó en
-                        verde (<code>./gradlew test</code>): detección de familia GPU,
-                        panel «Estado GPU», comandos apt de instalación/desinstalación,
-                        verificación SHA-256 en streaming y la inyección de
-                        <code>MESA_LOADER_DRIVER_OVERRIDE=kgsl</code>. Lo que sigue pendiente es
-                        <strong>ejercitar el pipeline en un Adreno real</strong>; el dispositivo de
-                        trabajo habitual es Mali (Unisoc T606), donde la vía KGSL no existe por
-                        diseño y el pipeline no se ofrece.
-                    </p>
-                    <p>
-                        Proceso de validación documentado, para cuando se disponga de un
-                        dispositivo con <strong>Adreno 6xx o 7xx</strong> que exponga
-                        <code>/dev/kgsl-3d0</code> (sin root, Android stock, <code>enforcing</code>):
-                    </p>
-                    <ol>
-                        <li>Ajustes → «Estado GPU» debe reportar la familia
-                            <em>Adreno con KGSL</em> (no la vía CPU ni «desconocida»).</li>
-                        <li>Instalar la aceleración desde el panel: las seis descargas deben
-                            verificar su SHA-256 y el <code>apt install --reinstall</code> del
-                            invitado debe terminar en exit&nbsp;0 con los holds aplicados.</li>
-                        <li>En una sesión nueva del invitado,
-                            <code>env | grep MESA_LOADER_DRIVER_OVERRIDE</code> debe mostrar
-                            <code>MESA_LOADER_DRIVER_OVERRIDE=kgsl</code>, y el comando proot
-                            (fuera del env del invitado) no debe cambiar respecto a la versión
-                            base del fork.</li>
-                        <li>Con un medidor de renderer disponible
-                            (<code>glxinfo</code>/<code>eglinfo</code>/<code>vulkaninfo</code>),
-                            el reporte del proveedor debe ser el de freedreno/turnip por KGSL, no
-                            <code>llvmpipe</code>/<code>lavapipe</code>.</li>
-                        <li>Instalar un benchmark (p.&nbsp;ej. <code>glmark2</code>) y anotar el
-                            score frente a la misma versión con la aceleración desinstalada
-                            (referencia llvmpipe multihilo).</li>
-                        <li>Desinstalar desde el panel: <code>apt-mark unhold</code> + reinstall
-                            desde el mirror Debian debe devolver el invitado a los paquetes de
-                            distro y el renderer debe volver a llvmpipe.</li>
-                        <li>Caso anti-confusión: reinstalar el rootfs con la preferencia aún
-                            activa; el panel debe degradar el estado con el motivo concreto
-                            («versión de mesa diverge») sin ofrecer la acción Y manteniendo la
-                            posibilidad de desinstalar.</li>
-                    </ol>
-                    <p>
-                        Mientras ese proceso no se ejecute en hardware Adreno, la página y el
-                        README señalan el pipeline como <em>implementado y documentado</em>, no
-                        como validado; el resultado real de cada paso se anotará aquí.
+                        En la vía por CPU los núcleos no se desperdician: el rasterizador de llvmpipe
+                        corre <strong>multihilo</strong> (spec&nbsp;012). En Ajustes →
+                        <strong>«Hilos de llvmpipe»</strong> viene activado por defecto con N=8
+                        (slider de 1 a 16); el valor efectivo en el invitado es
+                        <code>min(núcleos, N)</code>. Se aplica a las sesiones nuevas: para volver al
+                        entorno sin las variables, apaga <strong>«Activar multihilo»</strong>. Con
+                        aceleración GPU activa (KGSL <em>o</em> VirGL), llvmpipe no usa estos ajustes.
                     </p>
 
                     <h2>Sin udev ni systemd en el invitado: <code>udevadm</code> y <code>systemd-hwdb</code> fallan</h2>
@@ -482,59 +262,49 @@
                     <ul>
                         <li><code>udevadm control</code> habla con el demonio <code>systemd-udevd</code>
                             mediante el socket <code>/run/udev/control</code>; ese demonio no corre en el
-                            contenedor (y menos puede recibir uevents del kernel: dentro del huésped no
-                            existe ese flujo).</li>
+                            contenedor, y dentro del huésped no existe el flujo de uevents del kernel.</li>
                         <li>El gestor de <code>/dev</code> es el <code>ueventd</code> de Android (parte del
                             init de Android), no udev: el invitado solo ve los nodos que Android ya creó,
                             con los permisos que la política SELinux deje (véase arriba
                             <em>«SELinux del fabricante»</em>).</li>
                         <li><code>systemd-hwdb</code> compila <code>/etc/udev/hwdb.bin</code>, la base de
-                            datos que solo consume udev: aunque se escribiera, nadie la leería nunca. El
-                            mensaje <code>Bad file descriptor</code> es proot exponiendo la escritura sobre
-                            ruta/fd que no puede manejar.</li>
+                            datos que solo consume udev: aunque se escribiera, nadie la leería nunca.</li>
                     </ul>
                     <p>
-                        En consecuencia, esos comandos son <strong>no-op aquí</strong>: no hay que ejecutarlos
+                        En consecuencia esos comandos son <strong>no-op aquí</strong>: no hay que ejecutarlos
                         ni «arreglarlos». Si una guía para Linux con systemd termina con «recarga las reglas
-                        de udev», ese paso no aplica al huésped; todo lo relacionado con dispositivos va por
-                        el lado de Android (permisos, <code>ueventd</code>). Con <code>ls /run/udev</code> se
-                        confirma que no hay demonio.
+                        de udev», ese paso no aplica al huésped.
                     </p>
                     <p>
-                        Iso más visible todavía: el <strong>paquete <code>udisks2</code></strong> ejecuta esa
+                        Lo más visible todavía: el <strong>paquete <code>udisks2</code></strong> ejecuta esa
                         misma receta en su script <code>postinst</code>, así que durante un
                         <code>apt upgrade</code> que lo toque aparece el trío
                         <code>Failed to send reload request: No such file or directory</code> /
                         <code>Failed to scan devices: Permission denied</code> (el <code>udevadm trigger</code>
-                        del postinst escanea <code>/sys</code>, y SELinux lo deniega — la sección de arriba) y
+                        del postinst escanea <code>/sys</code>, y SELinux lo deniega — la sección de arriba) /
                         <code>dpkg: error processing package udisks2</code>. Error conocido de proot (reportes
-                        idénticos en Termux y UserLAnd). No afecta a la sesión; <code>udisks2</code> no sirve de
-                        nada aquí (habla con udev/systemd, que no existen). Deja el paquete en
-                        <code>1 not fully installed</code> y cada <code>apt upgrade</code> lo reintentará.
+                        idénticos en Termux y UserLAnd): no afecta a la sesión, <code>udisks2</code> no sirve de
+                        nada aquí (habla con udev/systemd, que no existen) y deja el paquete en
+                        <code>1 not fully installed</code> para que cada <code>apt upgrade</code> lo reintentará.
                         Remedios:
                     </p>
                     <ul>
                         <li>Quitarlo si nada depende de él:
                             <code>apt remove --purge udisks2</code>.</li>
-                        <li>Si un dependiente (p. ej. <code>gvfs</code>) lo exige, neutralizar el postinst,
-                            que es el workaround estándar en proot:
+                        <li>Si un dependiente (p. ej. <code>gvfs</code>) lo exige, neutralizar su
+                            <code>postinst</code> — el workaround estándar en proot, y vale igual para
+                            cualquier paquete cuyo script llame a
+                            <code>udevadm</code>/<code>systemd-hwdb</code>:
                             <pre><code>echo 'exit 0' &gt; /var/lib/dpkg/info/udisks2.postinst
 dpkg --configure -a</code></pre>
                             El paquete queda «configurado» sin los pasos udev, que aquí no harían nada.</li>
                     </ul>
-                    <p>
-                        Lo contrario también es cierto: si <code>dpkg</code> muestra ese error en el
-                        <code>postinst</code> de otro paquete cuyo script llame a
-                        <code>udevadm trigger</code>/<code>systemd-hwdb</code>, la causa es la misma y el
-                        remedio es idéntico (neutralizar su <code>postinst</code> en
-                        <code>/var/lib/dpkg/info/</code>).
-                    </p>
 
                     <h2>Solo AArch64</h2>
                     <p>
                         El binario <code>proot</code> embebido está compilado y preparado para
                         <code>arm64-v8a</code>: el paquete solo cubre AArch64. En dispositivos x86 o
-                        arboles ARM de 32 bits no funciona.
+                        árboles ARM de 32 bits no funciona.
                     </p>
 
                     <h2>Sixel y animaciones kitty</h2>

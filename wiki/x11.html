@@ -109,10 +109,52 @@
                     <p>Algunas notas del entorno:</p>
                     <ul>
                         <li>El servidor atiende las conexiones por el socket del display (<code>:0</code>); no requiere root ni TCP.</li>
-                        <li>Si el programa se queja de <code>libGL</code>, por defecto acelera por <em>llvmpipe</em> (software); con la opción <strong>«Aceleración GPU vía VirGL»</strong> activada en Ajustes, la sesión nueva va por la vía VirGL: ver <a href="limitaciones.html">Limitaciones conocidas</a>.</li>
+                        <li>Si el programa se queja de <code>libGL</code>, por defecto acelera por <em>llvmpipe</em> (software); con la opción <strong>«Aceleración GPU vía VirGL»</strong> activada en Ajustes, la sesión nueva va por la vía VirGL: ver la <a href="#virgl">sección VirGL</a> de esta página y <a href="limitaciones.html">Limitaciones conocidas</a>.</li>
                         <li>El teclado completo de la pestaña llega al servidor X: teclas físicas, enter/borrar del teclado virtual y la barra de teclas extra se inyectan con la misma semántica de la app standalone (macros de modificadores, pegar portapapeles, zoom del visor).</li>
                         <li>El touch del servidor se pasa a las ventanas directamente; la emulación de gestos completa vive en la app standalone de termux-x11, no en esta pestaña.</li>
                     </ul>
+
+                    <h2 id="virgl">Aceleración VirGL: GPU para las apps del guest</h2>
+                    <p>
+                        Por defecto, las apps gráficas del guest renderizan con
+                        <em>llvmpipe</em> (el rasterizador por CPU de Mesa). Con la opción
+                        <strong>«Aceleración GPU vía VirGL»</strong> de Ajustes → «Estado GPU», la vía
+                        es un servidor VirGL que corre dentro de la app: renderiza con el
+                        <strong>EGL del sistema Android</strong> y el guest lo consume con el driver
+                        <code>virpipe</code> de mesa. La opción es mutuamente excluyente con la vía
+                        Adreno/KGSL: para cambiar de una a otra hay que pasar por «desactivada».
+                    </p>
+                    <ol>
+                        <li>Activa <strong>«Aceleración GPU vía VirGL»</strong> en Ajustes → «Estado GPU».
+                            El interruptor arranca el servidor nativo y avisa antes de quedarse
+                            activado si algo falla (el detalle queda en el log de la app).</li>
+                        <li>Abre la <strong>pestaña X11</strong> (botón «Iniciar el servidor X») y deja
+                            el display vivo: el guest no puede arrancar el companion por sí solo
+                            (véase arriba).</li>
+                        <li>En la sesión Debian, el env de la vía se inyecta <strong>solo cuando el
+                            servidor existe</strong>: <code>ls -l /tmp/virgl_test</code> debe mostrar
+                            el socket. En una sesión nueva:
+                            <pre><code>env | grep -E 'GALLIUM_DRIVER|MESA_GL_VERSION_OVERRIDE|VTEST_SOCKET_NAME'</code></pre>
+                            El display ya viene exportado de fábrica (<code>DISPLAY=:0</code>, otra
+                            nota de arriba), sin exports manuales.</li>
+                        <li>Lanza una app gráfica y verifica el renderer: <code>glxgears</code> (del
+                            paquete <code>mesa-utils</code>) imprime
+                            <code>GL_RENDERER = virgl (…)</code> al arrancar, y <code>glmark2</code>
+                            da un score comparable (validado en Mali-G57: score&nbsp;57). No
+                            prometemos FPS: es una capa de traducción, no aceleración nativa
+                            equivalente.</li>
+                    </ol>
+                    <p>
+                        Avisos conocidos del stack (no de la vía): <code>glxinfo</code> completo
+                        aborta con un <code>X_GetImage</code> BadMatch en displays rootless (quirk
+                        conocido de mesa + servidor rootless — verifica con
+                        <code>glxgears</code>/<code>glmark2</code>), y la mesa stock no soporta
+                        <code>GLX_EXT_swap_control</code> en este display (<code>glmark2</code> lo
+                        advierte). Con la opción apagada, una sesión nueva vuelve byte a byte al
+                        entorno previo. El terminal <code>zutty</code> puede congelarse bajo VirGL:
+                        síntoma y mitigaciones en
+                        <a href="limitaciones.html#virgl-zutty">Limitaciones conocidas</a>.
+                    </p>
 
                     <h2>Ajustes X11</h2>
                     <p>
