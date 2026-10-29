@@ -58,40 +58,26 @@
   untrusted_app) — no reintentar fix; no usar `ACTION_MEDIA_MOUNTED`
   (restringido).
 
-## Spec 022 — Navegador GeckoView (EN CURSO, spec aprobada 2026-10-28)
+## Spec 022 — Navegador GeckoView (CERRADA 2026-10-29 — implementada y verificada)
 
 - Objetivo: pestañas de navegador in-app (quinto caso sealed `Browser`, patrón X11 014)
   para abrir los enlaces del terminal (hipervínculos/URL 003 + More-menu) sin salir de la app.
-- Motor decidido con el mantenedor: **GeckoView release arm64-v8a**, pin
-  `159.0.20261022150525`. Aprendizaje clave: los `maven-metadata.xml` de
-  maven.mozilla.org están desincronizados (dicen que el release acabó en 99/2022), pero el
-  canal release SÍ publicó hasta 159 (oct-2026) — verificar por POM/AAR directo, no por
-  metadata. AAR arm64 = 87 MiB comprimido; el universal de 232 MiB está PROHIBIDO (RNF-1).
-- **Hecho T2 (F3 positivo):** AAR resuelve; el motor exige compileSdk 37.2 y minSdk 26 →
-  enmienda aprobada (RNF-0): minSdk 24→26 + targetSdk 28 INTACTO; AGENTS.md ya dice minSdk
-  26. APK universal debug = 140.8 MB con libxul.so (154 MB) dentro. `./gradlew test` verde.
-- **Hecho T3:** `BrowserLogic.kt` (routeLink/normalizeUrlInput/tabLabel/nextSessionName,
-  puros) + `BrowserLogicTest`/`BrowserSessionsTest` (rojo→verde; quirk: los schemes se
-  normalizan a minúscula, RFC 3986 §3.1). Puerta `./gradlew test` completa verde.
-- **Hecho T4:** prefs `KEY_LINKS_INTERNAL_BROWSER` (on por defecto) + fila en Ajustes
-  (icono Public); de paso reparado `terminal_images` ausente en pt-rBR (crash latente).
-- **Hecho T5–T10:** sealed `Browser` + `createBrowserSession`; `BrowserController.kt`
-  (delegates verificados contra fuentes FF-159: `onLocationChange` 4-args,
-  `onNewSession` → `GeckoResult.fromValue(null)` tras rutar RF-8); `BrowserSessionHost`;
-  dispatch en `TermuxMainScreen`; ruteo canvas/More-menu vía `handleOpenLink`; legado
-  `TerminalView.onHyperlinkOpen(uri)` (default method → fallback ACTION_VIEW); licencia
-  MPL-2.0 en LicensesScreen. RF-1 enmendado: **la entrada de navegador vive en el drawer**
-  (el tab bar quedó como fila pura de pestañas).
-- **Verificación parcial del mantenedor (2026-10-28):** probado en dispositivo, funciona.
-  Falta el punto formal RNF-3 (procesos GV UID compartido + `dumpsys meminfo`).
-- **T12 hecho (solo commits, enmienda del mantenedor):** árbol dividido en
-  `a3d53f26` (build+spec), `be451b10` (lógica+tests), `824c013f` (prefs/
-  ajustes/licencia ×3 locales), `efad182f` (motor+UI+drawer+ruteo). Sin
-  changelog ni update-site: queda para la release 3.1 general.
-- Pendiente: cerrar T11 completo (RNF-3 formal).
-- **`assembleRelease` (R8) NO verificado (2026-10-29):** 3 intentos agotan la
-  RAM del entorno (OOM); pospuesto — reintentar con heap Gradle reducido o en
-  CI. No dar por sana la ofuscación del AAR de GV hasta entonces.
+- Motor pin `159.0.20261022150525` (release, nunca el universal 232 MiB — RNF-1);
+  compileSdk 37.2, minSdk 26 (enmienda RNF-0). Pin manual por release; los
+  `maven-metadata.xml` de maven.mozilla.org están desincronizados — verificar
+  por POM/AAR directo. APK debug universal: 140.8 MB (libxul.so 154 MB dentro).
+- **Verificación RNF-3 (2026-10-29, mantenedor):** `ps -A` muestra el multiproc
+  de Gecko (`:gpu`, `:media`, 4 `:sandboxed_tab_*`) todos con el UID del app
+  (`u0_a235`) en el Unisoc/A12 — sin conflicto con shared UID (spike T1
+  POSITIVO). Principal ≈230 MB PSS con ≈104 MB swap; pestañas 50–240 MB RSS
+  (buena parte es libxul mapeado compartido). Sin caídas de proot/X11.
+  Veredicto: uso aceptable, sin reescopo. También probado: entrada en drawer,
+  ruteo de enlaces tap → pestaña, ajuste intern/extern («magnífico»).
+- **Excepción:** R8/`assembleRelease` NO verificado (3 intentos con OOM local);
+  pospuesto a la CI/release 3.1. No dar por sana la ofuscación del AAR de GV
+  hasta entonces. El tamaño con ofuscación se medirá con la release.
+- Commits: `a3d53f26` (build+spec), `be451b10` (lógica+tests), `824c013f`
+  (prefs/ajustes/licencia), `efad182f` (motor/UI/drawer) + bookkeeping.
 - Sin changelog/update-site: quedan para la release 3.1 general.
 
 ## Arquitectura y reglas prácticas

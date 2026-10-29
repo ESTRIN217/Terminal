@@ -79,17 +79,22 @@ verde → marcar. F1–F3 antes de tocar UI (ver plan).
     del terminal-view no rompen) y la tap del renderizador legado obedece el
     ajuste (T11).
 
-- [ ] **T11. Licencias + Verificación en dispositivo (completa).** RF-11, RNF-3
+- [x] **T11. Licencias + Verificación en dispositivo (completa).** RF-11, RNF-3
   - **2026-10-28, parcial del usuario:** probado en dispositivo y funcionando
     ("magnífico"), incluido el ruteo de enlaces del terminal (tap → pestaña nueva).
-  Falta por confirmar: el punto formal RNF-3 (procesos GeckoView con UID
-  compartido y `dumpsys meminfo` con X11+proot).
-  - Entrada del motor en `LicensesScreen` (MPL-2.0); corrida de criterios
-    1–7 de la spec en el Unisoc/A12; memoria constatada documentada en la spec
-    + tamaño final del APK; R8/`assembleRelease` sanos (consumer rules del
-    AAR, binds mínimos si hicieran falta).
+  - **2026-10-29, completa:** RNF-3 verificado (`dumpsys meminfo` + `ps -A`),
+    datos y veredicto en spec.md "Resultados de factibilidad y verificación":
+    shared UID `u0_a235` (principal + :gpu/:media/4 sandboxed_tab), principal
+    ≈230 MB PSS/104 MB swap, sin caídas proot/X11. Excepción: R8/release
+    NO verificado por OOM (3 intentos) — pospuesto a CI/release 3.1 por el
+    mantenedor, quedase documentado en spec.md.
+  - Entrada del motor en `LicensesScreen` (MPL-2.0); criterios 1–7 de la
+    spec corridos en el Unisoc/A12; memoria constatada documentada en spec.md.
+    El tamaño con ofuscación y el sanity check R8 quedan para la CI de la
+    release 3.1 (ver nota de OOM en T12).
   - Hecho cuando: checklist de "Criterios de finalización" de spec.md completa;
-    memoria y resultados registrados en spec.md.
+    memoria y resultados registrados en spec.md. ✅ (con la excepción R8
+    explícita, decisión del mantenedor).
 
 - [x] **T12. Solo commits.** *(2026-10-28: el mantenedor decide — T12 se reduce a
   Conventional Commits del código; sin `CHANGELOG.md` ni flujo web/update-site, que

@@ -1,6 +1,8 @@
 # Spec 022 — Navegador interno: pestañas GeckoView para abrir webs desde la terminal
 
-Estado: **aprobada (2026-10-28) — pendiente de implementación**
+Estado: **implementada y verificada en dispositivo (2026-10-29)**. Excepción
+registrada: R8/`assembleRelease` NO verificado (OOM tras 3 intentos en el
+entorno local; decisión del mantenedor de posponerlo a la CI/release 3.1).
 
 ## Contexto y objetivo
 
@@ -149,18 +151,18 @@ universal lleva esa misma lib):
 
 ## Fuera de alcance
 
-- Historial persistente, marcadores, pestañas privadas, sincronizaciónmozilla, no.
-- Soporte vírgene de biscuto de cookies, skills completo de Permisos (ubicación, cámara,
-  notificaciones web) → todo denieto por defecto del motor.
-- Multi-proceso X11 *( tracked issue del término de las otras spec: no ninguna )*
--Downloads/progress bar own; files decidir newsletter externo.
-- Restaura pestañas de navegador tras un cierre de proceso.
+- Historial persistente, marcadores, pestañas privadas, sincronización Mozilla.
+- Configuración fina de cookies/permisos (ubicación, cámara, notificaciones web)
+  → todo denegado por defecto por el motor.
+- Multi-proceso X11 (tracked issue aparte; fuera de esta spec).
+- Barra de descargas/progreso; los ficheros descargados se dejan al flujo externo.
+- Restaurar pestañas de navegador tras un cierre de proceso.
 - Modo oscuro de la página ligado al tema del app.
 
 ## Criterios de finalización
 
-1. Botón de pestaña de navegador en el tab bar → pestaña "Navegador" activa y numerada
-   (RF-1); cerrarla no toca el service ni las demás pestañas (RF-9).
+1. Acción "pestaña de navegador" en el drawer (enmienda RF-1) → pestaña "Navegador"
+   activa y numerada; cerrarla no toca el service ni las demás pestañas (RF-9).
 2. En la pestaña: barra de URL editable, recargar, atrás/adelante habilitados por historia
    del propio tab (RF-2); el título del documento llega a la pestaña (RF-3).
 3. Con el ajuste por defecto, pulsar un enlace del terminal (ambos renderers y More-menu)
@@ -173,7 +175,7 @@ universal lleva esa misma lib):
    compleja) sin bloquear el resto de pestañas; medida y memoria constatada documentada
    (RNF-3), tamaño del APK resultante reportado.
 
-## Resultados de factibilidad (en curso)
+## Resultados de factibilidad y verificación (final)
 
 - **F3 — Build local (2026-10-28, T2):** POSITIVO.
   - El AAR `geckoview-arm64-v8a-159.0.20261022150525` se resuelve desde
@@ -187,8 +189,26 @@ universal lleva esa misma lib):
     (`unzip -l` verificado).
   - Tamaño constatado del APK universal DEBUG: **140.8 MB** (antes ~30-60).
     La cifra de release se mide en T11.
-- **F1/F2 (procesos con shared UID + memoria en el Unisoc/A12):** PENDIENTES — T1,
-  mantenedor en dispositivo. Si F1 o F2 fallan: reescopo en frío antes del código de UI.
+- **F1/F2 (procesos con shared UID + memoria en el Unisoc/A12):** POSITIVOS —
+  verificados en dispositivo el **2026-10-29** (T11, `dumpsys meminfo` + `ps -A`
+  con sesión proot + X11 abiertos y pestañas del navegador activas):
+  - **Shared UID confirmado (F1):** `ps -A` muestra el proceso principal y los
+    procesos auxiliares de GeckoView — `:gpu`, `:media` y 4 `:sandboxed_tab_*` —
+    todos bajo `u0_a235`, el mismo UID del app. El multiproc de GeckoView con
+    sandbox funciona en el Unisoc/A12 bajo UID compartido sin conflicto.
+  - **Memoria constatada (F2, RNF-3):** proceso principal ≈ **230 MB PSS**
+    con ≈ **104 MB en swap** (presión moderada; el teléfono no cayó, no se
+    cerró sesión proot ni X11). Cada pestaña sandboxed entre ≈ 50–240 MB RSS —
+    buena parte es `libxul.so` mapeado compartido entre procesos, así que el
+    PSS agregado real es bastante menor. Veredicto del mantenedor: uso
+    aceptable; **sin reescopo**.
+  - **Verificación funcional del mantenedor (2026-10-28):** entrada del
+    navegador en el drawer, ruteo de enlaces del terminal (tap → pestaña
+    interna) y ajuste intern/extern funcionando en dispositivo («magnífico»).
+  - **Excepción registrada:** R8/`assembleRelease` NO verificado (3 intentos
+    con OOM en el entorno de build; pospuesto a la CI/release 3.1 por decisión
+    del mantenedor). El `assembleDebug` con el motor dentro del APK ya está
+    constatado (F3). El tamaño final de la release se medirá con ella.
 
 ## Dudas abiertas
 
