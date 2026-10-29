@@ -80,10 +80,11 @@
   (prefs/ajustes/licencia), `efad182f` (motor/UI/drawer) + bookkeeping.
 - Sin changelog/update-site: quedan para la release 3.1 general.
 
-## Spec 023 — Ejecutar en terminal y Descomprimir (2026-10-29)
+## Spec 023 — Ejecutar en terminal y Descomprimir (CERRADA 2026-10-29)
 
-- Implementada (T1–T8), `./gradlew test` verde; pendiente verificación en
-  dispositivo por el mantenedor. Menú More: «Ejecutar en la terminal»
+- Implementada (T1–T8) y verificada en dispositivo por el mantenedor (run de
+  `.sh`/binarios en pestaña, extracción zip/tar.xz, colisión, 7z con
+  contraseña, gz suelto); spec cerrada. Menú More: «Ejecutar en la terminal»
   (archivos, tras Abrir con…, callback opcional `onRunInTerminal`, oculto sin
   cablear) y «Descomprimir» (tras Comprimir…, solo formatos extraíbles).
 - Piezas: `ExtractPolicy` (formato+destino por nombre: contenedor → carpeta

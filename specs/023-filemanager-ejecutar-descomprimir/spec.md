@@ -1,10 +1,10 @@
 # Spec 023 — Gestor de archivos: Ejecutar en la terminal y Descomprimir
 
-Estado: **implementada** (2026-10-29; T1–T8, `./gradlew test` verde completo;
-verificación en dispositivo pendiente del mantenedor. Clarificación previa
-aprobada por el mantenedor: ejecutar = lanzar el archivo en sesión del
-rootfs; destino de extracción = carpeta nueva `<base>/`; formatos = los de
-commons-compress, sin rar)
+Estado: **cerrada** (2026-10-29; T1–T8 implementadas con `./gradlew test`
+verde completo y verificadas en dispositivo por el mantenedor. Clarificación
+previa aprobada: ejecutar = lanzar el archivo en sesión del rootfs; destino
+de extracción = carpeta nueva `<base>/`; formatos = los de commons-compress,
+sin rar)
 
 ## Contexto y objetivo
 

@@ -44,7 +44,11 @@ Cada tarea que añade tests es test-primero (rojo), luego código, `./gradlew te
   - Hecho cuando: `grep -rnP '(Text|contentDescription)\(\s*"' --include=*.kt
     app/src/main filemanager/src/main` sin literales y `./gradlew test` completo verde.
 - [x] **T8. Verificación de cierre de spec.**
-  - `./gradlew test` verde global (2026-10-29); spec en `implementada`;
-    verificación en dispositivo pendiente del mantenedor (se ejecuta contra
-    los criterios de finalización de la spec).
-  - Hecho cuando: 0 tests caídos; estados marcados; anotado en `MEMORY.md`.
+  - `./gradlew test` verde global (2026-10-29); verificación en dispositivo
+    COMPLETA (2026-10-29, mantenedor): spec CERRADA, criterios de finalización
+    cubiertos por el dispositivo (run de `.sh` sin bit en pestaña nueva con
+    shell interactiva al salir; extracción `.zip`/`.tar.xz` en carpeta
+    `<base>/` con listado refrescado; colisión con aviso sin tocar nada;
+    `.7z` con contraseña correcta/errónea y un solo diálogo; `.gz` suelto;
+    grep de literales limpio).
+  - Hecho cuando: 0 tests caídos; spec en `cerrada`; anotado en `MEMORY.md`.
