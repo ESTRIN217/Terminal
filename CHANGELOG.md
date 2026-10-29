@@ -51,6 +51,10 @@ y no está afiliado al equipo de Termux.
 ### Corregido
 
 #### Terminal
+- **El gestor de archivos no detectaba neovim** (enmienda spec 009, RF-2): la lista
+  `DEBIAN_EDITOR_CANDIDATES` no incluía `nvim`, así que tras `apt install neovim` la
+  acción "Abrir con… › Rootfs" avisaba "no hay editor" (o el selector no lo ofrecía)
+  aunque el binario existiera en `usr/bin/nvim`. Ahora se sondea junto al resto.
 - **`can't sanitize binding "/linkerconfig"`** (spec 018): proot (`new_binding()`)
   acepta el binding `/linkerconfig` con `EACCES` en fase CLI (espejo de canon.c,
   termux/proot#254); desaparece el warning al arrancar Debian.

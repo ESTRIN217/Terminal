@@ -45,7 +45,7 @@ data class EditorCandidate(val name: String, val available: Boolean)
 
 /** Primer candidato disponible en el orden dado (nano → vim), o null. */
 fun chooseEditor(candidates: List<EditorCandidate>): EditorCandidate?
-// hoy: el orden nano→vim vive implícito en TermuxConstants.DEBIAN_EDITOR_CANDIDATES
+// hoy: el orden nano→nvim→vim vive implícito en TermuxConstants.DEBIAN_EDITOR_CANDIDATES
 // filtrado por canExecute() en TermuxComposeActivity.openFileInEditor; el menú por ítem
 // necesita decidir ANTES de llamar para avisar por snack bar y no abrir nada (RF-2)
 ```

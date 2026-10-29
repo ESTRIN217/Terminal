@@ -4,6 +4,12 @@
   firmado + `sha256sums`; CI adjunta los `+github-debug` al publicarse. Sitio y wiki
   desplegados (`update-site.py` + `firebase deploy --only hosting`, dos targets).
 - Rama `3.0` = `master` (ff-merge `74b4ac75 → 74333562`). Specs 010–020 CERRADAS.
+- **Fix 2026-10-29 (enmienda spec 009 RF-2)**: `DEBIAN_EDITOR_CANDIDATES`
+  (`TermuxConstants.java`) ahora incluye `nvim` — `apt install neovim` deja
+  `usr/bin/nvim` y el "Abrir con › Rootfs" del gestor no lo sondeaba. Test de
+  regreso: `EditorPolicyTest.debianCandidatesIncludeNvim`. Ambos consumidores
+  (FileManagerScreen + `openFileInEditor`) leen la misma constante: cambiar la
+  lista ahí basta.
 - **Spec 020 (Soporte USB sin root: lsusb + bridge UsbManager)**: implementada
   y verificada en dispositivo (commits `87aeaaf2`, `3ea23f96`, verificación
   2026-10-26). Puente socket abstracto `@terminal_usb` + snapshots

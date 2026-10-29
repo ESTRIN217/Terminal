@@ -703,9 +703,11 @@ public final class TermuxConstants {
      * Editor candidates probed under {@code DEBIAN_ROOTFS_DIR_PATH/usr/bin} for the file
      * manager "Edit" action (first match wins when several are installed).
      * The minbase rootfs ships none of them; users install one via {@code apt install nano}.
+     * {@code nvim} covers {@code apt install neovim}, whose binary lives at
+     * {@code usr/bin/nvim} next to the rest.
      */
     public static final String[] DEBIAN_EDITOR_CANDIDATES = {
-        "nano", "vim", "vi", "vim.tiny", "mcedit", "ed"
+        "nano", "nvim", "vim", "vi", "vim.tiny", "mcedit", "ed"
     };
 
     /** Guest-relative path of the login welcome-message profile script inside the Debian rootfs. */

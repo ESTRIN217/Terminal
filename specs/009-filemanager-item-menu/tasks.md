@@ -46,7 +46,8 @@ Cada tarea que añade tests es test-primero (rojo), luego código, `./gradlew te
     `DEBIAN_EDITOR_CANDIDATES` en rootfs (`usr/bin`, canExecute): disponible →
     `onEditFile` (callback opcional ya existente; `null` oculta el elemento),
     indisponible/rootfs ausente → snack bar `msg_no_rootfs_editor` y no abre nada.
-  - Hecho cuando: `Rootfs` abre sesión con nano (o vim si nano falta); sin binarios el aviso
+  - Hecho cuando: `Rootfs` abre sesión con el primer candidato disponible (nano→nvim→vim→…);
+    sin binarios el aviso
     aparece y no hay sesión; sin cableado de `onEditFile` el elemento Rootfs no se ve;
     enlaces: Sistema/Rootfs actúan sobre el destino; `./gradlew test` verde.
 - [x] **T7. Diálogo «Comprimir…».** RF-7

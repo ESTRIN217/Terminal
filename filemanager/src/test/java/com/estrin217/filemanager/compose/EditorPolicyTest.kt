@@ -1,7 +1,9 @@
 package com.estrin217.filemanager.compose
 
+import com.termux.shared.termux.TermuxConstants
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -39,5 +41,15 @@ class EditorPolicyTest {
     fun respectsTheGivenOrderBeyondTheDefaultPair() {
         // The order is the caller's: whatever the host wires is honored.
         assertEquals(vim(true), EditorPolicy.chooseEditor(listOf(vim(true), nano(true))))
+    }
+
+    @Test
+    fun debianCandidatesIncludeNvim() {
+        // Spec 009 RF-2 amendment (2026-10-29): `apt install neovim` provides
+        // usr/bin/nvim, which both consumers (FileManagerScreen pre-check and
+        // TermuxComposeActivity.openFileInEditor) must detect via the shared
+        // candidate list. Nano keeps its first place from the original contract.
+        assertTrue(TermuxConstants.DEBIAN_EDITOR_CANDIDATES.contains("nvim"))
+        assertEquals("nano", TermuxConstants.DEBIAN_EDITOR_CANDIDATES.first())
     }
 }

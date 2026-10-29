@@ -60,7 +60,7 @@ Versión actual: Ver el [CHANGELOG](CHANGELOG.md) o las release.
   marcadores, iconos por tipo de fichero, topbar con breadcrumb y menú «Organizar»,
   selección en la topbar, compresión **zip/tar.xz/7z** (con contraseña en `.7z`),
   propiedades en dos pestañas (permisos POSIX + SELinux) y edición de archivos con
-  `nano`/`vim`.
+  `nano`/`nvim`/`vim`.
 - **Aplicaciones gráficas sin root** — pestañas X11 integradas: el servidor X
   companion se lanza desde la propia app para el Debian/proot (con `DISPLAY` ya
   exportado), el teclado y las teclas extra llegan al guest con la semántica de la

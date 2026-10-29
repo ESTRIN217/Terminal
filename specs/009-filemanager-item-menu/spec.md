@@ -75,7 +75,10 @@ archivo o carpeta concreta sin entrar en ella ni seleccionarla.
 - RF-2: EL SISTEMA muestra «Abrir con…» solo para archivos, como submenú con dos
   opciones: «Sistema» (abre el archivo con la app Android, flujo actual) y
   «Rootfs» (abre una sesión de terminal del rootfs con el primer editor disponible
-  nano→vim sobre ese archivo); SI no hay editor disponible o el rootfs no está
+  de `TermuxConstants.DEBIAN_EDITOR_CANDIDATES` — orden nano→nvim→vim→…— sobre ese
+  archivo; *(enmienda 2026-10-29: la lista original nano/vim/vi/vim.tiny/mcedit/ed
+  no detectaba neovim, `apt install neovim` da un binario `usr/bin/nvim` que no se
+  sondeaba)*); SI no hay editor disponible o el rootfs no está
   listo, ENTONCES el sistema avisa con la snack bar y no abre nada. SI el host no
   cablea «Rootfs», ENTONCES el elemento se oculta (precedente de la 008).
 - RF-3: CUANDO el usuario pulsa «Cortar» o «Copiar» del menú del ítem, EL SISTEMA
