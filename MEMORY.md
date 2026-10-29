@@ -88,6 +88,13 @@
   en el guest, Android gestiona `/dev` con `ueventd`, y `hwdb.bin` solo lo
   consume udev. Son no-op: no reintentar ni "arreglar". Si un tutorial de
   Linux con systemd pide "recargar reglas udev", ese paso no aplica al guest.
+- Origen real de esos mensajes: el `postinst` de `udisks2` (aparece como
+  `Failed to scan devices: Permission denied` + `dpkg: error processing
+  package udisks2` en `apt upgrade`). Remedio documentado (wiki + README):
+  `apt remove --purge udisks2`, o neutralizar su postinst
+  (`echo 'exit 0' > /var/lib/dpkg/info/udisks2.postinst && dpkg --configure -a`).
+  Mismo patrón para cualquier paquete cuyo postinst llame a `udevadm`/
+  `systemd-hwdb`.
 
 ## Arquitectura y reglas prácticas
 - `terminal-emulator` → `terminal-view` → `termux-shared` → `app`; `filemanager` →

@@ -500,6 +500,35 @@
                         el lado de Android (permisos, <code>ueventd</code>). Con <code>ls /run/udev</code> se
                         confirma que no hay demonio.
                     </p>
+                    <p>
+                        Iso más visible todavía: el <strong>paquete <code>udisks2</code></strong> ejecuta esa
+                        misma receta en su script <code>postinst</code>, así que durante un
+                        <code>apt upgrade</code> que lo toque aparece el trío
+                        <code>Failed to send reload request: No such file or directory</code> /
+                        <code>Failed to scan devices: Permission denied</code> (el <code>udevadm trigger</code>
+                        del postinst escanea <code>/sys</code>, y SELinux lo deniega — la sección de arriba) y
+                        <code>dpkg: error processing package udisks2</code>. Error conocido de proot (reportes
+                        idénticos en Termux y UserLAnd). No afecta a la sesión; <code>udisks2</code> no sirve de
+                        nada aquí (habla con udev/systemd, que no existen). Deja el paquete en
+                        <code>1 not fully installed</code> y cada <code>apt upgrade</code> lo reintentará.
+                        Remedios:
+                    </p>
+                    <ul>
+                        <li>Quitarlo si nada depende de él:
+                            <code>apt remove --purge udisks2</code>.</li>
+                        <li>Si un dependiente (p. ej. <code>gvfs</code>) lo exige, neutralizar el postinst,
+                            que es el workaround estándar en proot:
+                            <pre><code>echo 'exit 0' &gt; /var/lib/dpkg/info/udisks2.postinst
+dpkg --configure -a</code></pre>
+                            El paquete queda «configurado» sin los pasos udev, que aquí no harían nada.</li>
+                    </ul>
+                    <p>
+                        Lo contrario también es cierto: si <code>dpkg</code> muestra ese error en el
+                        <code>postinst</code> de otro paquete cuyo script llame a
+                        <code>udevadm trigger</code>/<code>systemd-hwdb</code>, la causa es la misma y el
+                        remedio es idéntico (neutralizar su <code>postinst</code> en
+                        <code>/var/lib/dpkg/info/</code>).
+                    </p>
 
                     <h2>Solo AArch64</h2>
                     <p>

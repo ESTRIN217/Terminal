@@ -138,7 +138,11 @@ automático. Publica el texto completo al abrir un issue; los issues con
   con `Bad file descriptor`. Son errores esperados y no afectan a la sesión —
   Android gestiona `/dev` con su propio `ueventd`; los pasos de estilo
   «recarga las reglas de udev» de tutoriales no aplican al huésped, no hay que
-  ejecutarlos.
+  ejecutarlos. El caso más común es el `postinst` de `udisks2` (aparece como
+  `Failed to scan devices: Permission denied` + `dpkg: error processing package
+  udisks2` en un `apt upgrade`): quítalo con `apt remove --purge udisks2` o
+  neutraliza su postinst (`echo 'exit 0' >
+  /var/lib/dpkg/info/udisks2.postinst && dpkg --configure -a`).
 - Las lecturas de `/proc/stat` (Android≥8), `/proc/cpuinfo` (sin `model name`) y
   `/proc/uptime` que bloquea SELinux están resueltas sin root: la app sirve
   *snapshots* de procfs por binds de proot durante la sesión, así que `htop` y `btop`
