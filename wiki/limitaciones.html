@@ -471,6 +471,36 @@
                         como validado; el resultado real de cada paso se anotará aquí.
                     </p>
 
+                    <h2>Sin udev ni systemd en el invitado: <code>udevadm</code> y <code>systemd-hwdb</code> fallan</h2>
+                    <p>
+                        Dentro de la sesión Debian, <code>udevadm control --reload-rules</code> termina con
+                        <code>Failed to send reload request: No such file or directory</code> y
+                        <code>systemd-hwdb update</code> puede fallar con
+                        <code>Failed to write database /etc/udev/hwdb.bin: Bad file descriptor</code>. No son
+                        bugs del fork: <strong>es lo esperado en proot</strong>.
+                    </p>
+                    <ul>
+                        <li><code>udevadm control</code> habla con el demonio <code>systemd-udevd</code>
+                            mediante el socket <code>/run/udev/control</code>; ese demonio no corre en el
+                            contenedor (y menos puede recibir uevents del kernel: dentro del huésped no
+                            existe ese flujo).</li>
+                        <li>El gestor de <code>/dev</code> es el <code>ueventd</code> de Android (parte del
+                            init de Android), no udev: el invitado solo ve los nodos que Android ya creó,
+                            con los permisos que la política SELinux deje (véase arriba
+                            <em>«SELinux del fabricante»</em>).</li>
+                        <li><code>systemd-hwdb</code> compila <code>/etc/udev/hwdb.bin</code>, la base de
+                            datos que solo consume udev: aunque se escribiera, nadie la leería nunca. El
+                            mensaje <code>Bad file descriptor</code> es proot exponiendo la escritura sobre
+                            ruta/fd que no puede manejar.</li>
+                    </ul>
+                    <p>
+                        En consecuencia, esos comandos son <strong>no-op aquí</strong>: no hay que ejecutarlos
+                        ni «arreglarlos». Si una guía para Linux con systemd termina con «recarga las reglas
+                        de udev», ese paso no aplica al huésped; todo lo relacionado con dispositivos va por
+                        el lado de Android (permisos, <code>ueventd</code>). Con <code>ls /run/udev</code> se
+                        confirma que no hay demonio.
+                    </p>
+
                     <h2>Solo AArch64</h2>
                     <p>
                         El binario <code>proot</code> embebido está compilado y preparado para

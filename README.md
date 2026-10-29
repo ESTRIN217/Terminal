@@ -133,6 +133,12 @@ automático. Publica el texto completo al abrir un issue; los issues con
   `/dev/pts` y `/sys`, así que `ls /dev` puede fallar con `Permission denied` dentro
   de la sesión Debian. El acceso a dispositivos concretos (`/dev/null`, `/dev/tty`…)
   sigue funcionando.
+- En el invitado no hay udev ni systemd gestor de dispositivos: `udevadm control
+  --reload-rules` falla con `No such file or directory` y `systemd-hwdb update`
+  con `Bad file descriptor`. Son errores esperados y no afectan a la sesión —
+  Android gestiona `/dev` con su propio `ueventd`; los pasos de estilo
+  «recarga las reglas de udev» de tutoriales no aplican al huésped, no hay que
+  ejecutarlos.
 - Las lecturas de `/proc/stat` (Android≥8), `/proc/cpuinfo` (sin `model name`) y
   `/proc/uptime` que bloquea SELinux están resueltas sin root: la app sirve
   *snapshots* de procfs por binds de proot durante la sesión, así que `htop` y `btop`

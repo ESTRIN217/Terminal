@@ -80,6 +80,15 @@
   (prefs/ajustes/licencia), `efad182f` (motor/UI/drawer) + bookkeeping.
 - Sin changelog/update-site: quedan para la release 3.1 general.
 
+## Doc limitaciones udev (2026-10-29)
+- Documentado en `wiki/limitaciones.html` + README § Limitaciones conocidas:
+  `udevadm control --reload-rules` (`No such file or directory`) y
+  `systemd-hwdb update` (`Bad file descriptor`) son **esperados en proot**:
+  no hay `udevd` (socket `/run/udev/control` no existe), sin uevents del kernel
+  en el guest, Android gestiona `/dev` con `ueventd`, y `hwdb.bin` solo lo
+  consume udev. Son no-op: no reintentar ni "arreglar". Si un tutorial de
+  Linux con systemd pide "recargar reglas udev", ese paso no aplica al guest.
+
 ## Arquitectura y reglas prácticas
 - `terminal-emulator` → `terminal-view` → `termux-shared` → `app`; `filemanager` →
   `termux-shared`. No invertir dependencias. Librerías Java puro; Kotlin solo en `app`
