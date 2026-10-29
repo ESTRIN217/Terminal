@@ -103,6 +103,11 @@
   zutty condensado a un párrafo, OSC 8 a una frase. Sin pérdida de síntomas ni
   remedios. Anclas: `limitaciones.html#aceleracion-virgl`, `#virgl-zutty`,
   `x11.html#virgl` (referenciadas cruzadamente).
+- README revisado (252→237): TOC completo (faltaban Limitaciones/GPU y el
+  anchor de Características estaba roto), títulos sin números de spec
+  (`Limitaciones conocidas`, `Gráficos y GPU`), GPU condensada a 3 bullets con
+  links a la wiki (URL web, sin path relativo), bullet udisks2 acortado con
+  remedio de una línea y puntero a la wiki.
 
 ## Arquitectura y reglas prácticas
 - `terminal-emulator` → `terminal-view` → `termux-shared` → `app`; `filemanager` →

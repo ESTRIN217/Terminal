@@ -72,11 +72,13 @@ Versión actual: Ver el [CHANGELOG](CHANGELOG.md) o las release.
 
 ## Contenido
 
-- [Características](#características)
+- [Características](#características-clave)
 - [Instalación](#instalación)
 - [Desinstalación](#desinstalación)
 - [Enlaces](#enlaces)
 - [Depuración](#depuración)
+- [Limitaciones conocidas](#limitaciones-conocidas)
+- [Gráficos y GPU](#gráficos-y-gpu)
 - [Mantenimiento y contribuciones](#mantenimiento-y-contribuciones)
 - [Atribución](#atribución)
 
@@ -127,22 +129,20 @@ automático. Publica el texto completo al abrir un issue; los issues con
 - `Debug` — mensajes de depuración.
 - `Verbose` — mensajes detallados.
 
-### Limitaciones conocidas (SELinux OEM)
+### Limitaciones conocidas
 
 - La política SELinux de algunos fabricantes impide a la app enumerar `/dev`,
   `/dev/pts` y `/sys`, así que `ls /dev` puede fallar con `Permission denied` dentro
   de la sesión Debian. El acceso a dispositivos concretos (`/dev/null`, `/dev/tty`…)
   sigue funcionando.
 - En el invitado no hay udev ni systemd gestor de dispositivos: `udevadm control
-  --reload-rules` falla con `No such file or directory` y `systemd-hwdb update`
-  con `Bad file descriptor`. Son errores esperados y no afectan a la sesión —
-  Android gestiona `/dev` con su propio `ueventd`; los pasos de estilo
-  «recarga las reglas de udev» de tutoriales no aplican al huésped, no hay que
-  ejecutarlos. El caso más común es el `postinst` de `udisks2` (aparece como
-  `Failed to scan devices: Permission denied` + `dpkg: error processing package
-  udisks2` en un `apt upgrade`): quítalo con `apt remove --purge udisks2` o
-  neutraliza su postinst (`echo 'exit 0' >
-  /var/lib/dpkg/info/udisks2.postinst && dpkg --configure -a`).
+  --reload-rules` y `systemd-hwdb update` fallan con errores esperados que no
+  afectan a la sesión — Android gestiona `/dev` con su propio `ueventd`, así que
+  los pasos «recarga las reglas de udev» de tutoriales no aplican al huésped.
+  El caso más común es el `postinst` de `udisks2` en un `apt upgrade`
+  (`Failed to scan devices: Permission denied` + `dpkg: error processing
+  package udisks2`); remedio: `apt remove --purge udisks2`, o neutralizar su
+  postinst — el porqué y el detalle en la wiki.
 - Las lecturas de `/proc/stat` (Android≥8), `/proc/cpuinfo` (sin `model name`) y
   `/proc/uptime` que bloquea SELinux están resueltas sin root: la app sirve
   *snapshots* de procfs por binds de proot durante la sesión, así que `htop` y `btop`
@@ -154,43 +154,28 @@ automático. Publica el texto completo al abrir un issue; los issues con
 Detalles técnicos y receta de VirGL en la wiki:
 [`terminal-gnulinux-docs.web.app/limitaciones.html`](https://terminal-gnulinux-docs.web.app/limitaciones.html).
 
-## Gráficos y GPU (specs 011/012/013)
+## Gráficos y GPU
 
 Sin root, lo que ve `glxinfo`/`vulkaninfo` dentro de la sesión Debian es el
-renderizador por CPU de Mesa (**llvmpipe**, con la lavapipe de Vulkan): no es un
-bug, es el punto de partida en la mayoría de móviles. La sección «Estado GPU» de
-Ajustes dice qué situación tiene tu dispositivo:
+renderizador por CPU de Mesa (**llvmpipe**, con la lavapipe de Vulkan): no es
+un bug, es el punto de partida en la mayoría de móviles. La sección
+**«Estado GPU»** de Ajustes dice qué vía tiene tu dispositivo:
 
 - **Adreno (Qualcomm):** el backend KGSL de los drivers libres freedreno/turnip
-  habla directamente con el GPU (nodo `/dev/kgsl-3d0`) sin root ni DRM. Si la
-  detección lo confirma y la versión de mesa del invitado coincide
-  (`25.0.7-2+deb13u1`), la app ofrece «Instalar aceleración GPU»: descarga los
-  seis `.deb` de mesa recompilados con KGSL, verificando el SHA-256 de cada uno,
-  los instala con `apt install --reinstall` dentro del invitado, marca holds y a
-  partir de entonces inyecta `MESA_LOADER_DRIVER_OVERRIDE=kgsl`. Desinstalar
-  devuelve el invitado al estado del mirror Debian. Referencia externa:
-  [`lfdevs/mesa-for-android-container`](https://github.com/lfdevs/mesa-for-android-container).
-- **VirGL (cualquier GPU: Mali, PowerVR, Adreno sin KGSL…):** segunda vía sin
-  root, agnóstica del fabricante (spec 013). La app ejecuta un servidor nativo
-  (`virgl_test_server`, compilado con el pipeline del fork y embebido en el
-  APK) que renderiza 3D con el EGL del sistema Android, y el invitado lo usa
-  con el driver `virpipe` de mesa (`GALLIUM_DRIVER=virpipe`). El interruptor
-  «Aceleración GPU vía VirGL» está disponible en el panel «Estado GPU» para
-  todas las familias y es mutuamente excluyente con la vía KGSL: para cambiar
-  de una a otra hay que pasar por «desactivada». Es una capa de traducción:
-  offload real del GPU frente a llvmpipe, no aceleración nativa equivalente.
-  El display gráfico es la pestaña X11 de la app (spec 014); la receta paso a
-  paso, la alternativa VNC y las limitaciones (Zink/OpenCL) están en la
-  [wiki](wiki/limitaciones.html). Validación en dispositivo pendiente.
-- **Mali / PowerVR (MediaTek, Exynos...):** sin vía directa a la GPU sin root
-  (habría que portar módulos kernel DRM). El panel lo dice en claro y
-  llvmpipe sigue en uso al no activar VirGL. La spec 012 saca partido a la
-  CPU: el rasterizador por software corre multihilo. En Ajustes → «Hilos de
-  llvmpipe» viene activado con N=8; puedes configurar N entre 1 y 16. Se
-  inyecta `LP_NUM_THREADS` y `GALLIUM_NUM_THREADS` con `min(núcleos, N)`. Apaga
-  «Activar multihilo» para no inyectar ninguna de las dos variables. Los cambios
-  se aplican a las sesiones nuevas; las que ya están abiertas conservan su entorno.
-  Con aceleración activa (KGSL o VirGL) estos ajustes no aplican.
+  habla con el GPU (`/dev/kgsl-3d0`) sin root ni DRM. «Instalar aceleración
+  GPU» instala mesa recompilada con KGSL (SHA-256 verificado, holds y
+  desinstalación reversible). Pipeline implementado; pendiente de validar en
+  hardware Adreno real (referencia:
+  [`lfdevs/mesa-for-android-container`](https://github.com/lfdevs/mesa-for-android-container)).
+- **VirGL (cualquier GPU: Mali, PowerVR, Adreno sin KGSL…):** la vía
+  agnóstica del fabricante — la app corre un servidor VirGL nativo y el guest
+  renderiza con la GPU real vía `virpipe`. Es una capa de traducción, no
+  aceleración nativa; la receta paso a paso está en la wiki:
+  [display X11](https://terminal-gnulinux-docs.web.app/x11.html#virgl) ·
+  [limitaciones](https://terminal-gnulinux-docs.web.app/limitaciones.html#aceleracion-virgl).
+- **Hilos de llvmpipe:** en la vía por CPU el rasterizador corre multihilo;
+  configurable en Ajustes (N de 1 a 16, por defecto 8). Sin efecto con
+  aceleración GPU activa.
 
 ## Mantenimiento y contribuciones
 
