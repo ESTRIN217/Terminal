@@ -82,6 +82,17 @@
 - **Excepción:** R8/`assembleRelease` NO verificado (3 intentos con OOM local);
   pospuesto a la CI/release 3.1. No dar por sana la ofuscación del AAR de GV
   hasta entonces. El tamaño con ofuscación se medirá con la release.
+- **RESUELTO (2026-10-30):** R8 fallaba con 2 clases ausentes (`ZstdInputStream`
+  de zstd-jni y `BrotliInputStream` de brotli-dec, deps OPCIONALES de
+  commons-compress 1.27.1 no traídas por Gradle pero hard-referenciadas por
+  `CompressorStreamFactory`). Fix: `-dontwarn` por ambas en
+  `app/proguard-rules.pro`. `assembleRelease` OK en local (13 min): APK
+  `terminal_release_universal.apk` 104 MB, válido (1078→ 1379 ficheros,
+  manifest OK, libxul.so 154 MB). `missing_rules.txt` ya no se genera → no
+  quedan más classes ausentes (GV AAR pasó limpio). NO añadir zstd/brotli como
+  deps reales salvo spec futura de `.tar.zst`. Commit `5859f2fe` (rama
+  `experimental`), incluye `-Xmx1024m → 2048m` en `gradle.properties` (el OOM
+  de los 3 intentos previos era heap del daemon, no R8).
 - Commits: `a3d53f26` (build+spec), `be451b10` (lógica+tests), `824c013f`
   (prefs/ajustes/licencia), `efad182f` (motor/UI/drawer) + bookkeeping.
 - Sin changelog/update-site: quedan para la release 3.1 general.
