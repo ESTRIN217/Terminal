@@ -9,6 +9,52 @@ y no está afiliado al equipo de Termux.
 
 ## [Sin publicar]
 
+
+## [3.1.0] — 2026-10-30
+
+### Añadido
+
+#### Terminal
+- **Navegador interno con pestañas GeckoView** (spec 022): el drawer incluye una
+  entrada «Navegador» que abre pestañas de navegación web directamente en la app
+  (motor Firefox/GeckoView release 159, arm64-v8a); los enlaces del terminal y del
+  menú «Más» se pueden abrir en la app con el ajuste «Abrir enlaces en la app» en
+  Ajustes; las pestañas de navegador coexisten con las de terminal y el gestor de
+  archivos; `minSdk` sube de 24 a **26** para satisfacer el requisito de GeckoView
+  (proot/`getifaddrs` Bionic sigue OK en 26).
+- **Enumeración de dispositivos USB sin root** (spec 020): `lsusb` disponible en el
+  guest Debian muestra los dispositivos USB del host vía un bridge de socket abstracto
+  (`@terminal_usb`) que lee el `UsbManager` de Android; `termux-usb` permite
+  interactuar con ellos desde la terminal.
+- **Acceso a almacenamiento USB desde el guest** (spec 021): `lsblk` en el guest
+  lista los volúmenes montados (pendrive, microSD) con tamaño real vía `statvfs`;
+  `terminal-usb-cp` copia ficheros entre el host y el volumen; el acceso al sistema
+  de archivos llega vía el bind `/storage` ya existente (SELinux-safe).
+
+#### Gestor de archivos
+- **«Ejecutar en la terminal»** (spec 023): el menú More de un archivo ejecutable
+  abre una sesión proot que lo lanza y queda como shell interactiva; archivos de
+  texto no ejecutables con extensión reconocida (`.sh`, `.py`, …) se pasan al
+  intérprete adecuado (`bash`/`python3`); los demás muestran un aviso.
+- **«Descomprimir aquí»** (spec 023): el menú More de un archivo `.zip`, `.tar.xz`
+  o `.7z` lo descomprime en la carpeta actual con el indicador de ocupado y aviso de
+  resultado por snack bar.
+
+### Corregido
+
+#### Gestor de archivos
+- **El editor del rootfs no detectaba neovim** (enmienda spec 009, RF-2): la lista
+  `DEBIAN_EDITOR_CANDIDATES` no incluía `nvim`, así que tras `apt install neovim` la
+  acción «Abrir con… › Rootfs» avisaba «no hay editor» aunque el binario existiera en
+  `usr/bin/nvim`. Ahora se sondea en el orden nano→nvim→vim→…
+
+### Notas técnicas
+- R8 (`assembleRelease`) verificado en esta release tras resolución de missing-class
+  errors de GeckoView (spec 022, `190ceaf2`).
+
+
+## [3.0.0] — 2026-10-26
+
 ### Añadido
 
 #### Terminal
@@ -51,10 +97,6 @@ y no está afiliado al equipo de Termux.
 ### Corregido
 
 #### Terminal
-- **El gestor de archivos no detectaba neovim** (enmienda spec 009, RF-2): la lista
-  `DEBIAN_EDITOR_CANDIDATES` no incluía `nvim`, así que tras `apt install neovim` la
-  acción "Abrir con… › Rootfs" avisaba "no hay editor" (o el selector no lo ofrecía)
-  aunque el binario existiera en `usr/bin/nvim`. Ahora se sondea junto al resto.
 - **`can't sanitize binding "/linkerconfig"`** (spec 018): proot (`new_binding()`)
   acepta el binding `/linkerconfig` con `EACCES` en fase CLI (espejo de canon.c,
   termux/proot#254); desaparece el warning al arrancar Debian.

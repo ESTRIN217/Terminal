@@ -1,6 +1,6 @@
 # Spec 020 — Soporte USB sin root: enumeración (lsusb) e interacción (bridge UsbManager)
 
-Estado: **implementada** (2026-10-26; T1–T6 completadas, suite global `./gradlew test` en verde)
+Estado: **cerrada** (2026-10-26; T1–T6 completadas, suite global `./gradlew test` en verde, verificada en dispositivo)
 
 ## Contexto y objetivo
 

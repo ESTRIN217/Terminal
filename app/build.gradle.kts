@@ -56,8 +56,8 @@ android {
         // (antes 24 por proot/getifaddrs, que sigue satisfecho con 26).
         minSdk = providers.gradleProperty("minSdkVersion").orNull?.toInt() ?: 26
         targetSdk = providers.gradleProperty("targetSdkVersion").orNull?.toInt() ?: 28
-        versionCode = 122
-        val verName = appVersionName.ifEmpty { "3.0.0" }
+        versionCode = 123
+        val verName = appVersionName.ifEmpty { "3.1.0" }
         versionName = verName
         validateVersionName(verName)
 

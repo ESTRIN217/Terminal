@@ -1,8 +1,6 @@
 # Spec 022 — Navegador interno: pestañas GeckoView para abrir webs desde la terminal
 
-Estado: **implementada y verificada en dispositivo (2026-10-29)**. Excepción
-registrada: R8/`assembleRelease` NO verificado (OOM tras 3 intentos en el
-entorno local; decisión del mantenedor de posponerlo a la CI/release 3.1).
+Estado: **cerrada** (2026-10-30; implementada y verificada en dispositivo; R8/`assembleRelease` verificado en la release 3.1.0)
 
 ## Contexto y objetivo
 
