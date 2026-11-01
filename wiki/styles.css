@@ -381,4 +381,10 @@ blockquote p:last-child {
 .footer .muted {
     color: var(--muted);
 }
+.footer__bottom {
+    margin-top: 1rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    width: 100%;
+}
 .footer__legal { font-size: .82rem; opacity: .8; }
