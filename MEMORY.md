@@ -9,10 +9,16 @@
   columnas, cards podadas a 4, FAQ ampliada, Android 8.0/API 26, minSdk en
   JSON-LD (ambos HTML). El `404.html` del sitio se dejó SIN datos que caducan
   (enlaces a `/releases/latest`, sin versión/fecha horneada).
-- **Wiki revisada y corregida (2026-10-31, `aeacac26`)**: requisito API 26 y
-  APK ~104 MB (`instalacion.html`), sección «Navegador interno» + Ejecutar/
-  Descomprimir del gestor (`uso-terminal.html`), ajuste «Abrir enlaces en la
-  app» en `hipervinculos.html`. USB (020/021) y nvim ya estaban.
+- **Wiki revisada y corregida (2026-10-31, `aeacac26`)**: API 26/APK ~104 MB
+  (`instalacion.html`), «Navegador interno» + Ejecutar/Descomprimir del gestor
+  (`uso-terminal.html`), «Abrir enlaces en la app» (`hipervinculos.html`).
+- **Nueva página wiki/tecnicos.html (2026-10-31)**: «Documentación técnica
+  (devs/IT)» — pila/toolchain, arquitectura de módulos, estilo Java/Kotlin,
+  errores (Error/Errno/Logger/CrashHandler), internals proot+rootfs,
+  workflows CI reales, firma (UID compartido), update-site.py + targets
+  `main`/`terminal-gnulinux-docs`, depuración y proceso SDD. Enlazada en
+  nav + tabla «¿Por dónde empezar?» de `index.html` (metas actualizadas).
+  Versionless, sin JS, sin cambios en styles.css. Sin desplegar.
 
 ## Decisiones permanentes
 - **Imágenes del sitio → JPEG**: PNG con degradado → `ffmpeg -vf format=yuvj420p

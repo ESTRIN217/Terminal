@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Documentación técnica — Wiki de Terminal</title>
+    <meta name="description" content="Documentación técnica de Terminal para desarrolladores e IT: arquitectura de módulos, compilación, tests, internals de proot y Debian, CI, firma, depuración y proceso de contribución.">
+    <meta name="color-scheme" content="dark">
+    <link rel="canonical" href="https://terminal-gnulinux-docs.web.app/tecnicos.html">
+    <link rel="icon" href="https://terminal-gnulinux.web.app/img/icon-192.png" type="image/png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+    <header class="site-header">
+        <div class="wrap header-inner">
+            <a class="brand" href="index.html">
+                <span class="brand-name">Terminal</span>
+                <span class="brand-sub">· wiki</span>
+            </a>
+            <nav class="site-nav" aria-label="Enlaces del sitio">
+                <ul>
+                    <li><a href="https://terminal-gnulinux.web.app">Sitio</a></li>
+                    <li><a href="https://github.com/ESTRIN217/Terminal">GitHub</a></li>
+                    <li><a href="https://github.com/ESTRIN217/Terminal/releases">Descargar</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main id="contenido">
+        <div class="wrap docs">
+            <nav class="docs-nav" aria-label="Páginas de la wiki">
+                <h2>Documentación</h2>
+                <ul>
+                    <li><a href="index.html">Portada</a></li>
+                    <li><a href="instalacion.html">Instalación</a></li>
+                    <li><a href="uso-terminal.html">Uso de la terminal</a></li>
+                    <li><a href="personalizacion.html">Apariencia y fuentes</a></li>
+                    <li><a href="hipervinculos.html">Hipervínculos</a></li>
+                    <li><a href="imagenes.html">Imágenes en la terminal</a></li>
+                    <li><a href="x11.html">Servidor X11 (companion)</a></li>
+                    <li><a href="android-studio.html">Android Studio (ARM64)</a></li>
+                    <li><a href="tecnicos.html" aria-current="page">Documentación técnica (devs/IT)</a></li>
+                    <li><a href="limitaciones.html">Limitaciones conocidas</a></li>
+                </ul>
+            </nav>
+
+            <article class="docs-main">
+                <header class="doc-head">
+                    <h1>Documentación técnica</h1>
+                    <p class="doc-meta">Para desarrolladores e IT · fuente de verdad: el repo — <a href="https://github.com/ESTRIN217/Terminal">ESTRIN217/Terminal</a> (detalles en <code>AGENTS.md</code> y <code>docs/constitution.md</code>).</p>
+                </header>
+
+                <div class="doc-body">
+                    <p>
+                        Esta página condensa lo que un desarrollador o un equipo de IT necesita para
+                        <strong>compilar</strong>, <strong>entender la arquitectura</strong>, <strong>depurar</strong> y
+                        <strong>contribuir</strong> al fork. Va al código y a su proceso: para el uso del
+                        producto mira las demás páginas, y hacia las recetas del guest (X11, USB, Android
+                        Studio) solo se enlaza cuando hace falta.
+                    </p>
+
+                    <h2>La pila, de un vistazo</h2>
+                    <dl>
+                        <dt>Qué es</dt>
+                        <dd>App Android de terminal + entorno Linux (Debian vía <code>proot</code>, sin root), UI en Jetpack Compose y emulación de terminal nativa (JNI pty).</dd>
+                        <dt>Toolchain</dt>
+                        <dd>JDK 17 · NDK <code>30.0.14904198</code> · CMake 3.31.6 · Gradle 9.7.1 · AGP 9.4.1 · Kotlin 2.4.20 · Compose BOM 2026.09.00</dd>
+                        <dt>SDK</dt>
+                        <dd><code>minSdk 26</code> (Android 8.0), código nativo compilado contra android-28. El <code>targetSdk 28</code> es <strong>intencional</strong>: subirlo activa scoped storage y otras restricciones que rompen el modelo de acceso a ficheros.</dd>
+                        <dt>ABIs</dt>
+                        <dd><code>arm64-v8a</code> únicamente: el binario <code>proot</code> (loader + ensamblador AArch64) está portado solo a ARM64 y no se soportan otras ABIs en runtime.</dd>
+                        <dt>Paquete</dt>
+                        <dd><code>com.estrin217.terminal</code> con UID compartido <code>com.termux</code>: toda la familia de APKs de la firma debe firmarse con la misma key.</dd>
+                    </dl>
+
+                    <h2>Arquitectura de módulos</h2>
+<pre><code>app  →  termux-shared  →  terminal-view  →  terminal-emulator
+  └─→  filemanager  →  termux-shared</code></pre>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Módulo</th>
+                                <th>Paquete</th>
+                                <th>Propósito</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>terminal-emulator</code></td>
+                                <td><code>com.termux.terminal</code></td>
+                                <td>Motor de emulación VT100/xterm, pty por JNI. Cero dependencias internas.</td>
+                            </tr>
+                            <tr>
+                                <td><code>terminal-view</code></td>
+                                <td><code>com.termux.view</code></td>
+                                <td>Renderizado como <code>View</code> de Android para la terminal.</td>
+                            </tr>
+                            <tr>
+                                <td><code>termux-shared</code></td>
+                                <td><code>com.termux.shared</code></td>
+                                <td>Lógica compartida: settings, utilidades de ficheros, sistema de errores, crash handling, constantes.</td>
+                            </tr>
+                            <tr>
+                                <td><code>filemanager</code></td>
+                                <td><code>com.estrin217.filemanager</code></td>
+                                <td>Librería reutilizable del gestor: <code>FileOperationsHelper</code>, <code>FileSortOption</code>, Compose <code>FileManagerScreen</code>/<code>FileManagerViewModel</code>. Java + Kotlin (Compose), con sus propios string resources.</td>
+                            </tr>
+                            <tr>
+                                <td><code>app</code></td>
+                                <td><code>com.termux</code></td>
+                                <td>Activities, services y punto de entrada. Java + Kotlin (Compose).</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3>¿Dónde toco qué?</h3>
+                    <ul>
+                        <li><strong>Bug de emulación VT100/xterm:</strong> <code>terminal-emulator</code>.</li>
+                        <li><strong>UI/Activities:</strong> <code>app</code>.</li>
+                        <li><strong>Cuestión transversal (settings, errores, ficheros):</strong> <code>termux-shared</code>.</li>
+                    </ul>
+
+                    <h3>Reglas de dependencia</h3>
+                    <ul>
+                        <li><code>terminal-view</code> expone <code>terminal-emulator</code> vía <code>api()</code> (transitivo). No cambiar a <code>implementation()</code> sin entender el impacto en los consumidores.</li>
+                        <li><code>terminal-view</code> no puede declarar dependencias hacia <code>termux-shared</code>: esa dirección crearía un ciclo.</li>
+                        <li>Utilidad que <code>termux-shared</code> y también <code>terminal-view</code> o <code>terminal-emulator</code> necesitan → se implementa en <code>terminal-emulator</code> y se delega desde la clase original (p. ej. <code>TerminalUrlScanner</code>), conservando su API pública para no tocar a los callers.</li>
+                        <li>El host del gestor de ficheros vive en <code>app</code>: <code>FileManagerSessionHost</code> aloja <code>FileManagerScreen</code> como pestaña de sesión, y los permisos de almacenamiento, <code>FileProvider</code> y el tema se cablean en la app.</li>
+                    </ul>
+
+                    <h2>Lenguaje, estilo y patrones</h2>
+                    <h3>Java + Kotlin</h3>
+                    <ul>
+                        <li><strong>Librerías <code>terminal-emulator</code>, <code>terminal-view</code>, <code>termux-shared</code> son Java puro</strong>: no añadir ficheros Kotlin ahí. La única librería con Kotlin es <code>filemanager</code>.</li>
+                        <li><strong>El módulo <code>app</code> usa Kotlin</strong> para la capa Compose (paquete <code>com.termux.terminal.compose</code>, punto de entrada <code>TermuxComposeActivity.kt</code>); activities/services existentes siguen en Java.</li>
+                        <li>Notación húngara en Java <strong>y</strong> Kotlin: <code>mTermuxService</code>, <code>mIsVisible</code>.</li>
+                        <li>Toda clase define <code>LOG_TAG</code> arriba (campo <code>static final</code> en Java, <code>companion object</code> en Kotlin).</li>
+                        <li>Clases concretas <code>final</code>; Javadoc/KDoc en métodos públicos con <code>@param</code>/<code>@return</code> y <code>{@link ...}</code>.</li>
+                        <li>Constantes centralizadas en <code>TermuxConstants.java</code> (~1357 líneas): rutas, acciones de intent y extras. Nada disperso por los ficheros.</li>
+                        <li>Identificadores y comentarios técnicos en inglés; el texto visible del usuario va en <code>strings.xml</code> (EN, <code>values-es-rVE</code>, <code>values-pt-rBR</code>), nunca literal en Compose.</li>
+                    </ul>
+
+                    <h3>Manejo de errores</h3>
+                    <ul>
+                        <li><strong>Se devuelven objetos <code>Error</code>, no se lanzan excepciones.</strong> <code>null</code> significa éxito:</li>
+                    </ul>
+<pre><code>Error error = TermuxFileUtils.isTermuxFilesDirectoryAccessible(ctx, true, true);
+if (error != null) {
+    Logger.logErrorExtended(LOG_TAG, "Failed\n" + error);
+    return;
+}</code></pre>
+                    <ul>
+                        <li>La clase <code>Errno</code> define los códigos (<code>ERRNO_SUCCESS</code>, <code>ERRNO_CANCELLED</code>, <code>ERRNO_FAILED</code>); usar las factorías <code>Errno.getError()</code>.</li>
+                        <li>Try/catch dirigido: se capturan excepciones concretas (<code>IOException</code>, <code>BadTokenException</code>), se registra con <code>Logger</code>, se notifica con Toast y se marca el flag de estado (p. ej. <code>mIsInvalidState</code>).</li>
+                        <li><code>CrashHandler</code> (excepciones no capturadas) escribe el crash log y avisa a la app por broadcast; se instala en <code>TermuxApplication.onCreate()</code>.</li>
+                        <li>Registro con <code>com.termux.shared.logger.Logger</code>, nunca <code>android.util.Log</code> directo: Logger trocea mensajes largos respetando el límite de logcat de 4068 bytes.</li>
+                    </ul>
+
+                    <h3>Patrones</h3>
+                    <ul>
+                        <li><strong>Client Interface Pattern:</strong> las interfaces definen contratos (<code>TerminalSessionClient</code>, <code>TerminalViewClient</code>); bases con no-op por defecto (<code>TermuxTerminalSessionClientBase</code>); implementaciones concretas en <code>app</code> extienden las bases.</li>
+                        <li><strong>Ciclo de vida del servicio:</strong> <code>TermuxService</code> sobrevive a <code>TermuxComposeActivity</code> (rotación, reinicio, re-bind). No guardar referencias de la Activity en el service — pasar por la interfaz client.</li>
+                        <li><strong>Utilidades estáticas</strong> para helpers sin estado (<code>TermuxUtils</code>, <code>TermuxThemeUtils</code>, <code>DataUtils</code>).</li>
+                        <li><strong>Pestañas de sesión polimórficas (Compose):</strong> <code>TermuxSessionUiModel</code> es un sealed type (<code>Terminal</code> = sesión pty, <code>FileManager</code> = sesión solo de UI). Cerrar la pestaña del gestor de ficheros no toca <code>TermuxService</code>.</li>
+                        <li><strong>Delegación hacia abajo:</strong> la lógica compartida por módulos bajos vive en el fondo del grafo (<code>terminal-emulator</code>) y los módulos de arriba delegan — ver reglas de dependencia.</li>
+                    </ul>
+
+                    <h2>Internals: <code>proot</code> y Debian rootfs</h2>
+                    <dl>
+                        <dt>Binario <code>proot</code></dt>
+                        <dd>Pipeline CMake multi-stage (loader → strip → objcopy → loader-info → <code>proot</code> final) empaquetado en <code>app/src/main/assets/arm64-v8a/proot</code>. Las tareas <code>merge.*Assets</code> dependen de <code>buildCMake</code> para garantizar que el binario esté en el APK en el primer build.</dd>
+                        <dt>Rootfs Debian</dt>
+                        <dd>Se descarga en el <strong>primer arranque</strong> (no en build time) vía <code>DebianInstaller.java</code> con verificación SHA-256 en streaming. El viejo task Gradle <code>downloadBootstraps</code> fue eliminado — el stack Compose usa <code>commons-compress</code> para extraer el rootfs y <code>HttpURLConnection</code> directo para el HTTP (no hay Ktor).</dd>
+                        <dt>UID compartido</dt>
+                        <dd>Toda la familia <code>com.termux</code> comparte UID Linux: los APKs deben firmarse con la misma key.</dd>
+                    </dl>
+                    <p>
+                        El subsistema USB sin root (<code>lsusb</code>/<code>termux-usb</code> vía API de Android,
+                        resolución de volúmenes con bind <code>-b /storage:$HOME/storage</code> porque SELinux
+                        deniega el <code>readdir</code> de <code>/storage</code>, no el del hijo) y sus límites
+                        están documentados en <a href="limitaciones.html">Limitaciones conocidas</a>.
+                        Detalle completo en las specs cerradas 020 y 021 del repo.
+                    </p>
+
+                    <h2>Compilar y probar</h2>
+<pre><code>./gradlew assembleDebug
+./gradlew test              # todos los módulos, tests unitarios
+./gradlew :filemanager:test # módulo filemanager por separado</code></pre>
+                    <ul>
+                        <li><strong>JDK 17 obligatorio:</strong> los builds fallan con versiones anteriores.</li>
+                        <li><strong>NDK <code>30.0.14904198</code></strong> y CMake 3.31.6 en local y CI; el código C nativo de <code>terminal-emulator</code>, <code>termux-shared</code> y <code>app</code> lo consume.</li>
+                        <li>JitPack usa NDK <code>29.0.14206865</code> vía env <code>JITPACK_NDK_VERSION</code>: la divergencia con el NDK local/CI (30) es esperada, no un bug.</li>
+                        <li>El <strong>único gate de calidad</strong> es <code>./gradlew test</code>: NO hay lint, detekt, ktlint ni formatter configurados.</li>
+                        <li>El <code>versionName</code> debe seguir semver <code>major.minor.patch</code>; la validación vive en <code>app/build.gradle.kts</code> y la versión en curso se imprime con <code>./gradlew :app:versionName</code>.</li>
+                        <li>Instrumented tests: no hay en CI; solo tests unitarios JUnit.</li>
+                    </ul>
+                    <div class="key-point">
+                        <p>
+                            Splits ABI: por defecto los builds debug generan <code>arm64-v8a</code> +
+                            <code>universal</code>, controlado por la variable de entorno
+                            <code>TERMUX_SPLIT_APKS_FOR_DEBUG_BUILDS</code>. La release es de <code>arm64-v8a</code> únicamente.
+                        </p>
+                    </div>
+
+                    <h2>CI y firma</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Workflow (<code>.github/workflows/</code>)</th>
+                                <th>Qué hace</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>debug_build.yml</code></td>
+                                <td><strong>Build</strong> (push a master, PRs): valida SemVer, compila <code>assembleDebug</code>, valida APKs (universal/arm64-v8a) y sube artefactos con <code>sha256sums</code>.</td>
+                            </tr>
+                            <tr>
+                                <td><code>run_tests.yml</code></td>
+                                <td><strong>Unit tests</strong>: gate de tests en CI.</td>
+                            </tr>
+                            <tr>
+                                <td><code>attach_debug_apks_to_release.yml</code></td>
+                                <td>Adjunta los APKs debug de la última release de GitHub.</td>
+                            </tr>
+                            <tr>
+                                <td><code>dependency-submission.yml</code></td>
+                                <td><strong>Automatic Dependency Submission</strong>: genera y envía el grafo de dependencias del proyecto al Dependency Graph de GitHub.</td>
+                            </tr>
+                            <tr>
+                                <td><code>gradle-wrapper-validation.yml</code></td>
+                                <td>Verifica el <strong>wrapper</strong> de Gradle contra la firma oficial.</td>
+                            </tr>
+                            <tr>
+                                <td><code>trigger_library_builds_on_jitpack.yml</code></td>
+                                <td>Dispara el build de las librerías en JitPack (con NDK 29 por env).</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <h3>Firma</h3>
+                    <ul>
+                        <li>Los secretos van en <code>key.properties</code> (nunca en el repo). El UID compartido <code>com.termux</code> exige que todas las APKs del proyecto se firmen con la misma key.</li>
+                    </ul>
+                    <h3>Publicación del sitio y de la wiki</h3>
+                    <ul>
+                        <li><code>firebase.json</code> define dos targets de Hosting: <code>main</code> (dir <code>public/</code>, sitio con descarga y requisitos) y <code>terminal-gnulinux-docs</code> (dir <code>wiki/</code>, esta documentación estática).</li>
+                        <li>Los datos del sitio que caducan (versión, fecha, tamaño, SHA-256, enlaces del APK) NO se escriben a mano: los pone <code>scripts/update-site.py</code>, que lee la última release de la API de GitHub y solo procesa <code>public/index.html</code>. Es idempotente y tiene <code>--dry-run</code>.</li>
+                        <li>La wiki y los <code>404</code> no llevan versión ni datos que caducan horneados: no necesitan <code>update-site.py</code>.</li>
+                        <li><code>Cache-Control: no-cache</code> en ambos targets: los cambios de contenido se ven al refrescar.</li>
+                    </ul>
+
+                    <h2>Depuración y soporte</h2>
+                    <ul>
+                        <li><strong>Logcat:</strong> filtra por el <code>LOG_TAG</code> de la clase que interesa (p. ej. <code>adb logcat -s ClassName</code>). Los mensajes largos los trocea <code>Logger</code>; si la primera línea se corta, busca la continuación del mismo tag.</li>
+                        <li><strong>Crashes:</strong> <code>CrashHandler</code> escribe el crash log en fichero y notifica a la app por broadcast: revisar ese log antes de abrir un issue.</li>
+                        <li><strong>Errores:</strong> los objetos <code>Error</code> incluyen el mensaje extendido completo — al reportar, pégalo tal cual (el detalle suele estar ahí, no lo resumas).</li>
+                    </ul>
+                    <div class="key-point">
+                        <p>
+                            <strong>Los issues se abren en <a href="https://github.com/ESTRIN217/Terminal/issues">ESTRIN217/Terminal</a></strong>,
+                            nunca a los canales de Termux: es un fork independiente sin afiliación con el equipo de Termux.
+                        </p>
+                    </div>
+
+                    <h2>Contribuir</h2>
+                    <ul>
+                        <li><strong>Spec-Driven Development:</strong> sin <code>specs/NNN-*/</code> aprobada no hay cambio de comportamiento; lee <code>docs/constitution.md</code> y la spec activa antes de tocar código. Si el código contradice la spec, se corrige la spec antes que el código; cada tarea implementada referencia su requisito funcional (RF).</li>
+                        <li><strong>Tests primero:</strong> test en rojo, luego código. <code>./gradlew test</code> en verde antes de marcar la tarea como hecha.</li>
+                        <li><strong>Lógica fuera de la UI:</strong> parseo, split y cálculos van en funciones puras con test JUnit que corre sin Android; Compose y las Views solo pintan y despachan.</li>
+                        <li><strong>Commits:</strong> Conventional Commits con el tipo inicial en mayúscula: <code>Added</code>, <code>Changed</code>, <code>Deprecated</code>, <code>Removed</code>, <code>Fixed</code>, <code>Security</code>.</li>
+                    </ul>
+                    <p>
+                        Gotchas con historial (salidos de specs cerradas): al tocar un bloque de prefs
+                        persistidas, conserva <strong>todas</strong> sus keys — refactorizar el serializador
+                        y soltar una key pierde el ajuste en silencio (lección de la spec 008; claves del
+                        gestor: <code>sort_option</code>, <code>sort_ascending</code>, <code>show_hidden</code>,
+                        <code>folders_first</code>, <code>view_mode</code>, <code>favorites</code>) — y no subas
+                        el <code>targetSdk 28</code>.
+                    </p>
+                    <p>
+                        El detalle completo (constitución, gotchas con ejemplos, reglas por módulo) está en
+                        <code>AGENTS.md</code> y <code>docs/constitution.md</code> del repo; las guías por página
+                        van en el índice lateral, y la receta de Android Studio ARM64 —con el parche skiko
+                        incluido— en <a href="android-studio.html">Android Studio (ARM64)</a>.
+                    </p>
+                </div>
+
+                <nav class="page-nav" aria-label="Navegación entre páginas">
+                    <a href="android-studio.html" rel="prev">← Android Studio (ARM64)</a>
+                    <a href="limitaciones.html" rel="next">Siguiente: Limitaciones conocidas →</a>
+                </nav>
+            </article>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="wrap footer__inner">
+            <p>Desarrollado con pasión por <strong>ESTRIN217</strong>. Hecho con ❤️ en Venezuela.</p>
+            <p>
+                <strong>Wiki de Terminal</strong> · parte del proyecto
+                <a href="https://github.com/ESTRIN217/Terminal">ESTRIN217/Terminal</a> (GPLv3).
+            </p>
+            <p class="muted">
+                Fork independiente de <a href="https://github.com/termux/termux-app">termux/termux-app</a>.
+                Sin afiliación con el equipo de Termux.
+            </p>
+            <div class="footer__bottom">
+        <p class="footer__legal">© 2026 ESTRIN217 · Sitio estático sin cookies, analíticas ni rastreo de terceros.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
