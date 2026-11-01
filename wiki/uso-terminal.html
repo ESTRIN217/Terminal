@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Uso de la terminal — Wiki de Terminal</title>
-    <meta name="description" content="Uso diario de la app Terminal: teclado y teclas extra, multipantalla, menú «Más», selección de URL, gestor de archivos y depuración con logcat.">
+    <meta name="description" content="Uso diario de la app Terminal: teclado y teclas extra, multipantalla, menú «Más», gestor de archivos, navegador interno GeckoView y depuración con logcat.">
     <meta name="color-scheme" content="dark">
     <link rel="canonical" href="https://terminal-gnulinux-docs.web.app/uso-terminal.html">
     <link rel="icon" href="https://terminal-gnulinux.web.app/img/icon-192.png" type="image/png">
@@ -49,7 +49,7 @@
             <article class="docs-main">
                 <header class="doc-head">
                     <h1>Uso de la terminal</h1>
-                    <p class="doc-meta">Gestos, teclado, multipantalla, menú «Más» y depuración.</p>
+                    <p class="doc-meta">Gestos, teclado, multipantalla, menú «Más», navegador interno y depuración.</p>
                 </header>
 
                 <div class="doc-body">
@@ -66,8 +66,9 @@
                     <ul>
                         <li>
                             <strong>Pestañas</strong>: cada sesión de terminal (o pestaña del gestor de
-                            archivos, o <a href="x11.html">pestaña X11</a>) es una pestaña; puedes tener
-                            varias a la vez.
+                            archivos, o <a href="x11.html">pestaña X11</a>, o pestaña de
+                            <a href="uso-terminal.html#navegador">navegador</a>) es una pestaña; puedes
+                            tener varias a la vez.
                         </li>
                         <li>
                             <strong>Split</strong>: en pantallas de <strong>600 dp o más</strong> puedes
@@ -80,7 +81,15 @@
                             menú «Organizar», selección en la topbar y acciones sobre los archivos
                             (copiar ruta, compresión zip/tar.xz/7z, propiedades con permisos, edición
                             con <code>nano</code>/<code>nvim</code>/<code>vim</code>, abrir terminal en el directorio
-                            actual…).
+                            actual,
+                            <strong>«Ejecutar en la terminal»</strong> — archivos ejecutables se lanzan
+                            en una sesión proot; los scripts <code>.sh</code>/<code>.bash</code> y
+                            <code>.py</code> se pasan a <code>bash</code>/<code>python3</code> si ese
+                            binario existe en el rootfs; los demás avisan «archivo no ejecutable (sin
+                            intérprete)» — y
+                            <strong>«Descomprimir»</strong> — extrae zip, tar.xz y 7z (incluye los
+                            cifrados, con diálogo de contraseña) en la carpeta actual, con aviso de
+                            colisión si el destino ya existe y protección zip-slip…).
                         </li>
                     </ul>
 
@@ -123,6 +132,46 @@
                         la hoja de selección de URL (ver <a href="hipervinculos.html">Hipervínculos</a>)
                         es un diálogo cuyo título explica las dos acciones posibles: <em>«Click URL to
                         copy or long press to open»</em>.
+                    </p>
+
+                    <h2 id="navegador">Navegador interno</h2>
+                    <p>
+                        El drawer incluye la entrada <strong>«Navegador»</strong> que abre pestañas de
+                        navegación web <em>dentro</em> de la app (motor
+                        <a href="https://github.com/mozilla-mobile/firefox-android">GeckoView</a>,
+                        licencia MPL-2.0, incluido en el APK). Cada pestaña de navegador es una pestaña
+                        más del sistema de sesiones como las del gestor de archivos o X11; al cerrarla
+                        se libera su motor sin afectar al resto ni a las sesiones de terminal.
+                    </p>
+                    <ul>
+                        <li>
+                            <strong>Barra de navegación</strong>: URL editable, recargar y
+                            retroceder/adelante (inhabilitados sin historial); la URL sin esquema se
+                            carga con <code>https://</code> implícito.
+                        </li>
+                        <li>
+                            <strong>Título de pestaña</strong>: toma el título del documento al cargar
+                            (o el nombre corto del dominio si viene vacío).
+                        </li>
+                        <li>
+                            <strong>Enlaces del terminal</strong>: con el ajuste
+                            <strong>«Abrir enlaces en la app»</strong> (por defecto), los hipervínculos
+                            y URLs del terminal y del
+                            <a href="hipervinculos.html#seleccionar-url">diálogo de URLs</a> se abren en
+                            una pestaña del navegador interno; si lo desactivas, se delegan al
+                            navegador del sistema como antes. Los URIs no web (<code>mailto:</code>,
+                            <code>content://</code>, <code>file://</code>…) siempre se abren por el
+                            cauce externo.
+                        </li>
+                        <li>
+                            <strong>Fallo de carga</strong>: el error se muestra dentro de la pestaña
+                            con la acción «Abrir en navegador externo».
+                        </li>
+                    </ul>
+                    <p>
+                        El navegador es el motivo por el que la app pide <strong>Android 8.0 (API
+                        26)</strong>: GeckoView no soporta versiones anteriores (ver
+                        <a href="instalacion.html">requisitos</a>).
                     </p>
 
                     <h2>Depuración</h2>
